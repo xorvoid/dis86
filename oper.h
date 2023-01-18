@@ -1,12 +1,16 @@
 #pragma once
 #include "header.h"
 
-#define OPERATIONS(_) \
-  _( OP_MOV,    "mov" ) \
+#define OPERATIONS(_)    \
+  _( OP_MOV,    "mov"  ) \
   _( OP_CALL,   "call" ) \
-  _( OP_INT,    "int" ) \
-  _( OP_LES,    "les" ) \
-  _( OP_LDS,    "lds" ) \
+  _( OP_INT,    "int"  ) \
+  _( OP_LES,    "les"  ) \
+  _( OP_LDS,    "lds"  ) \
+  _( OP_CLD,    "cld"  ) \
+  _( OP_SCAS,   "scas" ) \
+  _( OP_JCXZ,   "jcxz" ) \
+  _( OP_INC,    "inc" ) \
 
 enum {
 #define ELT(x, _) x,

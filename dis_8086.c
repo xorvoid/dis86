@@ -3,6 +3,10 @@
 #include "oper.h"
 #include "bin.h"
 
+#define REP_NONE  0
+#define REP_EQ    1
+#define REP_NE    2
+
 #define SIZE_FLAG_NONE  0
 #define SIZE_FLAG_8     1
 #define SIZE_FLAG_16    2
@@ -77,9 +81,21 @@ operand_t operand_addr_imm(u16 imm, int has_seg, u8 seg)
   return operand[0];
 }
 
+operand_t operand_addr_reg(u8 seg, u8 reg)
+{
+  operand_t operand[1] = {{}};
+  operand->type = OPERAND_TYPE_ADDR;
+  operand->has_reg = 1;
+  operand->has_seg_override = 1;
+  operand->reg = reg;
+  operand->seg_override = seg;
+  return operand[0];
+}
+
 typedef struct instr instr_t;
 struct instr
 {
+  int       rep;
   int       opcode;     /* operation enum (not 8086 opcode) */
   int       size_flag;  /* SIZE_FLAG_* */
   operand_t operand[2]; /* operands */
@@ -107,6 +123,12 @@ static inline void instr_print(size_t start_loc, instr_t *ins)
   size_t used = (bin_location() - start_loc) * 3;
   size_t remain = (used <= 21) ? 21 - used : 0;
   printf("%*s\t", (int)remain, " ");
+
+  if (ins->rep == REP_EQ) {
+    printf("rep ");
+  } else if (ins->rep == REP_NE) {
+    printf("repnz ");
+  }
 
   printf("%-6s", opcode_str(ins->opcode));
   for (size_t i = 0; i < ARRAY_SIZE(ins->operand); i++) {
@@ -138,19 +160,24 @@ static inline void instr_print(size_t start_loc, instr_t *ins)
     }
 
     if (o->type == OPERAND_TYPE_ADDR) {
-      /* if (o->has_reg) { */
-      /*   printf("%s", reg_str(o->reg, ins->size_flag)); */
-      /* } */
-      if (o->has_imm) {
-        if (ins->size_flag == SIZE_FLAG_8) {
-          printf("BYTE PTR ");
-        } else if (ins->size_flag == SIZE_FLAG_16) {
-          printf("WORD PTR ");
-        } else if (ins->size_flag == SIZE_FLAG_32) {
-          printf("DWORD PTR ");
+      if (ins->size_flag == SIZE_FLAG_8) {
+        printf("BYTE PTR ");
+      } else if (ins->size_flag == SIZE_FLAG_16) {
+        printf("WORD PTR ");
+      } else if (ins->size_flag == SIZE_FLAG_32) {
+        printf("DWORD PTR ");
+      } else {
+        FAIL("Expected size flag to be set");
+      }
+      if (o->has_reg) {
+        if (o->has_seg_override) {
+          printf("%s:", sreg_str(o->seg_override));
         } else {
-          FAIL("Expected size flag to be set");
+          printf("ds:");
         }
+        printf("[%s]", reg_str(o->reg, SIZE_FLAG_16));
+      }
+      if (o->has_imm) {
         if (o->has_seg_override) {
           printf("%s:", sreg_str(o->seg_override));
         } else {
@@ -165,14 +192,14 @@ static inline void instr_print(size_t start_loc, instr_t *ins)
 
 static void modrm_process(operand_t *operand1, operand_t *operand2, int has_seg_override, u8 seg_override)
 {
-  u8 modrm = fetch_u8();
+  u8 modrm = bin_fetch_u8();
   u8 mod = modrm >> 6;
   u8 reg = (modrm >> 3) & 7;
   u8 rm = modrm & 7;
 
   /* Direct addressing: 16-bit address offset */
   if (mod == 0 && rm == 6) {
-    u16 imm = fetch_u16();
+    u16 imm = bin_fetch_u16();
     *operand1 = operand_addr_imm(imm, has_seg_override, seg_override);
     *operand2 = operand_reg(reg);
   }
@@ -192,7 +219,7 @@ static void instr_fetch(instr_t *ins)
 {
   memset(ins, 0, sizeof(*ins));
 
-  u8 b = fetch_u8();
+  u8 b = bin_fetch_u8();
 
   /* handle any prefixes first */
   int has_seg_override;
@@ -215,12 +242,33 @@ static void instr_fetch(instr_t *ins)
 
   /* advance byte? */
   if (has_seg_override) {
-    b = fetch_u8();
+    b = bin_fetch_u8();
+  }
+
+  /* handle rep and repne */
+  ins->rep = REP_NONE;
+  if (b == 0xf3) {
+    ins->rep = REP_EQ;
+  } else if (b == 0xf2) {
+    ins->rep = REP_NE;
+  }
+
+  /* advance byte? */
+  if (ins->rep) {
+    b = bin_fetch_u8();
   }
 
   /* parse opcode now */
   u8 op = b;
   if (0) {
+  } else if (0x40 <= op && op <= 0x47) {
+    /* INC REG16 */
+    u8 reg = op - 0x40;
+
+    ins->opcode = OP_INC;
+    ins->size_flag = SIZE_FLAG_16;
+    ins->operand[0] = operand_reg(reg);
+
   } else if ((op & ~3) == 0x88) { /* all sizes and directions */
     /* MOV REG, R/M */
     u8 w = (op&1);
@@ -252,16 +300,25 @@ static void instr_fetch(instr_t *ins)
     u8 w = (op&1);
     u8 d = ((op>>1)&1);
 
-    u16 imm = w ? fetch_u16() : fetch_u8();
+    u16 imm = w ? bin_fetch_u16() : bin_fetch_u8();
 
     ins->opcode = OP_MOV;
     ins->size_flag = w ? SIZE_FLAG_16 : SIZE_FLAG_8;
     ins->operand[d] = operand_reg(0); /* AX or AL implied by opcode */
     ins->operand[1-d] = operand_addr_imm(imm, has_seg_override, seg_override);
 
+  } else if ((op & ~1) == 0xae) { /* all sizes, one direction */
+    /* SCAS AX, WORD PTR ES:[DI] (implied) */
+    u8 w = (op&1);
+
+    ins->opcode = OP_SCAS;
+    ins->size_flag = w ? SIZE_FLAG_16 : SIZE_FLAG_8;
+    ins->operand[0] = operand_reg(0); /* AX or AL implied by opcode */
+    ins->operand[1] = operand_addr_reg(SREG_ES, REG16_DI); /* Always ES:[DI] */
+
   } else if (op == 0xcd) {
     /* INT IMM8 */
-    u8 imm = fetch_u8();
+    u8 imm = bin_fetch_u8();
     ins->opcode = OP_INT;
     ins->size_flag = SIZE_FLAG_8;
     ins->operand[0] = operand_imm(imm);
@@ -269,7 +326,7 @@ static void instr_fetch(instr_t *ins)
   } else if (0xb0 <= op && op <= 0xb7) {
     /* MOV REG8 IMM8 */
     u8 reg = op - 0xb0;
-    u8 imm = fetch_u8();
+    u8 imm = bin_fetch_u8();
 
     ins->opcode = OP_MOV;
     ins->size_flag = SIZE_FLAG_8;
@@ -279,7 +336,7 @@ static void instr_fetch(instr_t *ins)
   } else if (0xb8 <= op && op <= 0xbf) {
     /* MOV REG16 IMM16 */
     u8 reg = op - 0xb8;
-    u16 imm = fetch_u16();
+    u16 imm = bin_fetch_u16();
 
     ins->opcode = OP_MOV;
     ins->size_flag = SIZE_FLAG_16;
@@ -289,7 +346,7 @@ static void instr_fetch(instr_t *ins)
   } else if (op == 0xc4) {
     // LES REG MEM32
 
-    /* u8 b = fetch_u8(); */
+    /* u8 b = bin_fetch_u8(); */
     /* printf("b: %x (%u)\n", b, b); */
 
     ins->opcode = OP_LES;
@@ -299,11 +356,21 @@ static void instr_fetch(instr_t *ins)
   /* } else if (op == 0xc5) { */
   /*   // LDS REG MEM32 */
 
+  } else if (op == 0xe3) {
+    // JCXZ REL8
+    u8 imm = bin_fetch_u8();
+    ins->opcode = OP_JCXZ;
+    ins->operand[0] = operand_rel(imm);
+
   } else if (op == 0xe8) {
     // CALL REL16
-    u16 imm = fetch_u16();
+    u16 imm = bin_fetch_u16();
     ins->opcode = OP_CALL;
     ins->operand[0] = operand_rel(imm);
+
+  } else if (op == 0xfc) {
+    // CLD
+    ins->opcode = OP_CLD;
 
   } else {
     FAIL("Unknown opcode: %x", op);
@@ -312,11 +379,17 @@ static void instr_fetch(instr_t *ins)
 
 int main(int argc, char *argv[])
 {
-  int n = atoi(argv[1]);
+  if (argc != 2) {
+    fprintf(stderr, "usage: %s <binary>\n", argv[0]);
+    return 1;
+  }
+  const char *filename = argv[1];
+
+  bin_init(filename);
 
   instr_t ins[1];
-
-  for (size_t i = 0; i < n; i++) {
+  //for (size_t i = 0; i < 10; i++) {
+  while (1) {
     size_t start_loc = bin_location();
     instr_fetch(ins);
     size_t end_loc = bin_location();
