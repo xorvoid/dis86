@@ -97,8 +97,17 @@ static inline const char *reg_str(u8 r, u8 size_flag)
   }
 }
 
-static inline void instr_print(instr_t *ins)
+static inline void instr_print(size_t start_loc, instr_t *ins)
 {
+  printf("%8zx:\t", start_loc);
+  for (size_t i = start_loc; i < bin_location(); i++) {
+    u8 b = bin_byte_at(i);
+    printf("%02x ", b);
+  }
+  size_t used = (bin_location() - start_loc) * 3;
+  size_t remain = (used <= 21) ? 21 - used : 0;
+  printf("%*s\t", (int)remain, " ");
+
   printf("%-6s", opcode_str(ins->opcode));
   for (size_t i = 0; i < ARRAY_SIZE(ins->operand); i++) {
     operand_t *o = &ins->operand[i];
@@ -308,8 +317,10 @@ int main(int argc, char *argv[])
   instr_t ins[1];
 
   for (size_t i = 0; i < n; i++) {
+    size_t start_loc = bin_location();
     instr_fetch(ins);
-    instr_print(ins);
+    size_t end_loc = bin_location();
+    instr_print(start_loc, ins);
   }
 
   return 0;

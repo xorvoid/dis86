@@ -24,6 +24,12 @@ static u16 fetch_u16()
   return (u16)high << 8 | (u16)low;
 }
 
-static size_t bin_location() {
+static u8 bin_byte_at(size_t idx)
+{
+  return BIN[idx];
+}
+
+static size_t bin_location()
+{
   return IDX;
 }
