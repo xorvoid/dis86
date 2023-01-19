@@ -1,8 +1,17 @@
 #include "dis86.h"
-#include "header.h"
+#include "dis86_private.h"
+
+static dis86_t *dis_exit = NULL;
+static void on_fail()
+{
+  if (!dis_exit) return;
+  bin_dump(dis_exit->b);
+}
 
 int main(int argc, char *argv[])
 {
+  atexit(on_fail);
+
   if (argc != 2) {
     fprintf(stderr, "usage: %s <binary>\n", argv[0]);
     return 1;
@@ -15,6 +24,7 @@ int main(int argc, char *argv[])
   dis86_t *d = dis86_new(0, mem, mem_sz);
   if (!d) FAIL("Failed to allocate dis86 instance");
   free(mem);
+  dis_exit = d;
 
   while (1) {
     size_t addr, n_bytes;
@@ -26,5 +36,7 @@ int main(int argc, char *argv[])
     free(s);
   }
 
+  dis_exit = NULL;
+  dis86_delete(d);
   return 0;
 }

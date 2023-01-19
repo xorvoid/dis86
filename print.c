@@ -111,6 +111,9 @@ char *dis86_print_intel_syntax(dis86_t *d, dis86_instr_t *ins, size_t addr, size
       if (o->has_rel) {
         str_fmt(s, "0x%x", (u16)(addr + n_bytes + o->rel));
       }
+      if (o->has_abs32) {
+        str_fmt(s, "0x%x:0x%x", o->abs32>>16, (u16)o->abs32);
+      }
     }
 
     if (o->type == OPERAND_TYPE_ADDR) {
@@ -130,20 +133,24 @@ char *dis86_print_intel_syntax(dis86_t *d, dis86_instr_t *ins, size_t addr, size
       }
       if (o->has_mode) {
         switch (o->mode) {
-          case MODE_BX_PLUS_SI: str_fmt(s, "[bx+si]"); break;
-          case MODE_BX_PLUS_DI: str_fmt(s, "[bx+di]"); break;
-          case MODE_BP_PLUS_SI: str_fmt(s, "[bp+si]"); break;
-          case MODE_BP_PLUS_DI: str_fmt(s, "[bp+di]"); break;
-          case MODE_SI:         str_fmt(s, "[si]"); break;
-          case MODE_DI:         str_fmt(s, "[di]"); break;
-          case MODE_BP:         str_fmt(s, "[bp]"); break;
-          case MODE_BX:         str_fmt(s, "[bx]"); break;
+          case MODE_BX_PLUS_SI: str_fmt(s, "[bx+si"); break;
+          case MODE_BX_PLUS_DI: str_fmt(s, "[bx+di"); break;
+          case MODE_BP_PLUS_SI: str_fmt(s, "[bp+si"); break;
+          case MODE_BP_PLUS_DI: str_fmt(s, "[bp+di"); break;
+          case MODE_SI:         str_fmt(s, "[si"); break;
+          case MODE_DI:         str_fmt(s, "[di"); break;
+          case MODE_BP:         str_fmt(s, "[bp"); break;
+          case MODE_BX:         str_fmt(s, "[bx"); break;
         }
+        if (o->has_imm) {
+          str_fmt(s, "+0x%x", o->imm);
+        }
+        str_fmt(s, "]");
       }
-      if (o->has_reg) {
+      else if (o->has_reg) {
         str_fmt(s, "[%s]", reg_str(o->reg, SIZE_FLAG_16));
       }
-      if (o->has_imm) {
+      else if (o->has_imm) {
         str_fmt(s, "0x%x", o->imm);
       }
     }

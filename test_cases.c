@@ -89,7 +89,7 @@ TEST({ 0x000000e8,     { 3,  {0xbb, 0x01, 0x00},                  }, "mov    bx,
 TEST({ 0x000000eb,     { 2,  {0xcd, 0x21},                        }, "int    0x21" })
 TEST({ 0x000000ed,     { 2,  {0x72, 0x17},                        }, "jb     0x106" })
 TEST({ 0x000000ef,     { 1,  {0x40},                              }, "inc    ax" })
-TEST({ 0x000000f0,     { 3,  {0xa3, 0x91, 0x00},                  }, "mov    ds:0x91,ax" })
+TEST({ 0x000000f0,     { 3,  {0xa3, 0x91, 0x00},                  }, "mov    WORD PTR ds:0x91,ax" })
 TEST({ 0x000000f3,     { 1,  {0x48},                              }, "dec    ax" })
 TEST({ 0x000000f4,     { 2,  {0x8e, 0xc0},                        }, "mov    es,ax" })
 TEST({ 0x000000f6,     { 2,  {0xb4, 0x49},                        }, "mov    ah,0x49" })

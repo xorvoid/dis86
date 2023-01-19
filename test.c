@@ -30,6 +30,7 @@ static int run_test(size_t num, bool verbose)
 
   test_t *t = &TESTS[num];
   printf("TEST %zu: %-40s | ", num, t->code);
+  fflush(stdout);
 
   dis86_t *d = dis86_new(t->address, (char*)t->data.mem, t->data.n_mem);
   if (!d) FAIL("Failed to allocate instance");

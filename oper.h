@@ -7,6 +7,7 @@
   _( OP_ADD,    "add"   ) \
   _( OP_AND,    "and"   ) \
   _( OP_CALL,   "call"  ) \
+  _( OP_CLI,    "cli"   ) \
   _( OP_CLD,    "cld"   ) \
   _( OP_CMP,    "cmp"   ) \
   _( OP_DEC,    "dec"   ) \
@@ -36,6 +37,7 @@
   _( OP_MOV,    "mov"   ) \
   _( OP_MUL,    "mul"   ) \
   _( OP_NEG,    "neg"   ) \
+  _( OP_NOP,    "nop"   ) \
   _( OP_NOT,    "not"   ) \
   _( OP_OR,     "or"    ) \
   _( OP_OUT,    "out"   ) \
@@ -44,9 +46,11 @@
   _( OP_REP,    "rep"   ) \
   _( OP_REPNE,  "repne" ) \
   _( OP_RET,    "ret"   ) \
+  _( OP_RETF,   "retf"  ) \
   _( OP_SBB,    "sbb"   ) \
   _( OP_SCAS,   "scas"  ) \
   _( OP_STD,    "std"   ) \
+  _( OP_STI,    "sti"   ) \
   _( OP_STOS,   "stos"  ) \
   _( OP_SUB,    "sub"   ) \
   _( OP_XOR,    "xor"   ) \

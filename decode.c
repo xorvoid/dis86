@@ -1,6 +1,6 @@
 #include "dis86_private.h"
 
-static void modrm_process(dis86_t *d, operand_t *operand1, operand_t *operand2, int has_seg_override, u8 seg_override)
+static void modrm_oper2(dis86_t *d, operand_t *operand1, operand_t *operand2, int has_seg_override, u8 seg_override)
 {
   u8 modrm = bin_fetch_u8(d->b);
   u8 mod = modrm >> 6;
@@ -21,10 +21,49 @@ static void modrm_process(dis86_t *d, operand_t *operand1, operand_t *operand2, 
     }
   }
 
+  else if (mod == 1) {
+    /* Ordinary special mode w/ 1 byte immediate */
+    u8 imm = bin_fetch_u8(d->b);
+    // FIXME!!
+    *operand1 = operand_addr_mode_imm(rm, imm, 0, 0); //has_seg_override, seg_override);
+    *operand2 = operand_reg(reg);
+  }
+
   /* Two register mode */
   else if(mod == 3) {
     *operand1 = operand_reg(rm);
     *operand2 = operand_reg(reg);
+  }
+
+  else {
+    FAIL("Unsupported MOD/RM mode | mod=%u, rm=%u", mod, rm);
+  }
+}
+
+static void modrm_oper1_expect(dis86_t *d, u8 expect, operand_t *operand, int has_seg_override, u8 seg_override)
+{
+  u8 modrm = bin_fetch_u8(d->b);
+  u8 mod = modrm >> 6;
+  u8 val = (modrm >> 3) & 7;
+  u8 rm = modrm & 7;
+
+  if (val != expect) FAIL("Expected the value %u in the modrm reg field, got %u", val, expect);
+
+  if (mod == 0) {
+    if (rm == 6) {
+      /* Direct addressing: 16-bit address offset */
+      u16 imm = bin_fetch_u16(d->b);
+      *operand = operand_addr_imm(imm, has_seg_override, seg_override);
+    }
+    else {
+      /* Ordinary special mode */
+      *operand = operand_addr_mode(rm, has_seg_override, seg_override);
+    }
+  }
+
+  /* Two register mode */
+  else if(mod == 3) {
+    *operand = operand_reg(rm);
   }
 
   else {
@@ -46,10 +85,27 @@ static u8 arith_op(dis86_t *d, u8 *ops_tbl, operand_t *operand, int has_seg_over
   u8 op = ops_tbl[opnum];
   if (!op) FAIL("Invalid instruction op encoding");
 
-  // FIXME
-  assert(mod == 3);
+  if (mod == 0) {
+    if (rm == 6) {
+      /* Direct addressing: 16-bit address offset */
+      u16 imm = bin_fetch_u16(d->b);
+      *operand = operand_addr_imm(imm, has_seg_override, seg_override);
+    }
+    else {
+      /* Ordinary special mode */
+      *operand = operand_addr_mode(rm, has_seg_override, seg_override);
+    }
+  }
 
-  *operand = operand_reg(rm);
+  /* Register mode */
+  else if(mod == 3) {
+    *operand = operand_reg(rm);
+  }
+
+  else {
+    FAIL("Unsupported MOD/RM mode | mod=%u, rm=%u", mod, rm);
+  }
+
   return op;
 }
 
@@ -62,7 +118,7 @@ dis86_instr_t *dis86_next(dis86_t *d, size_t *addr, size_t *n_bytes)
   u8 b = bin_fetch_u8(d->b);
 
   /* handle any prefixes first */
-  int has_seg_override;
+  int has_seg_override = 0;
   u8 seg_override;
   if (b == 0x2e) {
     has_seg_override = 1;
@@ -131,7 +187,7 @@ dis86_instr_t *dis86_next(dis86_t *d, size_t *addr, size_t *n_bytes)
     // NOTE: NOT HANDLING THE 0x4 and 0x5 cases yet! FIXME!
     ins->opcode = binary_op[arith_op_idx];
     ins->size_flag = op_w ? SIZE_FLAG_16 : SIZE_FLAG_8;
-    modrm_process(d, &ins->operand[op_d], &ins->operand[1-op_d], has_seg_override, seg_override);
+    modrm_oper2(d, &ins->operand[op_d], &ins->operand[1-op_d], has_seg_override, seg_override);
 
   /****************************************************************
    * Special arthmetic cases: 0x80, 0x81, 0x83 */
@@ -189,6 +245,11 @@ dis86_instr_t *dis86_next(dis86_t *d, size_t *addr, size_t *n_bytes)
     ins->opcode = OP_JMP;
     ins->operand[0] = operand_rel16(rel);
 
+  } else if (op == 0xeb) {
+    u8 rel = bin_fetch_u8(d->b);
+    ins->opcode = OP_JMP;
+    ins->operand[0] = operand_rel8(rel);
+
   /****************************************************************/
   /* Less common layouts */
   } else if (0x40 <= op && op <= 0x47) {
@@ -199,14 +260,101 @@ dis86_instr_t *dis86_next(dis86_t *d, size_t *addr, size_t *n_bytes)
     ins->size_flag = SIZE_FLAG_16;
     ins->operand[0] = operand_reg(reg);
 
+  } else if (0x48 <= op && op <= 0x4f) {
+    /* DEC REG16 */
+    u8 reg = op - 0x48;
+
+    ins->opcode = OP_DEC;
+    ins->size_flag = SIZE_FLAG_16;
+    ins->operand[0] = operand_reg(reg);
+
+  } else if ((op & ~1) == 0xc6) {
+    /* MOV R/M, IMM */
+    u8 op_w = (op&1);
+
+    ins->opcode = OP_MOV;
+    ins->size_flag = op_w ? SIZE_FLAG_16 : SIZE_FLAG_8;
+    modrm_oper1_expect(d, 0, &ins->operand[0], has_seg_override, seg_override);
+
+    u16 imm = op_w ? bin_fetch_u16(d->b) : bin_fetch_u8(d->b);
+    ins->operand[1] = operand_imm(imm);
+
+  } else if (op == 0xff) {
+    /* PUSH R/M */
+    ins->opcode = OP_PUSH;
+    ins->size_flag = SIZE_FLAG_16;
+    modrm_oper1_expect(d, 6, &ins->operand[0], has_seg_override, seg_override);
+
+  } else if (0x50 <= op && op <= 0x57) {
+    /* PUSH REG16 */
+    u8 reg = op - 0x50;
+
+    ins->opcode = OP_PUSH;
+    ins->size_flag = SIZE_FLAG_16;
+    ins->operand[0] = operand_reg(reg);
+
+  } else if (0x58 <= op && op <= 0x5f) {
+    /* POP REG16 */
+    u8 reg = op - 0x58;
+
+    ins->opcode = OP_POP;
+    ins->size_flag = SIZE_FLAG_16;
+    ins->operand[0] = operand_reg(reg);
+
+  } else if (op == 0xfa) {
+    ins->opcode = OP_CLI;
+
+  } else if (op == 0xfb) {
+    ins->opcode = OP_STI;
+
+  } else if (op == 0xc3) {
+    ins->opcode = OP_RET;
+
+  } else if (op == 0xcb) {
+    ins->opcode = OP_RETF;
+
+  } else if (op == 0x90) {
+    ins->opcode = OP_NOP;
+
+  } else if (op == 0x06) {
+    /* PUSH ES */
+    ins->opcode = OP_PUSH;
+    ins->size_flag = SIZE_FLAG_16;
+    ins->operand[0] = operand_sreg(SREG_ES);
+
+  } else if (op == 0x0e) {
+    /* PUSH CS */
+    ins->opcode = OP_PUSH;
+    ins->size_flag = SIZE_FLAG_16;
+    ins->operand[0] = operand_sreg(SREG_CS);
+
+  } else if (op == 0x16) {
+    /* PUSH SS */
+    ins->opcode = OP_PUSH;
+    ins->size_flag = SIZE_FLAG_16;
+    ins->operand[0] = operand_sreg(SREG_SS);
+
+  } else if (op == 0x1e) {
+    /* PUSH DS */
+    ins->opcode = OP_PUSH;
+    ins->size_flag = SIZE_FLAG_16;
+    ins->operand[0] = operand_sreg(SREG_DS);
+
+  } else if (op == 0x1f) {
+    /* POP DS */
+    ins->opcode = OP_POP;
+    ins->size_flag = SIZE_FLAG_16;
+    ins->operand[0] = operand_sreg(SREG_DS);
+
   } else if ((op & ~3) == 0x88) { /* all sizes and directions */
     /* MOV REG, R/M */
     u8 op_w = (op&1);
     u8 op_d = ((op>>1)&1);
+    assert(op_d <= 1);
 
     ins->opcode = OP_MOV;
     ins->size_flag = op_w ? SIZE_FLAG_16 : SIZE_FLAG_8;
-    modrm_process(d, &ins->operand[op_d], &ins->operand[1-op_d], has_seg_override, seg_override);
+    modrm_oper2(d, &ins->operand[op_d], &ins->operand[1-op_d], has_seg_override, seg_override);
 
   } else if ((op & ~3) == 0x8c) { /* only one size, all directions */
     /* MOV REG, SREG */
@@ -216,7 +364,7 @@ dis86_instr_t *dis86_next(dis86_t *d, size_t *addr, size_t *n_bytes)
 
     ins->opcode = OP_MOV;
     ins->size_flag = SIZE_FLAG_16;
-    modrm_process(d, &ins->operand[op_d], &ins->operand[1-op_d], has_seg_override, seg_override);
+    modrm_oper2(d, &ins->operand[op_d], &ins->operand[1-op_d], has_seg_override, seg_override);
 
     /* SREG, not REG (sort of a hack) */
     ins->operand[1-op_d].sreg = ins->operand[1-op_d].reg;
@@ -234,6 +382,14 @@ dis86_instr_t *dis86_next(dis86_t *d, size_t *addr, size_t *n_bytes)
     ins->size_flag = op_w ? SIZE_FLAG_16 : SIZE_FLAG_8;
     ins->operand[op_d] = operand_reg(0); /* AX or AL implied by opcode */
     ins->operand[1-op_d] = operand_addr_imm(imm, has_seg_override, seg_override);
+
+  } else if ((op & ~1) == 0xaa) { /* all sizes, one direction */
+    /* STOS AX, WORD PTR ES:[DI] (implied) */
+    u8 op_w = (op&1);
+    ins->opcode = OP_STOS;
+    ins->size_flag = op_w ? SIZE_FLAG_16 : SIZE_FLAG_8;
+    ins->operand[0] = operand_addr_reg(SREG_ES, REG16_DI); /* Always ES:[DI] */
+    ins->operand[1] = operand_reg(0); /* AX or AL implied by opcode */
 
   } else if ((op & ~1) == 0xae) { /* all sizes, one direction */
     /* SCAS AX, WORD PTR ES:[DI] (implied) */
@@ -273,16 +429,15 @@ dis86_instr_t *dis86_next(dis86_t *d, size_t *addr, size_t *n_bytes)
 
   } else if (op == 0xc4) {
     // LES REG MEM32
-
-    /* u8 b = bin_fetch_u8(); */
-    /* printf("b: %x (%u)\n", b, b); */
-
     ins->opcode = OP_LES;
     ins->size_flag = SIZE_FLAG_32;
-    modrm_process(d, &ins->operand[1], &ins->operand[0], has_seg_override, seg_override);
+    modrm_oper2(d, &ins->operand[1], &ins->operand[0], has_seg_override, seg_override);
 
-  /* } else if (op == 0xc5) { */
-  /*   // LDS REG MEM32 */
+  } else if (op == 0xc5) {
+    // LDS REG MEM32
+    ins->opcode = OP_LDS;
+    ins->size_flag = SIZE_FLAG_32;
+    modrm_oper2(d, &ins->operand[1], &ins->operand[0], has_seg_override, seg_override);
 
   } else if (op == 0xe3) {
     // JCXZ REL8
@@ -295,6 +450,13 @@ dis86_instr_t *dis86_next(dis86_t *d, size_t *addr, size_t *n_bytes)
     u16 imm = bin_fetch_u16(d->b);
     ins->opcode = OP_CALL;
     ins->operand[0] = operand_rel16(imm);
+
+  } else if (op == 0x9a) {
+    // CALL ABS32
+    u16 off = bin_fetch_u16(d->b);
+    u16 seg = bin_fetch_u16(d->b);
+    ins->opcode = OP_CALL;
+    ins->operand[0] = operand_abs32((u32)seg << 16 | (u32)off);
 
   } else if (op == 0xd3) {
     // SKIP FIXME HAX

@@ -54,14 +54,12 @@ static inline size_t bin_length(bin_t *b)
   return b->len;
 }
 
-/* static inline void bin_dump_and_abort(bin_t *b) */
-/* { */
-/*   printf("ABORTING AT LOCATION %zx: ", b->idx); */
-/*   size_t end = MIN(b->idx + 16, b->len); */
-/*   for (size_t idx = b->idx; idx < end; idx++) { */
-/*     printf("%02x ", bin_byte_at(b, idx)); */
-/*   } */
-/*   printf("\n"); */
-
-/*   abort(); */
-/* } */
+static inline void bin_dump(bin_t *b)
+{
+  printf("BIN DUMP LOCATION %zx: ", b->idx);
+  size_t end = MIN(b->idx + 16, b->base_addr + b->len);
+  for (size_t idx = b->idx; idx < end; idx++) {
+    printf("%02x ", bin_byte_at(b, idx));
+  }
+  printf("\n");
+}

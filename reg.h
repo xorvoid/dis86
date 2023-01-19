@@ -46,7 +46,7 @@ static inline const char *reg8_str(u8 r)
     /* 6 */ "dh",
     /* 7 */ "bh",
   };
-  if (r >= ARRAY_SIZE(REG8)) FAIL("Invalid register number: %u", r);
+  if (r >= ARRAY_SIZE(REG8)) FAIL("Invalid 8-bit register number: %u", r);
   return REG8[r];
 }
 
@@ -62,7 +62,7 @@ static inline const char *reg16_str(u8 r)
     /* 6 */ "si",
     /* 7 */ "di",
   };
-  if (r >= ARRAY_SIZE(REG16)) FAIL("Invalid register number: %u", r);
+  if (r >= ARRAY_SIZE(REG16)) FAIL("Invalid 16-bit register number: %u", r);
   return REG16[r];
 }
 
@@ -78,10 +78,10 @@ static inline const char *sreg_str(u8 r)
     /* 6 */ 0,
     /* 7 */ 0,
   };
-  if (r >= ARRAY_SIZE(SREG)) FAIL("Invalid register number: %u", r);
+  if (r >= ARRAY_SIZE(SREG)) FAIL("Invalid segment register number: %u", r);
 
   const char *s = SREG[r];
-  if (!s) FAIL("Invalid register number: %u", r);
+  if (!s) FAIL("Invalid segment register number: %u", r);
 
   return s;
 }
