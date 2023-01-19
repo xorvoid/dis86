@@ -73,13 +73,19 @@ char *dis86_print_intel_syntax(dis86_t *d, dis86_instr_t *ins, size_t addr, size
     str_fmt(s, "%*s\t", (int)remain, " ");
   }
 
+  str_t op_buf[1];
+  str_init(op_buf);
   if (ins->rep == REP_EQ) {
-    str_fmt(s, "rep ");
+    str_fmt(op_buf, "rep ");
   } else if (ins->rep == REP_NE) {
-    str_fmt(s, "repnz ");
+    str_fmt(op_buf, "repnz ");
   }
+  str_fmt(op_buf, "%s", opcode_str(ins->opcode));
 
-  str_fmt(s, "%-6s", opcode_str(ins->opcode));
+  char *op_str = str_to_cstr(op_buf);
+  str_fmt(s, "%-6s", op_str);
+  free(op_str);
+
   for (size_t i = 0; i < ARRAY_SIZE(ins->operand); i++) {
     operand_t *o = &ins->operand[i];
     if (o->type == OPERAND_TYPE_NONE) {
@@ -143,5 +149,14 @@ char *dis86_print_intel_syntax(dis86_t *d, dis86_instr_t *ins, size_t addr, size
     }
   }
 
-  return str_to_cstr(s);
+  /* remove any trailing space */
+  char *ret = str_to_cstr(s);
+  size_t len = strlen(ret);
+  while (len > 0) {
+    if (ret[len-1] != ' ') break;
+    len--;
+  }
+  ret[len] = '\0';
+
+  return ret;
 }
