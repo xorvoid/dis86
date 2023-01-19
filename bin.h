@@ -1,48 +1,51 @@
 #include "header.h"
 
-static u8 *BIN_MEM = NULL;
-static size_t BIN_LEN = 0;
-static size_t BIN_IDX = 0;
-
-static void bin_init(const char *filename)
+typedef struct bin bin_t;
+struct bin
 {
-  if (BIN_MEM) {
-    free(BIN_MEM);
-  }
-  BIN_MEM = (u8*)read_file(filename, &BIN_LEN);
-  BIN_IDX = 0;
+  u8 *   mem;
+  size_t len;
+  size_t idx;
+};
+
+static inline void bin_init(bin_t *b, char *mem, size_t len)
+{
+  b->mem = malloc(len);
+  memcpy(b->mem, mem, len);
+  b->len = len;
+  b->idx = 0;
 }
 
-static u8 bin_fetch_u8()
+static inline u8 bin_fetch_u8(bin_t *b)
 {
-  if (BIN_IDX >= BIN_LEN) FAIL("Fetch beyond end of region");
-  return BIN_MEM[BIN_IDX++];
+  if (b->idx >= b->len) FAIL("Fetch beyond end of region");
+  return b->mem[b->idx++];
 }
 
-static u16 bin_fetch_u16()
+static inline u16 bin_fetch_u16(bin_t *b)
 {
-  u8 low = bin_fetch_u8();
-  u8 high = bin_fetch_u8();
+  u8 low = bin_fetch_u8(b);
+  u8 high = bin_fetch_u8(b);
   return (u16)high << 8 | (u16)low;
 }
 
-static u8 bin_byte_at(size_t idx)
+static inline u8 bin_byte_at(bin_t *b, size_t idx)
 {
-  if (idx >= BIN_LEN) FAIL("Binary access beyond end of region");
-  return BIN_MEM[idx];
+  if (idx >= b->len) FAIL("Binary access beyond end of region");
+  return b->mem[idx];
 }
 
-static size_t bin_location()
+static inline size_t bin_location(bin_t *b)
 {
-  return BIN_IDX;
+  return b->idx;
 }
 
-static inline void bin_dump_and_abort()
+static inline void bin_dump_and_abort(bin_t *b)
 {
-  printf("ABORTING AT LOCATION %zx: ", BIN_IDX);
-  size_t end = MIN(BIN_IDX + 16, BIN_LEN);
-  for (size_t idx = BIN_IDX; idx < end; idx++) {
-    printf("%02x ", bin_byte_at(idx));
+  printf("ABORTING AT LOCATION %zx: ", b->idx);
+  size_t end = MIN(b->idx + 16, b->len);
+  for (size_t idx = b->idx; idx < end; idx++) {
+    printf("%02x ", bin_byte_at(b, idx));
   }
   printf("\n");
 
