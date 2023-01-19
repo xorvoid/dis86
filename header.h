@@ -14,12 +14,12 @@ typedef  int32_t  i32;
 typedef uint64_t  u64;
 typedef  int64_t  i64;
 
-static inline void bin_dump_and_abort();
+//static inline void bin_dump_and_abort();
 
 #define MIN(a, b) (((a)<(b))?(a):(b))
 #define MAX(a, b) (((a)>(b))?(a):(b))
 #define ARRAY_SIZE(arr) (sizeof(arr)/sizeof((arr)[0]))
-#define FAIL(...) do { fprintf(stderr, "FAIL: "); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); bin_dump_and_abort(); abort(); } while(0)
+#define FAIL(...) do { fprintf(stderr, "FAIL: "); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); exit(42); } while(0)
 
 static inline char *read_file(const char *filename, size_t *out_sz)
 {
