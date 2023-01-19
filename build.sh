@@ -3,7 +3,10 @@ set -e
 
 CFLAGS="-std=c99 -Wall -Werror -Wno-unused-variable -Wno-unused-function -O2 -g"
 
-SRC="main.c dis86.c decode.c print.c"
+LIB_SRC="dis86.c decode.c print.c"
+
+SRC="main.c $LIB_SRC"
 clang $CFLAGS -o dis86 $SRC
 
-clang $CFLAGS -o test test.c
+SRC="test.c $LIB_SRC"
+clang $CFLAGS -o test $SRC

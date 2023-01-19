@@ -47,7 +47,7 @@ TEST({ 0x0000007e,     { 2,  {0x8b, 0xdf},                        }, "mov    bx,
 TEST({ 0x00000080,     { 2,  {0x03, 0xda},                        }, "add    bx,dx" })
 TEST({ 0x00000082,     { 4,  {0x89, 0x1e, 0x89, 0x00},            }, "mov    WORD PTR ds:0x89,bx" })
 TEST({ 0x00000086,     { 4,  {0x89, 0x1e, 0x8d, 0x00},            }, "mov    WORD PTR ds:0x8d,bx" })
-TEST({ 0x0000008a,     { 3,  {0xa1, 0x7b, 0x00},                  }, "mov    ax,ds:0x7b" })
+TEST({ 0x0000008a,     { 3,  {0xa1, 0x7b, 0x00},                  }, "mov    ax,WORD PTR ds:0x7b" })
 TEST({ 0x0000008d,     { 2,  {0x2b, 0xd8},                        }, "sub    bx,ax" })
 TEST({ 0x0000008f,     { 2,  {0x8e, 0xc0},                        }, "mov    es,ax" })
 TEST({ 0x00000091,     { 2,  {0xb4, 0x4a},                        }, "mov    ah,0x4a" })
