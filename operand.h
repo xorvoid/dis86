@@ -17,6 +17,7 @@ struct operand {
   int has_rel : 1;
   int has_abs32 : 1;
   int has_seg_override : 1;
+  int force_reg8 : 1;
 
   int mode;
   u8 reg;

@@ -100,7 +100,8 @@ char *dis86_print_intel_syntax(dis86_t *d, dis86_instr_t *ins, size_t addr, size
 
     if (o->type == OPERAND_TYPE_VAL) {
       if (o->has_reg) {
-        str_fmt(s, "%s", reg_str(o->reg, ins->size_flag));
+        int sz = o->force_reg8 ? SIZE_FLAG_8 : ins->size_flag;
+        str_fmt(s, "%s", reg_str(o->reg, sz));
       }
       if (o->has_sreg) {
         str_fmt(s, "%s", sreg_str(o->sreg));

@@ -47,8 +47,13 @@
   _( OP_REPNE,  "repne" ) \
   _( OP_RET,    "ret"   ) \
   _( OP_RETF,   "retf"  ) \
+  _( OP_ROL,    "rol"   ) \
+  _( OP_ROR,    "ror"   ) \
   _( OP_SBB,    "sbb"   ) \
   _( OP_SCAS,   "scas"  ) \
+  _( OP_SAR,    "sar"   ) \
+  _( OP_SHL,    "shl"   ) \
+  _( OP_SHR,    "shr"   ) \
   _( OP_STD,    "std"   ) \
   _( OP_STI,    "sti"   ) \
   _( OP_STOS,   "stos"  ) \
