@@ -1,45 +1,5 @@
 #include "dis86_private.h"
 
-static void modrm_oper2(dis86_t *d, operand_t *operand1, operand_t *operand2, int has_seg_override, u8 seg_override)
-{
-  u8 modrm = bin_fetch_u8(d->b);
-  u8 mod = modrm >> 6;
-  u8 reg = (modrm >> 3) & 7;
-  u8 rm = modrm & 7;
-
-  if (mod == 0) {
-    if (rm == 6) {
-      /* Direct addressing: 16-bit address offset */
-      u16 imm = bin_fetch_u16(d->b);
-      *operand1 = operand_addr_imm(imm, has_seg_override, seg_override);
-      *operand2 = operand_reg(reg);
-    }
-    else {
-      /* Ordinary special mode */
-      *operand1 = operand_addr_mode(rm, has_seg_override, seg_override);
-      *operand2 = operand_reg(reg);
-    }
-  }
-
-  else if (mod == 1) {
-    /* Ordinary special mode w/ 1 byte immediate */
-    u8 imm = bin_fetch_u8(d->b);
-    // FIXME!!
-    *operand1 = operand_addr_mode_imm(rm, imm, 0, 0); //has_seg_override, seg_override);
-    *operand2 = operand_reg(reg);
-  }
-
-  else if(mod == 3) {
-    /* Two register mode */
-    *operand1 = operand_reg(rm);
-    *operand2 = operand_reg(reg);
-  }
-
-  else {
-    FAIL("Unsupported MOD/RM mode | mod=%u, rm=%u", mod, rm);
-  }
-}
-
 static u8 modrm_oper1_reg(dis86_t *d, operand_t *operand, int has_seg_override, u8 seg_override)
 {
   u8 modrm = bin_fetch_u8(d->b);
@@ -84,6 +44,12 @@ static void modrm_oper1_expect(dis86_t *d, u8 expect, operand_t *operand, int ha
   if (val != expect) FAIL("Expected the value %u in the modrm reg field, got %u", val, expect);
 }
 
+static void modrm_oper2(dis86_t *d, operand_t *operand1, operand_t *operand2, int has_seg_override, u8 seg_override)
+{
+  u8 reg = modrm_oper1_reg(d, operand1, has_seg_override, seg_override);
+  *operand2 = operand_reg(reg);
+}
+
 static u8 binary_op[]  = { OP_ADD,  OP_OR,  OP_ADC, OP_SBB, OP_AND, OP_SUB,  OP_XOR, OP_CMP  };
 static u8 unary_op[]   = { 0,       0,      OP_NOT, OP_NEG, OP_MUL, OP_IMUL, OP_DIV, OP_IDIV };
 static u8 inc_dec_op[] = { OP_INC,  OP_DEC, 0,      0,      0,      0,       0,      0       };
@@ -91,41 +57,10 @@ static u8 shift_op[]   = { OP_ROL,  OP_ROR, 0,      0,      OP_SHL, OP_SHR,  0, 
 
 static u8 arith_op(dis86_t *d, u8 *ops_tbl, operand_t *operand, int has_seg_override, u8 seg_override)
 {
-  u8 modrm = bin_fetch_u8(d->b);
-  u8 mod = modrm >> 6;
-  u8 opnum = (modrm >> 3) & 7;
-  u8 rm = modrm & 7;
+  u8 opnum = modrm_oper1_reg(d, operand, has_seg_override, seg_override);
 
   u8 op = ops_tbl[opnum];
   if (!op) FAIL("Invalid instruction op encoding");
-
-  if (mod == 0) {
-    if (rm == 6) {
-      /* Direct addressing: 16-bit address offset */
-      u16 imm = bin_fetch_u16(d->b);
-      *operand = operand_addr_imm(imm, has_seg_override, seg_override);
-    }
-    else {
-      /* Ordinary special mode */
-      *operand = operand_addr_mode(rm, has_seg_override, seg_override);
-    }
-  }
-
-  else if (mod == 1) {
-    /* Ordinary special mode w/ 1 byte immediate */
-    u8 imm = bin_fetch_u8(d->b);
-    // FIXME!!
-    *operand = operand_addr_mode_imm(rm, imm, 0, 0); //has_seg_override, seg_override);
-  }
-
-  /* Register mode */
-  else if(mod == 3) {
-    *operand = operand_reg(rm);
-  }
-
-  else {
-    FAIL("Unsupported MOD/RM mode | mod=%u, rm=%u", mod, rm);
-  }
 
   return op;
 }
