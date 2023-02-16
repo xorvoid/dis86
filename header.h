@@ -40,3 +40,15 @@ static inline char *read_file(const char *filename, size_t *out_sz)
   if (out_sz) *out_sz = file_sz;
   return mem;
 }
+
+static inline void hexdump(u8 *mem, size_t len)
+{
+  size_t idx = 0;
+  while (idx < len) {
+    size_t line_end = MIN(idx+16, len);
+    for (; idx < line_end; idx++) {
+      printf("%02x ", mem[idx]);
+    }
+    printf("\n");
+  }
+}

@@ -168,3 +168,110 @@ char *dis86_print_intel_syntax(dis86_t *d, dis86_instr_t *ins, size_t addr, size
 
   return ret;
 }
+
+static void print_c_operand(str_t *s, dis86_instr_t *ins, operand_t *o, size_t addr, size_t n_bytes)
+{
+  if (o->type == OPERAND_TYPE_VAL) {
+      if (o->has_reg) {
+        int sz = o->force_reg8 ? SIZE_FLAG_8 : ins->size_flag;
+        str_fmt(s, "%s", reg_str(o->reg, sz));
+      }
+      if (o->has_sreg) {
+        str_fmt(s, "%s", sreg_str(o->sreg));
+      }
+      if (o->has_imm) {
+        str_fmt(s, "0x%x", o->imm);
+      }
+      if (o->has_rel) {
+        str_fmt(s, "0x%x", (u16)(addr + n_bytes + o->rel));
+      }
+      if (o->has_abs32) {
+        str_fmt(s, "0x%x:0x%x", o->abs32>>16, (u16)o->abs32);
+      }
+  }
+  if (o->type == OPERAND_TYPE_ADDR) {
+    if (ins->size_flag == SIZE_FLAG_8) {
+      str_fmt(s, "*(u8*)(");
+    } else if (ins->size_flag == SIZE_FLAG_16) {
+      str_fmt(s, "*(u16*)(");
+    } else if (ins->size_flag == SIZE_FLAG_32) {
+      str_fmt(s, "*(u32*)(");
+    } else {
+      FAIL("Expected size flag to be set");
+    }
+    if (o->has_seg_override) {
+      str_fmt(s, "%s:", sreg_str(o->seg_override));
+    } else {
+      str_fmt(s, "ds:");
+    }
+    if (o->has_mode) {
+      switch (o->mode) {
+        case MODE_BX_PLUS_SI: str_fmt(s, "bx+si"); break;
+        case MODE_BX_PLUS_DI: str_fmt(s, "bx+di"); break;
+        case MODE_BP_PLUS_SI: str_fmt(s, "bp+si"); break;
+        case MODE_BP_PLUS_DI: str_fmt(s, "bp+di"); break;
+        case MODE_SI:         str_fmt(s, "si"); break;
+        case MODE_DI:         str_fmt(s, "di"); break;
+        case MODE_BP:         str_fmt(s, "bp"); break;
+        case MODE_BX:         str_fmt(s, "bx"); break;
+      }
+      if (o->has_imm) {
+        str_fmt(s, "+0x%x", o->imm);
+      }
+    }
+    else if (o->has_reg) {
+      str_fmt(s, "%s", reg_str(o->reg, SIZE_FLAG_16));
+    }
+    else if (o->has_imm) {
+      str_fmt(s, "0x%x", o->imm);
+    }
+    str_fmt(s, ")");
+  }
+}
+
+char *dis86_print_c_code(dis86_t *d, dis86_instr_t *ins, size_t addr, size_t n_bytes)
+{
+  str_t s[1];
+  str_init(s);
+
+  assert(ins->rep == REP_NONE);
+
+  int type = opcode_c_type(ins->opcode);
+  if (type == OPER_C_FUNC) {
+    const char *c_func = opcode_c(ins->opcode);
+    str_fmt(s, "%s(", c_func);
+    for (size_t i = 0; i < ARRAY_SIZE(ins->operand); i++) {
+      operand_t *o = &ins->operand[i];
+      if (o->type == OPERAND_TYPE_NONE) continue;
+      if (i != 0) str_fmt(s, ", ");
+      print_c_operand(s, ins, o, addr, n_bytes);
+    }
+    str_fmt(s, ");");
+  } else if (type == OPER_C_RFUNC) {
+    const char *c_func = opcode_c(ins->opcode);
+    assert(ins->operand[0].type != OPERAND_TYPE_NONE);
+    print_c_operand(s, ins, &ins->operand[0], addr, n_bytes);
+    str_fmt(s, " = %s(", c_func);
+    if (ins->operand[1].type != OPERAND_TYPE_NONE) {
+      print_c_operand(s, ins, &ins->operand[1], addr, n_bytes);
+    }
+    str_fmt(s, ");");
+  } else if (type == OPER_C_INFIX) {
+    const char *c_oper = opcode_c(ins->opcode);
+    assert(ins->operand[0].type != OPERAND_TYPE_NONE);
+    print_c_operand(s, ins, &ins->operand[0], addr, n_bytes);
+    str_fmt(s, " %s ", c_oper);
+    if (ins->operand[1].type != OPERAND_TYPE_NONE) {
+      print_c_operand(s, ins, &ins->operand[1], addr, n_bytes);
+    }
+    str_fmt(s, ";");
+  } else if (type == OPER_C_LITERAL) {
+    const char *c_kw = opcode_c(ins->opcode);
+    str_fmt(s, "%s;", c_kw);
+  } else {
+    //FAIL("Unknown type: %d", type);
+    str_fmt(s, "UNKNOWN();");
+  }
+
+  return str_to_cstr(s);
+}

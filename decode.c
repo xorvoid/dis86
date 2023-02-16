@@ -111,6 +111,13 @@ static u8 arith_op(dis86_t *d, u8 *ops_tbl, operand_t *operand, int has_seg_over
     }
   }
 
+  else if (mod == 1) {
+    /* Ordinary special mode w/ 1 byte immediate */
+    u8 imm = bin_fetch_u8(d->b);
+    // FIXME!!
+    *operand = operand_addr_mode_imm(rm, imm, 0, 0); //has_seg_override, seg_override);
+  }
+
   /* Register mode */
   else if(mod == 3) {
     *operand = operand_reg(rm);
@@ -226,6 +233,18 @@ dis86_instr_t *dis86_next(dis86_t *d, size_t *addr, size_t *n_bytes)
 
   /****************************************************************
    * Shift instructions */
+  } else if (op == 0xc1) {
+    /* SHIFT_OP R/M16, IMM8 */
+    ins->opcode = arith_op(d, shift_op, &ins->operand[0], has_seg_override, seg_override);
+    ins->size_flag = SIZE_FLAG_16;
+    ins->operand[1] = operand_imm(bin_fetch_u8(d->b));
+
+  } else if (op == 0xd1) {
+    /* SHIFT_OP R/M16, 1 */
+    ins->opcode = arith_op(d, shift_op, &ins->operand[0], has_seg_override, seg_override);
+    ins->size_flag = SIZE_FLAG_16;
+    ins->operand[1] = operand_imm(1);
+
   } else if (op == 0xd3) {
     /* SHIFT_OP R/M16, CL */
     ins->opcode = arith_op(d, shift_op, &ins->operand[0], has_seg_override, seg_override);
@@ -306,9 +325,15 @@ dis86_instr_t *dis86_next(dis86_t *d, size_t *addr, size_t *n_bytes)
     operand_t operand[1];
     u8 reg_val = modrm_oper1_reg(d, operand, has_seg_override, seg_override);
 
-    if (reg_val == 6) {
-      /* PUSH R/M16 */
-      ins->opcode = OP_PUSH;
+    if (reg_val == 0) {
+      /* INC R/M16 */
+      ins->opcode = OP_INC;
+      ins->size_flag = SIZE_FLAG_16;
+      ins->operand[0] = operand[0];
+
+    } else if (reg_val == 1) {
+      /* DEC R/M16 */
+      ins->opcode = OP_DEC;
       ins->size_flag = SIZE_FLAG_16;
       ins->operand[0] = operand[0];
 
@@ -322,6 +347,24 @@ dis86_instr_t *dis86_next(dis86_t *d, size_t *addr, size_t *n_bytes)
       /* CALL R/M32 */
       ins->opcode = OP_CALL;
       ins->size_flag = SIZE_FLAG_32;
+      ins->operand[0] = operand[0];
+
+    } else if (reg_val == 4) {
+      /* JMP R/M16 */
+      ins->opcode = OP_JMP;
+      ins->size_flag = SIZE_FLAG_16;
+      ins->operand[0] = operand[0];
+
+    } else if (reg_val == 5) {
+      /* JMP R/M32 */
+      ins->opcode = OP_JMP;
+      ins->size_flag = SIZE_FLAG_32;
+      ins->operand[0] = operand[0];
+
+    } else if (reg_val == 6) {
+      /* PUSH R/M16 */
+      ins->opcode = OP_PUSH;
+      ins->size_flag = SIZE_FLAG_16;
       ins->operand[0] = operand[0];
 
     } else {
@@ -488,6 +531,10 @@ dis86_instr_t *dis86_next(dis86_t *d, size_t *addr, size_t *n_bytes)
     ins->size_flag = SIZE_FLAG_32;
     modrm_oper2(d, &ins->operand[1], &ins->operand[0], has_seg_override, seg_override);
 
+  } else if (op == 0xc9) {
+    // LEAVE
+    ins->opcode = OP_LEAVE;
+
   } else if (op == 0xe3) {
     // JCXZ REL8
     u8 imm = bin_fetch_u8(d->b);
@@ -501,7 +548,7 @@ dis86_instr_t *dis86_next(dis86_t *d, size_t *addr, size_t *n_bytes)
     ins->operand[0] = operand_rel16(imm);
 
   } else if (op == 0x9a) {
-    // CALL ABS32
+    // CALL SEG16:OFF16
     u16 off = bin_fetch_u16(d->b);
     u16 seg = bin_fetch_u16(d->b);
     ins->opcode = OP_CALL;
@@ -515,6 +562,13 @@ dis86_instr_t *dis86_next(dis86_t *d, size_t *addr, size_t *n_bytes)
   } else if (op == 0xfc) {
     // CLD
     ins->opcode = OP_CLD;
+
+  } else if (op == 0x68) {
+    // PUSH IMM16
+    u16 imm = bin_fetch_u16(d->b);
+    ins->opcode = OP_PUSH;
+    ins->size_flag = SIZE_FLAG_16;
+    ins->operand[0] = operand_imm(imm);
 
   } else {
     FAIL("Unknown opcode: %x", op);
