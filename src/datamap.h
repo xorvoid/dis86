@@ -22,5 +22,6 @@ struct datamap_entry
   u16    addr;
 };
 
-datamap_t *datamap_load(const char *filename);
+datamap_t *datamap_load_from_mem(const char *str, size_t n);
+datamap_t *datamap_load_from_file(const char *filename);
 void datamap_delete(datamap_t *d);

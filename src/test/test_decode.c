@@ -19,7 +19,7 @@ struct test
 #define TEST(...) __VA_ARGS__,
 
 static test_t TESTS[] = {
-#include "test_cases.c"
+#include "test_decode_cases.inc"
 };
 
 static int run_test(size_t num, bool verbose)
@@ -57,15 +57,17 @@ static int run_test(size_t num, bool verbose)
   assert(dis86_position(d) == dis86_baseaddr(d) + dis86_length(d));
 
   dis86_delete(d);
-  return 0;
+  return pass ? 0 : 1;
 }
 
 static int run_all()
 {
+  int ret = 0;
   for (size_t i = 0; i < ARRAY_SIZE(TESTS); i++) {
-    run_test(i, false);
+    int r = run_test(i, false);
+    if (!ret) ret = r;
   }
-  return 0;
+  return ret;
 }
 
 int main(int argc, char *argv[])

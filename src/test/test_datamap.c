@@ -1,6 +1,12 @@
 #include "header.h"
 #include "datamap.h"
 
+#define TESTCASE \
+"## THIS is A Comment\n"\
+"  # Also a comment\n"\
+"foo     u8    0x643\n"\
+"  bar    u16 0x1  # and another"\
+
 #define FMT_HDR  "%-10s %-6s %s\n"
 #define FMT_DATA "%-10s %-6s 0x%x\n"
 
@@ -13,15 +19,9 @@ const char *type_str(int typ)
   }
 }
 
-int main(int argc, char *argv[])
+int main(void)
 {
-  if (argc < 2) {
-    fprintf(stderr, "usage: %s <filename>\n", argv[0]);
-    return 1;
-  }
-  const char *filename = argv[1];
-
-  datamap_t *d = datamap_load(filename);
+  datamap_t *d = datamap_load_from_mem(TESTCASE, strlen(TESTCASE));
   if (!d) FAIL("Failed to load datamap");
 
   printf(FMT_HDR, "name", "type", "addr");

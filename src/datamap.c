@@ -1,6 +1,8 @@
 #include "datamap.h"
 #include <stdbool.h>
 
+#define INITIAL_CAP 32
+
 static inline bool is_white(char c)
 {
   return c == ' ' || c == '\t' || c == '\n';
@@ -10,33 +12,38 @@ typedef struct parser parser_t;
 struct parser
 {
   const char *line;
-  const char *cur;
+  size_t len;
+  size_t idx;
 };
 
-static inline void parser_skip(parser_t *p)
-{
-  bool in_comment = false;
-  while (*p->cur) {
-    if (*p->cur == '#') {
-      in_comment = true;
-    }
-    if (!in_comment && !is_white(*p->cur)) {
-      break;
-    }
-    p->cur++;
-  }
-}
+static inline void parser_skip(parser_t *p);
 
-static void parser_init(parser_t *p, const char *line)
+static void parser_init(parser_t *p, const char *line, size_t len)
 {
   p->line = line;
-  p->cur = line;
+  p->len = len;
+  p->idx = 0;
   parser_skip(p);
 }
 
 static inline bool parser_is_end(parser_t *p)
 {
-  return *p->cur == '\0';
+  return p->idx == p->len;
+}
+
+static inline void parser_skip(parser_t *p)
+{
+  bool in_comment = false;
+  while (p->idx < p->len) {
+    char c = p->line[p->idx];
+    if (c == '#') {
+      in_comment = true;
+    }
+    if (!in_comment && !is_white(c)) {
+      break;
+    }
+    p->idx++;
+  }
 }
 
 static inline void parse_tok(parser_t *p, const char **tok, size_t *tok_len)
@@ -44,9 +51,9 @@ static inline void parse_tok(parser_t *p, const char **tok, size_t *tok_len)
   parser_skip(p);
 
   // consume non-white tok
-  *tok = p->cur;
-  while (*p->cur && !is_white(*p->cur)) p->cur++;
-  *tok_len = p->cur - *tok;
+  *tok = &p->line[p->idx];
+  while (p->idx < p->len && !is_white(p->line[p->idx])) p->idx++;
+  *tok_len = &p->line[p->idx] - *tok;
 }
 
 static inline char *parse_name(parser_t *p)
@@ -125,35 +132,35 @@ static inline void entry_commit(datamap_t *d, datamap_entry_t *ent)
   d->n_entries++;
 }
 
-datamap_t *datamap_load(const char *filename)
+datamap_t *datamap_load_from_mem(const char *str, size_t n)
 {
-  size_t cap = 32;
+  size_t cap = INITIAL_CAP;
 
   datamap_t *d = calloc(1, sizeof(datamap_t));
   d->entries = malloc(cap * sizeof(datamap_entry_t));
   d->n_entries = 0;
 
-  FILE *fp = fopen(filename, "r");
-  if (!fp) FAIL("Failed to open file: '%s'", filename);
 
-  char *line = NULL;
-  size_t len = 0;
+  const char *line = str;
+  const char *line_end = str;
+  while (*line) {
+    // Find next line
+    while (*line_end && *line_end != '\n') line_end++;
 
-  while (1) {
-    ssize_t nread = getline(&line, &len, fp);
-    if (nread == -1) break;
-
-    size_t s_len = strlen(line);
-    if (line[s_len-1] == '\n') line[s_len-1] = '\0';
-
+    // Init parser
     parser_t p[1];
-    parser_init(p, line);
+    parser_init(p, line, line_end - line);
 
+    // Advance the line
+    if (*line_end) line_end++;
+    line = line_end;
+
+    // Allow and ignore empty lines
     if (parser_is_end(p)) {
-      // allow and ignore empty lines
       continue;
     }
 
+    // Parse the entry
     datamap_entry_t *ent = entry_begin(d, &cap);
     ent->name = parse_name(p);
     ent->type = parse_type(p);
@@ -162,9 +169,17 @@ datamap_t *datamap_load(const char *filename)
     entry_commit(d, ent);
   }
 
-  free(line);
-  fclose(fp);
+  return d;
+}
 
+datamap_t *datamap_load_from_file(const char *filename)
+{
+  size_t mem_sz = 0;
+  char * mem = read_file(filename, &mem_sz);
+
+  datamap_t *d = datamap_load_from_mem(mem, mem_sz);
+
+  free(mem);
   return d;
 }
 
