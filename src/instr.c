@@ -50,3 +50,8 @@ const char *instr_op_mneumonic(int op)
   if ((size_t)op >= ARRAY_SIZE(arr)) return NULL;
   return arr[op];
 }
+
+void dis86_instr_copy(dis86_instr_t *dst, dis86_instr_t *src)
+{
+  *dst = *src;
+}

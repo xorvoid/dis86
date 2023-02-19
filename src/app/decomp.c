@@ -1,3 +1,4 @@
+#include "array.h"
 
 static int exec_mode_decomp(const char *filename, segoff_t start, segoff_t end)
 {
@@ -15,21 +16,24 @@ static int exec_mode_decomp(const char *filename, segoff_t start, segoff_t end)
   free(mem);
   dis_exit = d;
 
-  char *s;
+  array_t *ins_arr = array_new(sizeof(dis86_instr_t));
   while (1) {
     dis86_instr_t *ins = dis86_next(d);
     if (!ins) break;
 
-    s = dis86_decompile(d, ins);
-    printf("%-30s // ", s);
-    free(s);
-
-    s = dis86_print_intel_syntax(d, ins, false);
-    printf("%s\n", s);
-    free(s);
+    dis86_instr_t *ins_ptr = array_append_dst(ins_arr);
+    dis86_instr_copy(ins_ptr, ins);
   }
 
+  size_t n_instr = 0;
+  dis86_instr_t *instr = (dis86_instr_t*)array_borrow(ins_arr, &n_instr);
+
+  const char *s = dis86_decompile(d, instr, n_instr);
+  printf("%-30s\n", s);
+  free((void*)s);
+
   dis_exit = NULL;
+  array_delete(ins_arr);
   dis86_delete(d);
   return 0;
 }

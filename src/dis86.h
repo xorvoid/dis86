@@ -44,6 +44,9 @@ size_t dis86_instr_addr(dis86_instr_t *ins);
 /* Get the number of bytes used in the encoding */
 size_t dis86_instr_n_bytes(dis86_instr_t *ins);
 
+/* Copy the instruction */
+void dis86_instr_copy(dis86_instr_t *dst, dis86_instr_t *src);
+
 /*****************************************************************/
 /* PRINT ROUTINES */
 /*****************************************************************/
@@ -56,7 +59,7 @@ char *dis86_print_intel_syntax(dis86_t *d, dis86_instr_t *ins, bool with_detail)
 /*****************************************************************/
 
 /* Decompile to C code */
-char *dis86_decompile(dis86_t *d, dis86_instr_t *ins);
+char *dis86_decompile(dis86_t *d, dis86_instr_t *ins, size_t n_ins);
 
 #ifdef __cplusplus
 }

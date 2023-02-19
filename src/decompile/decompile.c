@@ -95,55 +95,74 @@ static void print_operand_code_c(str_t *s, dis86_instr_t *ins, operand_t *o)
   }
 }
 
-char *dis86_decompile(dis86_t *d, dis86_instr_t *ins)
+char *dis86_decompile(dis86_t *d, dis86_instr_t *ins_arr, size_t n_ins)
 {
-  str_t s[1];
-  str_init(s);
-
   char buf[32];
 
-  int type = code_c_type[ins->opcode];
-  const char *str = code_c_str[ins->opcode];
+  str_t ret_s[1];
+  str_init(ret_s);
 
-  switch (type) {
-    case CODE_C_UNKNOWN:   str_fmt(s, "UNKNOWN();"); break;
-    case CODE_C_OPERATOR: {
-      assert(ins->operand[0].type != OPERAND_TYPE_NONE);
-      print_operand_code_c(s, ins, &ins->operand[0]);
-      str_fmt(s, " %s ", str);
-      if (ins->operand[1].type != OPERAND_TYPE_NONE) {
-        print_operand_code_c(s, ins, &ins->operand[1]);
-      }
-      str_fmt(s, ";");
-    } break;
-    case CODE_C_FUNCTION: {
-      str_fmt(s, "%s(", str);
-        for (size_t i = 0; i < ARRAY_SIZE(ins->operand); i++) {
-          operand_t *o = &ins->operand[i];
-          if (o->type == OPERAND_TYPE_NONE) break;
-          if (i != 0) str_fmt(s, ", ");
-          print_operand_code_c(s, ins, o);
+  str_fmt(ret_s, "void func(void)\n");
+  str_fmt(ret_s, "{\n");
+
+  for (size_t i = 0; i < n_ins; i++) {
+    str_t s[1];
+    str_init(s);
+
+    dis86_instr_t *ins = &ins_arr[i];
+
+    int type = code_c_type[ins->opcode];
+    const char *str = code_c_str[ins->opcode];
+
+    switch (type) {
+      case CODE_C_UNKNOWN:   str_fmt(s, "UNKNOWN();"); break;
+      case CODE_C_OPERATOR: {
+        assert(ins->operand[0].type != OPERAND_TYPE_NONE);
+        print_operand_code_c(s, ins, &ins->operand[0]);
+        str_fmt(s, " %s ", str);
+        if (ins->operand[1].type != OPERAND_TYPE_NONE) {
+          print_operand_code_c(s, ins, &ins->operand[1]);
         }
-      str_fmt(s, ");", str);
-    } break;
-    case CODE_C_RFUNCTION: {
-      assert(ins->operand[0].type != OPERAND_TYPE_NONE);
-      print_operand_code_c(s, ins, &ins->operand[0]);
-      str_fmt(s, " = %s(", str);
-        for (size_t i = 1; i < ARRAY_SIZE(ins->operand); i++) {
-          operand_t *o = &ins->operand[i];
-          if (o->type == OPERAND_TYPE_NONE) break;
-          if (i != 1) str_fmt(s, ", ");
-          print_operand_code_c(s, ins, o);
-        }
-      str_fmt(s, ");", str);
-    } break;
-    case CODE_C_LITERAL: {
-      str_fmt(s, "%s", str);
-    } break;
-    default:
-      FAIL("Unknown code type: %d\n", type);
+        str_fmt(s, ";");
+      } break;
+      case CODE_C_FUNCTION: {
+        str_fmt(s, "%s(", str);
+          for (size_t i = 0; i < ARRAY_SIZE(ins->operand); i++) {
+            operand_t *o = &ins->operand[i];
+            if (o->type == OPERAND_TYPE_NONE) break;
+            if (i != 0) str_fmt(s, ", ");
+            print_operand_code_c(s, ins, o);
+          }
+        str_fmt(s, ");", str);
+      } break;
+      case CODE_C_RFUNCTION: {
+        assert(ins->operand[0].type != OPERAND_TYPE_NONE);
+        print_operand_code_c(s, ins, &ins->operand[0]);
+        str_fmt(s, " = %s(", str);
+          for (size_t i = 1; i < ARRAY_SIZE(ins->operand); i++) {
+            operand_t *o = &ins->operand[i];
+            if (o->type == OPERAND_TYPE_NONE) break;
+            if (i != 1) str_fmt(s, ", ");
+            print_operand_code_c(s, ins, o);
+          }
+        str_fmt(s, ");", str);
+      } break;
+      case CODE_C_LITERAL: {
+        str_fmt(s, "%s", str);
+      } break;
+      default:
+        FAIL("Unknown code type: %d\n", type);
+    }
+
+    const char *cs = str_to_cstr(s);
+    const char *as = dis86_print_intel_syntax(d, ins, false);
+    if (i != 0) str_fmt(ret_s, "\n");
+    str_fmt(ret_s, "  %-30s // %s", cs, as);
+    free((void*)as);
+    free((void*)cs);
   }
 
-  return str_to_cstr(s);
+  str_fmt(ret_s, "}\n");
+
+  return str_to_cstr(ret_s);
 }
