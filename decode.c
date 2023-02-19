@@ -27,10 +27,20 @@ static inline operand_t operand_reg(int id)
   return o;
 }
 
-static inline operand_t operand_imm(u16 val)
+static inline operand_t operand_imm8(u8 val)
 {
   operand_t o = {};
   o.type = OPERAND_TYPE_IMM;
+  o.u.imm.sz = SIZE_8;
+  o.u.imm.val = val;
+  return o;
+}
+
+static inline operand_t operand_imm16(u16 val)
+{
+  operand_t o = {};
+  o.type = OPERAND_TYPE_IMM;
+  o.u.imm.sz = SIZE_16;
   o.u.imm.val = val;
   return o;
 }
@@ -177,21 +187,22 @@ dis86_instr_t *dis86_next(dis86_t *d)
   }
 
   int need_modrm = 0;
-  operand_t * oper_reg8   = NULL;
-  operand_t * oper_reg16  = NULL;
-  operand_t * oper_sreg   = NULL;
-  operand_t * oper_rm8    = NULL;
-  operand_t * oper_rm16   = NULL;
-  operand_t * oper_m8     = NULL;
-  operand_t * oper_m16    = NULL;
-  operand_t * oper_m32    = NULL;
-  operand_t * oper_imm8   = NULL;
-  operand_t * oper_imm16  = NULL;
-  operand_t * oper_moff8  = NULL;
-  operand_t * oper_moff16 = NULL;
-  operand_t * oper_rel8   = NULL;
-  operand_t * oper_rel16  = NULL;
-  operand_t * oper_far32  = NULL;
+  operand_t * oper_reg8     = NULL;
+  operand_t * oper_reg16    = NULL;
+  operand_t * oper_sreg     = NULL;
+  operand_t * oper_rm8      = NULL;
+  operand_t * oper_rm16     = NULL;
+  operand_t * oper_m8       = NULL;
+  operand_t * oper_m16      = NULL;
+  operand_t * oper_m32      = NULL;
+  operand_t * oper_imm8     = NULL;
+  operand_t * oper_imm8_ext = NULL;
+  operand_t * oper_imm16    = NULL;
+  operand_t * oper_moff8    = NULL;
+  operand_t * oper_moff16   = NULL;
+  operand_t * oper_rel8     = NULL;
+  operand_t * oper_rel16    = NULL;
+  operand_t * oper_far32    = NULL;
 
   // Decode everything else
   ins->opcode = fmt->op;
@@ -229,8 +240,8 @@ dis86_instr_t *dis86_next(dis86_t *d)
 
       // Implied others
       case OPER_FLAGS: ins->operand[i] = operand_reg(REG_FLAGS); break;
-      case OPER_LIT1:  ins->operand[i] = operand_imm(1); break;
-      case OPER_LIT3:  ins->operand[i] = operand_imm(3); break;
+      case OPER_LIT1:  ins->operand[i] = operand_imm8(1); break;
+      case OPER_LIT3:  ins->operand[i] = operand_imm8(3); break;
 
       // Implied string operations operands
       case OPER_SRC8:  UNIMPL(); break;
@@ -253,8 +264,9 @@ dis86_instr_t *dis86_next(dis86_t *d)
       case OPER_RM16: need_modrm = 1; oper_rm16 = &ins->operand[i]; break;
 
       // Explicit immediate data
-      case OPER_IMM8:  oper_imm8  = &ins->operand[i]; break;
-      case OPER_IMM16: oper_imm16 = &ins->operand[i]; break;
+      case OPER_IMM8:     oper_imm8     = &ins->operand[i]; break;
+      case OPER_IMM8_EXT: oper_imm8_ext = &ins->operand[i]; break;
+      case OPER_IMM16:    oper_imm16    = &ins->operand[i]; break;
 
       // Explicit far32 jump immediate
       case OPER_FAR32: oper_far32 = &ins->operand[i]; break;
@@ -289,8 +301,9 @@ dis86_instr_t *dis86_next(dis86_t *d)
   if (oper_m32)  *oper_m32  = operand_m32(d->b, modrm, sreg);
 
   // Process any immediate data
-  if (oper_imm8)  *oper_imm8  = operand_imm((i8)binary_fetch_u8(d->b));
-  if (oper_imm16) *oper_imm16 = operand_imm(binary_fetch_u16(d->b));
+  if (oper_imm8)     *oper_imm8     = operand_imm8(binary_fetch_u8(d->b));
+  if (oper_imm8_ext) *oper_imm8_ext = operand_imm16((i8)binary_fetch_u8(d->b));
+  if (oper_imm16)    *oper_imm16    = operand_imm16(binary_fetch_u16(d->b));
 
   // Process any memory offset immediates
   if (oper_moff8)  *oper_moff8  = operand_moff(d->b, SIZE_8, sreg);

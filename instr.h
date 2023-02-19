@@ -89,6 +89,7 @@ struct operand_mem
 
 struct operand_imm
 {
+  int sz;
   u16 val;
 };
 

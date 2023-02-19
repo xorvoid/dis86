@@ -52,8 +52,9 @@ enum {
   OPER_RM16,   // Either Register of memory operand, always 16-bit
 
   // Explicit immediate data
-  OPER_IMM8,   // Immediate value, sized 8-bits
-  OPER_IMM16,  // Immediate value, sized 16-bits
+  OPER_IMM8,     // Immediate value, sized 8-bits
+  OPER_IMM8_EXT, // Immediate value, sized 8-bits, sign-extended to 16-bits
+  OPER_IMM16,    // Immediate value, sized 16-bits
 
   // Explicit far32 jump immediate
   OPER_FAR32,  // Immediate value, sized 32-bits
@@ -325,14 +326,14 @@ static instr_fmt_t instr_tbl[] = {
   {  OP_SUB,       0x82,      5,   OPER_RM8,     OPER_IMM8,    -1            },
   {  OP_XOR,       0x82,      6,   OPER_RM8,     OPER_IMM8,    -1            },
   {  OP_CMP,       0x82,      7,   OPER_RM8,     OPER_IMM8,    -1            },
-  {  OP_ADD,       0x83,      0,   OPER_RM16,    OPER_IMM8,    -1            },
-  {  OP_OR,        0x83,      1,   OPER_RM16,    OPER_IMM8,    -1            },
-  {  OP_ADC,       0x83,      2,   OPER_RM16,    OPER_IMM8,    -1            },
-  {  OP_SBB,       0x83,      3,   OPER_RM16,    OPER_IMM8,    -1            },
-  {  OP_AND,       0x83,      4,   OPER_RM16,    OPER_IMM8,    -1            },
-  {  OP_SUB,       0x83,      5,   OPER_RM16,    OPER_IMM8,    -1            },
-  {  OP_XOR,       0x83,      6,   OPER_RM16,    OPER_IMM8,    -1            },
-  {  OP_CMP,       0x83,      7,   OPER_RM16,    OPER_IMM8,    -1            },
+  {  OP_ADD,       0x83,      0,   OPER_RM16,    OPER_IMM8_EXT,-1            },
+  {  OP_OR,        0x83,      1,   OPER_RM16,    OPER_IMM8_EXT,-1            },
+  {  OP_ADC,       0x83,      2,   OPER_RM16,    OPER_IMM8_EXT,-1            },
+  {  OP_SBB,       0x83,      3,   OPER_RM16,    OPER_IMM8_EXT,-1            },
+  {  OP_AND,       0x83,      4,   OPER_RM16,    OPER_IMM8_EXT,-1            },
+  {  OP_SUB,       0x83,      5,   OPER_RM16,    OPER_IMM8_EXT,-1            },
+  {  OP_XOR,       0x83,      6,   OPER_RM16,    OPER_IMM8_EXT,-1            },
+  {  OP_CMP,       0x83,      7,   OPER_RM16,    OPER_IMM8_EXT,-1            },
   {  OP_TEST,      0x84,     -1,   OPER_RM8,     OPER_R8,      -1            },
   {  OP_TEST,      0x85,     -1,   OPER_RM16,    OPER_R16,     -1            },
   {  OP_XCHG,      0x86,     -1,   OPER_R8,      OPER_RM8,     -1            },
@@ -401,14 +402,14 @@ static instr_fmt_t instr_tbl[] = {
   {  OP_SHR,       0xc0,      5,   OPER_RM8,     OPER_IMM8,    -1            },
   {  OP_SHL,       0xc0,      6,   OPER_RM8,     OPER_IMM8,    -1            },
   {  OP_SAR,       0xc0,      7,   OPER_RM8,     OPER_IMM8,    -1            },
-  {  OP_ROL,       0xc1,      0,   OPER_RM16,    OPER_IMM8,    -1            },
-  {  OP_ROR,       0xc1,      1,   OPER_RM16,    OPER_IMM8,    -1            },
-  {  OP_RCL,       0xc1,      2,   OPER_RM16,    OPER_IMM8,    -1            },
-  {  OP_RCR,       0xc1,      3,   OPER_RM16,    OPER_IMM8,    -1            },
-  {  OP_SHL,       0xc1,      4,   OPER_RM16,    OPER_IMM8,    -1            },
-  {  OP_SHR,       0xc1,      5,   OPER_RM16,    OPER_IMM8,    -1            },
-  {  OP_SHL,       0xc1,      6,   OPER_RM16,    OPER_IMM8,    -1            },
-  {  OP_SAR,       0xc1,      7,   OPER_RM16,    OPER_IMM8,    -1            },
+  {  OP_ROL,       0xc1,      0,   OPER_RM16,    OPER_IMM8_EXT,-1            },
+  {  OP_ROR,       0xc1,      1,   OPER_RM16,    OPER_IMM8_EXT,-1            },
+  {  OP_RCL,       0xc1,      2,   OPER_RM16,    OPER_IMM8_EXT,-1            },
+  {  OP_RCR,       0xc1,      3,   OPER_RM16,    OPER_IMM8_EXT,-1            },
+  {  OP_SHL,       0xc1,      4,   OPER_RM16,    OPER_IMM8_EXT,-1            },
+  {  OP_SHR,       0xc1,      5,   OPER_RM16,    OPER_IMM8_EXT,-1            },
+  {  OP_SHL,       0xc1,      6,   OPER_RM16,    OPER_IMM8_EXT,-1            },
+  {  OP_SAR,       0xc1,      7,   OPER_RM16,    OPER_IMM8_EXT,-1            },
   {  OP_RET,       0xc2,     -1,   OPER_IMM16,   -1,           -1            },
   {  OP_RET,       0xc3,     -1,   -1,           -1,           -1            },
   {  OP_LES,       0xc4,     -1,   OPER_ES,      OPER_R16,     OPER_M32      },
@@ -419,8 +420,8 @@ static instr_fmt_t instr_tbl[] = {
   {  OP_LEAVE,     0xc9,     -1,   OPER_BP,      -1,           -1            },
   {  OP_RETF,      0xca,     -1,   OPER_IMM16,   -1,           -1            },
   {  OP_RETF,      0xcb,     -1,   -1,           -1,           -1            },
-  {  OP_INT,       0xcc,     -1,   OPER_LIT3,    -1,           -1            },
-  {  OP_INT,       0xcd,     -1,   OPER_IMM8,    -1,           -1            },
+  {  OP_INT,       0xcc,     -1,   OPER_LIT3,    OPER_FLAGS,   -1            },
+  {  OP_INT,       0xcd,     -1,   OPER_IMM8,    OPER_FLAGS,   -1            },
   {  OP_INTO,      0xce,     -1,   OPER_FLAGS,   -1,           -1            },
   {  OP_IRET,      0xcf,     -1,   OPER_FLAGS,   -1,           -1            },
   {  OP_ROL,       0xd0,      0,   OPER_RM8,     OPER_LIT1,    -1            },

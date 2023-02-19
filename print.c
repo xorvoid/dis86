@@ -17,7 +17,10 @@ void print_operand_intel_syntax(str_t *s, dis86_instr_t *ins, operand_t *o)
       /* str_fmt(s, "0x%x", o->u.imm.val); */
     } break;
     case OPERAND_TYPE_IMM: str_fmt(s, "0x%x", o->u.imm.val); break;
-    case OPERAND_TYPE_REL: str_fmt(s, "0x%x", ins->addr + ins->n_bytes + o->u.rel.val); break;
+    case OPERAND_TYPE_REL: {
+      u16 effective = ins->addr + ins->n_bytes + o->u.rel.val;
+      str_fmt(s, "0x%x", effective);
+    } break;
     case OPERAND_TYPE_FAR: str_fmt(s, "0x%x:0x%x", o->u.far.seg, o->u.far.off); break;
     default: FAIL("INVALID OPERAND TYPE: %d", o->type);
   }
@@ -37,14 +40,8 @@ char *dis86_print_intel_syntax(dis86_t *d, dis86_instr_t *ins, size_t addr, size
     print_operand_intel_syntax(s, ins, o);
   }
 
-  /* /\* remove any trailing space *\/ */
-  /* char *ret = str_to_cstr(s); */
-  /* size_t len = strlen(ret); */
-  /* while (len > 0) { */
-  /*   if (ret[len-1] != ' ') break; */
-  /*   len--; */
-  /* } */
-  /* ret[len] = '\0'; */
+  /* remove any trailing space */
+  str_rstrip(s);
 
   return str_to_cstr(s);
 }
