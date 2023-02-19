@@ -318,6 +318,7 @@ dis86_instr_t *dis86_next(dis86_t *d)
 
   ins->addr = start_loc;
   ins->n_bytes = binary_location(d->b) - start_loc;
+  ins->intel_hidden = fmt->intel_hidden;
 
   return ins;
 }

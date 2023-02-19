@@ -122,19 +122,20 @@ struct dis86_instr
   operand_t operand[OPERAND_MAX];
   size_t    addr;
   size_t    n_bytes;
-
+  int       intel_hidden;   /* bitmap of operands hidden in intel assembly */
 };
 
 const char *instr_op_mneumonic(int op);
 
 struct instr_fmt
 {
-  int op;       /* OP_ */
-  int opcode1;  /* first byte: opcode */
-  int opcode2;  /* 3-bit modrm reg field: sometimes used as level 2 opcode */
-  int operand1; /* OPER_ */
-  int operand2; /* OPER_ */
-  int operand3; /* OPER_ */
+  int op;             /* OP_ */
+  int opcode1;        /* first byte: opcode */
+  int opcode2;        /* 3-bit modrm reg field: sometimes used as level 2 opcode */
+  int operand1;       /* OPER_ */
+  int operand2;       /* OPER_ */
+  int operand3;       /* OPER_ */
+  int intel_hidden;   /* bitmap of operands hidden in intel assembly */
 };
 
 int instr_fmt_lookup(int opcode1, int opcode2, instr_fmt_t **fmt);

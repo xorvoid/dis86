@@ -39,12 +39,16 @@ char *dis86_print_intel_syntax(dis86_t *d, dis86_instr_t *ins, size_t addr, size
   str_init(s);
 
   str_fmt(s, "%-5s", instr_op_mneumonic(ins->opcode));
+
+  int n_operands = 0;
   for (size_t i = 0; i < ARRAY_SIZE(ins->operand); i++) {
     operand_t *o = &ins->operand[i];
     if (o->type == OPERAND_TYPE_NONE) break;
-    if (i == 0) str_fmt(s, "  ");
+    if ((int)(1<<i) & ins->intel_hidden) continue;
+    if (n_operands == 0) str_fmt(s, "  ");
     else str_fmt(s, ",");
     print_operand_intel_syntax(s, ins, o);
+    n_operands++;
   }
 
   /* remove any trailing space */
