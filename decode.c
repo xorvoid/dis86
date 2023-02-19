@@ -181,6 +181,9 @@ dis86_instr_t *dis86_next(dis86_t *d)
   memset(ins, 0, sizeof(*ins));
 
   size_t start_loc = binary_location(d->b);
+  if (start_loc == binary_baseaddr(d->b) + binary_length(d->b)) {
+    return NULL; // Reached the end
+  }
 
   // First parse any prefixes
   int sreg = REG_INVAL;

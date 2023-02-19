@@ -93,9 +93,9 @@ int main(int argc, char *argv[])
     size_t addr = dis86_instr_addr(ins);
     size_t n_bytes = dis86_instr_n_bytes(ins);
 
-    s = dis86_print_c_code(d, ins, addr, n_bytes);
-    printf("%-30s // ", s);
-    free(s);
+    /* s = dis86_print_c_code(d, ins, addr, n_bytes); */
+    /* printf("%-30s // ", s); */
+    /* free(s); */
 
     s = dis86_print_intel_syntax(d, ins, addr, n_bytes, false);
     printf("%s\n", s);

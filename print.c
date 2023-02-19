@@ -19,7 +19,11 @@ void print_operand_intel_syntax(str_t *s, dis86_instr_t *ins, operand_t *o)
         str_fmt(s, "[");
         if (m->reg1) str_fmt(s, "%s", reg_name(m->reg1));
         if (m->reg2) str_fmt(s, "+%s", reg_name(m->reg2));
-        if (m->off) str_fmt(s, "+0x%x", m->off);
+        if (m->off) {
+          i16 disp = (i16)m->off;
+          if (disp >= 0) str_fmt(s, "+0x%x", (u16)disp);
+          else           str_fmt(s, "-0x%x", (u16)-disp);
+        }
         str_fmt(s, "]");
       }
     } break;
