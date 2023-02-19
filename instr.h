@@ -8,6 +8,7 @@ typedef struct operand_reg   operand_reg_t;
 typedef struct operand_mem   operand_mem_t;
 typedef struct operand_imm   operand_imm_t;
 typedef struct operand_rel   operand_rel_t;
+typedef struct operand_far   operand_far_t;
 typedef struct instr_fmt     instr_fmt_t;
 
 #define REGISTER_ARRAY(_)\
@@ -63,6 +64,7 @@ enum {
   OPERAND_TYPE_MEM,
   OPERAND_TYPE_IMM,
   OPERAND_TYPE_REL,
+  OPERAND_TYPE_FAR,
 };
 
 struct operand_reg
@@ -95,6 +97,12 @@ struct operand_rel
   u16 val;
 };
 
+struct operand_far
+{
+  u16 seg;
+  u16 off;
+};
+
 struct operand
 {
   int type;
@@ -103,6 +111,7 @@ struct operand
     operand_mem_t mem;
     operand_imm_t imm;
     operand_rel_t rel;
+    operand_far_t far;
   } u;
 };
 

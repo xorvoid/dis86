@@ -54,7 +54,9 @@ enum {
   // Explicit immediate data
   OPER_IMM8,   // Immediate value, sized 8-bits
   OPER_IMM16,  // Immediate value, sized 16-bits
-  OPER_IMM32,  // Immediate value, sized 32-bits
+
+  // Explicit far32 jump immediate
+  OPER_FAR32,  // Immediate value, sized 32-bits
 
   // Explicit 16-bit immediate used as a memory offset into DS
   OPER_MOFF8,  // 16-bit imm loading 8-bit value
@@ -283,22 +285,22 @@ static instr_fmt_t instr_tbl[] = {
   {  OP_INS,       0x6d,     -1,   OPER_M16,     OPER_DX,      -1            },
   {  OP_OUTS,      0x6e,     -1,   OPER_DX,      OPER_M8,      -1            },
   {  OP_OUTS,      0x6f,     -1,   OPER_DX,      OPER_M16,     -1            },
-  {  OP_JO,        0x70,     -1,   -1,           -1,           -1            },
-  {  OP_JNO,       0x71,     -1,   -1,           -1,           -1            },
-  {  OP_JB,        0x72,     -1,   -1,           -1,           -1            },
-  {  OP_JAE,       0x73,     -1,   -1,           -1,           -1            },
-  {  OP_JE,        0x74,     -1,   -1,           -1,           -1            },
-  {  OP_JNE,       0x75,     -1,   -1,           -1,           -1            },
-  {  OP_JBE,       0x76,     -1,   -1,           -1,           -1            },
-  {  OP_JA,        0x77,     -1,   -1,           -1,           -1            },
-  {  OP_JS,        0x78,     -1,   -1,           -1,           -1            },
-  {  OP_JNS,       0x79,     -1,   -1,           -1,           -1            },
-  {  OP_JP,        0x7a,     -1,   -1,           -1,           -1            },
-  {  OP_JNP,       0x7b,     -1,   -1,           -1,           -1            },
-  {  OP_JL,        0x7c,     -1,   -1,           -1,           -1            },
-  {  OP_JGE,       0x7d,     -1,   -1,           -1,           -1            },
-  {  OP_JLE,       0x7e,     -1,   -1,           -1,           -1            },
-  {  OP_JG,        0x7f,     -1,   -1,           -1,           -1            },
+  {  OP_JO,        0x70,     -1,   OPER_REL8,    -1,           -1            },
+  {  OP_JNO,       0x71,     -1,   OPER_REL8,    -1,           -1            },
+  {  OP_JB,        0x72,     -1,   OPER_REL8,    -1,           -1            },
+  {  OP_JAE,       0x73,     -1,   OPER_REL8,    -1,           -1            },
+  {  OP_JE,        0x74,     -1,   OPER_REL8,    -1,           -1            },
+  {  OP_JNE,       0x75,     -1,   OPER_REL8,    -1,           -1            },
+  {  OP_JBE,       0x76,     -1,   OPER_REL8,    -1,           -1            },
+  {  OP_JA,        0x77,     -1,   OPER_REL8,    -1,           -1            },
+  {  OP_JS,        0x78,     -1,   OPER_REL8,    -1,           -1            },
+  {  OP_JNS,       0x79,     -1,   OPER_REL8,    -1,           -1            },
+  {  OP_JP,        0x7a,     -1,   OPER_REL8,    -1,           -1            },
+  {  OP_JNP,       0x7b,     -1,   OPER_REL8,    -1,           -1            },
+  {  OP_JL,        0x7c,     -1,   OPER_REL8,    -1,           -1            },
+  {  OP_JGE,       0x7d,     -1,   OPER_REL8,    -1,           -1            },
+  {  OP_JLE,       0x7e,     -1,   OPER_REL8,    -1,           -1            },
+  {  OP_JG,        0x7f,     -1,   OPER_REL8,    -1,           -1            },
   {  OP_ADD,       0x80,      0,   OPER_RM8,     OPER_IMM8,    -1            },
   {  OP_OR,        0x80,      1,   OPER_RM8,     OPER_IMM8,    -1            },
   {  OP_ADC,       0x80,      2,   OPER_RM8,     OPER_IMM8,    -1            },
@@ -353,7 +355,7 @@ static instr_fmt_t instr_tbl[] = {
   {  OP_XCHG,      0x97,     -1,   OPER_DI,      OPER_AX,      -1            },
   {  OP_CBW,       0x98,     -1,   OPER_AX,      OPER_AL,      -1            },
   {  OP_CWD,       0x99,     -1,   OPER_DX,      OPER_AX,      -1            },
-  {  OP_CALLF,     0x9a,     -1,   OPER_IMM32,   -1,           -1            },
+  {  OP_CALLF,     0x9a,     -1,   OPER_FAR32,   -1,           -1            },
   {  OP_INVAL,     0x9b,     -1,   -1,           -1,           -1            },
   {  OP_PUSHF,     0x9c,     -1,   OPER_FLAGS,   -1,           -1            },
   {  OP_POPF,      0x9d,     -1,   OPER_FLAGS,   -1,           -1            },
@@ -475,7 +477,7 @@ static instr_fmt_t instr_tbl[] = {
   {  OP_OUT,       0xe7,     -1,   OPER_IMM8,    OPER_AX,      -1            },
   {  OP_CALL,      0xe8,     -1,   OPER_REL16,   -1,           -1            },
   {  OP_JMP,       0xe9,     -1,   OPER_REL16,   -1,           -1            },
-  {  OP_JMPF,      0xea,     -1,   OPER_IMM32,   -1,           -1            },
+  {  OP_JMPF,      0xea,     -1,   OPER_FAR32,   -1,           -1            },
   {  OP_JMP,       0xeb,     -1,   OPER_REL8,    -1,           -1            },
   {  OP_IN,        0xec,     -1,   OPER_AL,      OPER_DX,      -1            },
   {  OP_IN,        0xed,     -1,   OPER_AX,      OPER_DX,      -1            },

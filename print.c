@@ -18,6 +18,7 @@ void print_operand_intel_syntax(str_t *s, dis86_instr_t *ins, operand_t *o)
     } break;
     case OPERAND_TYPE_IMM: str_fmt(s, "0x%x", o->u.imm.val); break;
     case OPERAND_TYPE_REL: str_fmt(s, "0x%x", ins->addr + ins->n_bytes + o->u.rel.val); break;
+    case OPERAND_TYPE_FAR: str_fmt(s, "0x%x:0x%x", o->u.far.seg, o->u.far.off); break;
     default: FAIL("INVALID OPERAND TYPE: %d", o->type);
   }
 }

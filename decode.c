@@ -49,6 +49,18 @@ static inline operand_t operand_rel(binary_t *b, int sz)
   return o;
 }
 
+static inline operand_t operand_far(binary_t *b)
+{
+  u16 off = binary_fetch_u16(b);
+  u16 seg = binary_fetch_u16(b);
+
+  operand_t o = {};
+  o.type = OPERAND_TYPE_FAR;
+  o.u.far.seg = seg;
+  o.u.far.off = off;
+  return o;
+}
+
 static inline operand_t operand_moff(binary_t *b, int sz, int sreg)
 {
   operand_t o = {};
@@ -179,6 +191,7 @@ dis86_instr_t *dis86_next(dis86_t *d)
   operand_t * oper_moff16 = NULL;
   operand_t * oper_rel8   = NULL;
   operand_t * oper_rel16  = NULL;
+  operand_t * oper_far32  = NULL;
 
   // Decode everything else
   ins->opcode = fmt->op;
@@ -242,7 +255,9 @@ dis86_instr_t *dis86_next(dis86_t *d)
       // Explicit immediate data
       case OPER_IMM8:  oper_imm8  = &ins->operand[i]; break;
       case OPER_IMM16: oper_imm16 = &ins->operand[i]; break;
-      case OPER_IMM32: UNIMPL(); break;
+
+      // Explicit far32 jump immediate
+      case OPER_FAR32: oper_far32 = &ins->operand[i]; break;
 
       // Explicit 16-bit immediate used as a memory offset into DS
       case OPER_MOFF8:  oper_moff8  = &ins->operand[i]; break;
@@ -284,6 +299,9 @@ dis86_instr_t *dis86_next(dis86_t *d)
   // Process any relative offset immediates
   if (oper_rel8)  *oper_rel8  = operand_rel(d->b, SIZE_8);
   if (oper_rel16) *oper_rel16 = operand_rel(d->b, SIZE_16);
+
+  // Process any far32 offset immediates
+  if (oper_far32) *oper_far32 = operand_far(d->b);
 
   ins->addr = start_loc;
   ins->n_bytes = binary_location(d->b) - start_loc;
