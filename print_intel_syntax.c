@@ -1,7 +1,7 @@
 #include "dis86_private.h"
 #include "str.h"
 
-void print_operand_intel_syntax(str_t *s, dis86_instr_t *ins, operand_t *o)
+static void print_operand_intel_syntax(str_t *s, dis86_instr_t *ins, operand_t *o)
 {
   switch (o->type) {
     case OPERAND_TYPE_REG: str_fmt(s, "%s", reg_name(o->u.reg.id)); break;
@@ -41,6 +41,17 @@ char *dis86_print_intel_syntax(dis86_t *d, dis86_instr_t *ins, bool with_detail)
 {
   str_t s[1];
   str_init(s);
+
+  if (with_detail) {
+    str_fmt(s, "%8zx:\t", ins->addr);
+    for (size_t i = 0; i < ins->n_bytes; i++) {
+      u8 b = binary_byte_at(d->b, ins->addr + i);
+      str_fmt(s, "%02x ", b);
+    }
+    size_t used = ins->n_bytes * 3;
+    size_t remain = (used <= 21) ? 21 - used : 0;
+    str_fmt(s, "%*s\t", (int)remain, " ");
+  }
 
   if (ins->rep == REP_NE) str_fmt(s, "repne ");
   else if (ins->rep == REP_E)  str_fmt(s, "rep ");

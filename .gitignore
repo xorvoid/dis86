@@ -2,4 +2,5 @@
 \#*#
 *.dSYM/
 dis86
+dis86_c
 test
