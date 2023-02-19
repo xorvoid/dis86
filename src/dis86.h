@@ -51,8 +51,12 @@ size_t dis86_instr_n_bytes(dis86_instr_t *ins);
 /* Print */
 char *dis86_print_intel_syntax(dis86_t *d, dis86_instr_t *ins, bool with_detail);
 
-/* Print as C Code Equivalent */
-char *dis86_print_code_c(dis86_t *d, dis86_instr_t *ins);
+/*****************************************************************/
+/* DECOMPILE ROUTINES */
+/*****************************************************************/
+
+/* Decompile to C code */
+char *dis86_decompile(dis86_t *d, dis86_instr_t *ins);
 
 #ifdef __cplusplus
 }

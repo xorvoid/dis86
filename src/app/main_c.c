@@ -90,7 +90,7 @@ int main(int argc, char *argv[])
     dis86_instr_t *ins = dis86_next(d);
     if (!ins) break;
 
-    s = dis86_print_code_c(d, ins);
+    s = dis86_decompile(d, ins);
     printf("%-30s // ", s);
     free(s);
 

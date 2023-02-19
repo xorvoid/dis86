@@ -95,7 +95,7 @@ static void print_operand_code_c(str_t *s, dis86_instr_t *ins, operand_t *o)
   }
 }
 
-char *dis86_print_code_c(dis86_t *d, dis86_instr_t *ins)
+char *dis86_decompile(dis86_t *d, dis86_instr_t *ins)
 {
   str_t s[1];
   str_init(s);

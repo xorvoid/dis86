@@ -72,11 +72,6 @@ int main(int argc, char *argv[])
   size_t mem_sz = 0;
   char *mem = read_file(filename, &mem_sz);
 
-  /* printf("start_idx: %zu\n", start_idx); */
-  /* printf("end_idx: %zu\n", end_idx); */
-  /* hexdump((u8*)mem+start_idx, end_idx-start_idx); */
-  /* exit(42); */
-
   char *region = &mem[start_idx];
   size_t region_sz = end_idx - start_idx;
 
