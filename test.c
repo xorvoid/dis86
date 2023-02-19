@@ -38,10 +38,7 @@ static int run_test(size_t num, bool verbose)
   dis86_instr_t *ins = dis86_next(d);
   if (!ins) FAIL("Failed to decode instruction");
 
-  size_t addr = dis86_instr_addr(ins);
-  size_t n_bytes = dis86_instr_n_bytes(ins);
-
-  char *s = dis86_print_intel_syntax(d, ins, addr, n_bytes, false);
+  char *s = dis86_print_intel_syntax(d, ins, false);
   bool pass = (0 == strcmp(s, t->code));
   printf("%s", pass ? "PASS" : "FAIL");
   printf(" | '%s'\n", s);

@@ -37,7 +37,7 @@ void print_operand_intel_syntax(str_t *s, dis86_instr_t *ins, operand_t *o)
   }
 }
 
-char *dis86_print_intel_syntax(dis86_t *d, dis86_instr_t *ins, size_t addr, size_t n_bytes, bool with_detail)
+char *dis86_print_intel_syntax(dis86_t *d, dis86_instr_t *ins, bool with_detail)
 {
   str_t s[1];
   str_init(s);

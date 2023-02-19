@@ -90,14 +90,11 @@ int main(int argc, char *argv[])
     dis86_instr_t *ins = dis86_next(d);
     if (!ins) break;
 
-    size_t addr = dis86_instr_addr(ins);
-    size_t n_bytes = dis86_instr_n_bytes(ins);
+    s = dis86_print_code_c(d, ins);
+    printf("%-30s // ", s);
+    free(s);
 
-    /* s = dis86_print_c_code(d, ins, addr, n_bytes); */
-    /* printf("%-30s // ", s); */
-    /* free(s); */
-
-    s = dis86_print_intel_syntax(d, ins, addr, n_bytes, false);
+    s = dis86_print_intel_syntax(d, ins, false);
     printf("%s\n", s);
     free(s);
   }
