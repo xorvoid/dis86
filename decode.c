@@ -77,8 +77,8 @@ static inline operand_t operand_moff(binary_t *b, int sz, int sreg)
   o.type = OPERAND_TYPE_MEM;
   o.u.mem.sz = sz;
   o.u.mem.sreg = sreg ? sreg : REG_DS;
-  o.u.mem.reg1 = -1;
-  o.u.mem.reg2 = -1;
+  o.u.mem.reg1 = REG_INVAL;
+  o.u.mem.reg2 = REG_INVAL;
   o.u.mem.off  = binary_fetch_u16(b);
   return o;
 }
@@ -106,14 +106,14 @@ static inline operand_t _operand_rm(binary_t *b, int sz, u8 modrm, int sreg)
   m->sz = sz;
 
   switch (rm) {
-    case 0:  m->sreg = REG_DS;  m->reg1 = REG_BX;  m->reg2 = REG_SI;  break;
-    case 1:  m->sreg = REG_DS;  m->reg1 = REG_BX;  m->reg2 = REG_DI;  break;
-    case 2:  m->sreg = REG_SS;  m->reg1 = REG_BP;  m->reg2 = REG_SI;  break;
-    case 3:  m->sreg = REG_SS;  m->reg1 = REG_BP;  m->reg2 = REG_DI;  break;
-    case 4:  m->sreg = REG_DS;  m->reg1 = REG_SI;  m->reg2 = -1;      break;
-    case 5:  m->sreg = REG_DS;  m->reg1 = REG_DI;  m->reg2 = -1;      break;
-    case 6:  m->sreg = REG_SS;  m->reg1 = REG_BP;  m->reg2 = -1;      break;
-    case 7:  m->sreg = REG_DS;  m->reg1 = REG_BX;  m->reg2 = -1;      break;
+    case 0:  m->sreg = REG_DS;  m->reg1 = REG_BX;  m->reg2 = REG_SI;    break;
+    case 1:  m->sreg = REG_DS;  m->reg1 = REG_BX;  m->reg2 = REG_DI;    break;
+    case 2:  m->sreg = REG_SS;  m->reg1 = REG_BP;  m->reg2 = REG_SI;    break;
+    case 3:  m->sreg = REG_SS;  m->reg1 = REG_BP;  m->reg2 = REG_DI;    break;
+    case 4:  m->sreg = REG_DS;  m->reg1 = REG_SI;  m->reg2 = REG_INVAL; break;
+    case 5:  m->sreg = REG_DS;  m->reg1 = REG_DI;  m->reg2 = REG_INVAL; break;
+    case 6:  m->sreg = REG_SS;  m->reg1 = REG_BP;  m->reg2 = REG_INVAL; break;
+    case 7:  m->sreg = REG_DS;  m->reg1 = REG_BX;  m->reg2 = REG_INVAL; break;
   }
 
   // Handle immediate dispacements

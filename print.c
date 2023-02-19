@@ -13,8 +13,15 @@ void print_operand_intel_syntax(str_t *s, dis86_instr_t *ins, operand_t *o)
         case SIZE_32: str_fmt(s, "DWORD PTR "); break;
       }
       str_fmt(s, "%s:", reg_name(m->sreg));
-      if (m->off) str_fmt(s, "0x%x", m->off);
-      /* str_fmt(s, "0x%x", o->u.imm.val); */
+      if (!m->reg1 && !m->reg2) {
+        if (m->off) str_fmt(s, "0x%x", m->off);
+      } else {
+        str_fmt(s, "[");
+        if (m->reg1) str_fmt(s, "%s", reg_name(m->reg1));
+        if (m->reg2) str_fmt(s, "+%s", reg_name(m->reg2));
+        if (m->off) str_fmt(s, "+0x%x", m->off);
+        str_fmt(s, "]");
+      }
     } break;
     case OPERAND_TYPE_IMM: str_fmt(s, "0x%x", o->u.imm.val); break;
     case OPERAND_TYPE_REL: {
