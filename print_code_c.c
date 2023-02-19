@@ -30,12 +30,42 @@ static const char *as_upper(const char *s)
   return buf;
 }
 
+static const char *lookup_name(operand_mem_t *m)
+{
+  static char buf[128];
+  i16 off = (i16)m->off;
+
+  // Data section?
+  if (m->sreg == REG_DS && !m->reg1 && !m->reg2) {
+    sprintf(buf, "_data_%04x", (u16)off);
+    return buf;
+  }
+
+  // Local var?
+  if (m->sreg == REG_SS && m->reg1 == REG_BP && !m->reg2) {
+    if (off < 0) {
+      sprintf(buf, "_local_%04x", (u16)-off);
+    } else {
+      sprintf(buf, "_param_%04x", (u16)off);
+    }
+    return buf;
+  }
+
+
+  return NULL;
+}
+
 static void print_operand_code_c(str_t *s, dis86_instr_t *ins, operand_t *o)
 {
   switch (o->type) {
     case OPERAND_TYPE_REG: str_fmt(s, "%s", as_upper(reg_name(o->u.reg.id))); break;
     case OPERAND_TYPE_MEM: {
       operand_mem_t *m = &o->u.mem;
+      const char *var_name = lookup_name(m);
+      if (var_name) {
+        str_fmt(s, "%s", var_name);
+        break; // all done
+      }
       switch (m->sz) {
         case SIZE_8:  str_fmt(s, "*(u8*)"); break;
         case SIZE_16: str_fmt(s, "*(u16*)"); break;
@@ -55,7 +85,7 @@ static void print_operand_code_c(str_t *s, dis86_instr_t *ins, operand_t *o)
       }
       str_fmt(s, ")");
     } break;
-    case OPERAND_TYPE_IMM: str_fmt(s, "%x", o->u.imm.val); break;
+    case OPERAND_TYPE_IMM: str_fmt(s, "0x%x", o->u.imm.val); break;
     case OPERAND_TYPE_REL: {
       u16 effective = ins->addr + ins->n_bytes + o->u.rel.val;
       str_fmt(s, "0x%x", effective);
