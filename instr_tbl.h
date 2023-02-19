@@ -56,13 +56,13 @@ enum {
   OPER_IMM16,  // Immediate value, sized 16-bits
   OPER_IMM32,  // Immediate value, sized 32-bits
 
-  // Explicit relative offsets (branching / calls)
-  OPER_REL8,   // Sign-extended to 16-bit and added to address after fetch
-  OPER_REL16,  // Added to address after fetch
-
   // Explicit 16-bit immediate used as a memory offset into DS
   OPER_MOFF8,  // 16-bit imm loading 8-bit value
   OPER_MOFF16, // 16-bit imm loading 16-bit value
+
+  // Explicit relative offsets (branching / calls)
+  OPER_REL8,   // Sign-extended to 16-bit and added to address after fetch
+  OPER_REL16,  // Added to address after fetch
 };
 
 #define INSTR_OP_ARRAY(_)     \
@@ -205,6 +205,7 @@ static instr_fmt_t instr_tbl[] = {
   {  OP_AND,       0x23,     -1,   OPER_R16,     OPER_RM16,    -1            },
   {  OP_AND,       0x24,     -1,   OPER_AL,      OPER_IMM8,    -1            },
   {  OP_AND,       0x25,     -1,   OPER_AX,      OPER_IMM16,   -1            },
+  // SEGMENT OVERRIDE: ES
   {  OP_INVAL,     0x26,     -1,   -1,           -1,           -1            },
   {  OP_DAA,       0x27,     -1,   OPER_AL,      -1,           -1            },
   {  OP_SUB,       0x28,     -1,   OPER_RM8,     OPER_R8,      -1            },
@@ -213,6 +214,7 @@ static instr_fmt_t instr_tbl[] = {
   {  OP_SUB,       0x2b,     -1,   OPER_R16,     OPER_RM16,    -1            },
   {  OP_SUB,       0x2c,     -1,   OPER_AL,      OPER_IMM8,    -1            },
   {  OP_SUB,       0x2d,     -1,   OPER_AX,      OPER_IMM16,   -1            },
+  // SEGMENT OVERRIDE: CS
   {  OP_INVAL,     0x2e,     -1,   -1,           -1,           -1            },
   {  OP_DAS,       0x2f,     -1,   OPER_AL,      -1,           -1            },
   {  OP_XOR,       0x30,     -1,   OPER_RM8,     OPER_R8,      -1            },
@@ -221,6 +223,7 @@ static instr_fmt_t instr_tbl[] = {
   {  OP_XOR,       0x33,     -1,   OPER_R16,     OPER_RM16,    -1            },
   {  OP_XOR,       0x34,     -1,   OPER_AL,      OPER_IMM8,    -1            },
   {  OP_XOR,       0x35,     -1,   OPER_AX,      OPER_IMM16,   -1            },
+  // SEGMENT OVERRIDE: SS
   {  OP_INVAL,     0x36,     -1,   -1,           -1,           -1            },
   {  OP_AAA,       0x37,     -1,   OPER_AL,      OPER_AH,      -1            },
   {  OP_CMP,       0x38,     -1,   OPER_RM8,     OPER_R8,      -1            },
@@ -229,6 +232,7 @@ static instr_fmt_t instr_tbl[] = {
   {  OP_CMP,       0x3b,     -1,   OPER_R16,     OPER_RM16,    -1            },
   {  OP_CMP,       0x3c,     -1,   OPER_AL,      OPER_IMM8,    -1            },
   {  OP_CMP,       0x3d,     -1,   OPER_AX,      OPER_IMM16,   -1            },
+  // SEGMENT OVERRIDE: DS
   {  OP_INVAL,     0x3e,     -1,   -1,           -1,           -1            },
   {  OP_AAS,       0x3f,     -1,   OPER_AL,      OPER_AH,      -1            },
   {  OP_INC,       0x40,     -1,   OPER_AX,      -1,           -1            },
@@ -413,8 +417,8 @@ static instr_fmt_t instr_tbl[] = {
   {  OP_LEAVE,     0xc9,     -1,   OPER_BP,      -1,           -1            },
   {  OP_RETF,      0xca,     -1,   OPER_IMM16,   -1,           -1            },
   {  OP_RETF,      0xcb,     -1,   -1,           -1,           -1            },
-  {  OP_INT,       0xcc,     -1,   OPER_LIT3,    OPER_FLAGS,   -1            },
-  {  OP_INT,       0xcd,     -1,   OPER_IMM8,    OPER_FLAGS,   -1            },
+  {  OP_INT,       0xcc,     -1,   OPER_LIT3,    -1,           -1            },
+  {  OP_INT,       0xcd,     -1,   OPER_IMM8,    -1,           -1            },
   {  OP_INTO,      0xce,     -1,   OPER_FLAGS,   -1,           -1            },
   {  OP_IRET,      0xcf,     -1,   OPER_FLAGS,   -1,           -1            },
   {  OP_ROL,       0xd0,      0,   OPER_RM8,     OPER_LIT1,    -1            },

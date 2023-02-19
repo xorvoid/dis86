@@ -5,8 +5,9 @@
 
 typedef struct operand       operand_t;
 typedef struct operand_reg   operand_reg_t;
-typedef struct operand_imm   operand_imm_t;
 typedef struct operand_mem   operand_mem_t;
+typedef struct operand_imm   operand_imm_t;
+typedef struct operand_rel   operand_rel_t;
 typedef struct instr_fmt     instr_fmt_t;
 
 #define REGISTER_ARRAY(_)\
@@ -59,8 +60,9 @@ static inline const char *reg_name(int reg)
 enum {
   OPERAND_TYPE_NONE = 0,
   OPERAND_TYPE_REG,
-  OPERAND_TYPE_IMM,
   OPERAND_TYPE_MEM,
+  OPERAND_TYPE_IMM,
+  OPERAND_TYPE_REL,
 };
 
 struct operand_reg
@@ -68,17 +70,29 @@ struct operand_reg
   int id;
 };
 
+enum {
+  SIZE_8,
+  SIZE_16,
+  SIZE_32,
+};
+
+struct operand_mem
+{
+  int sz;   // SIZE_
+  int sreg; // always must be populated
+  int reg1; // -1 if unused
+  int reg2; // -1 if unused
+  u16 off;  // 0 if unused
+};
+
 struct operand_imm
 {
   u16 val;
 };
 
-struct operand_mem
+struct operand_rel
 {
-  int sreg; // always must be populated
-  int reg1; // -1 if unused
-  int reg2; // -1 if unused
-  u16 off;  // 0 if unused
+  u16 val;
 };
 
 struct operand
@@ -86,8 +100,9 @@ struct operand
   int type;
   union {
     operand_reg_t reg;
-    operand_imm_t imm;
     operand_mem_t mem;
+    operand_imm_t imm;
+    operand_rel_t rel;
   } u;
 };
 

@@ -24,6 +24,7 @@ int instr_fmt_lookup(int opcode1, int opcode2, instr_fmt_t **_fmt)
   for (size_t i = 0; i < ARRAY_SIZE(instr_tbl); i++) {
     instr_fmt_t *fmt = &instr_tbl[i];
     if (opcode1 == fmt->opcode1) {
+      if (fmt->op == OP_INVAL) return RESULT_NOT_FOUND;
       opcode1_found = 1;
       if (opcode2 == fmt->opcode2) {
         *_fmt = fmt;
