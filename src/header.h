@@ -53,3 +53,42 @@ static inline void hexdump(u8 *mem, size_t len)
     printf("\n");
   }
 }
+
+static u64 parse_hex_u64(const char *s, size_t len)
+{
+  if (len > 16) FAIL("Hex string too long to fit in u64");
+
+  u64 ret = 0;
+  for (size_t i = 0; i < len; i++) {
+    char c = s[i];
+    if ('0' <= c && c <= '9') {
+      ret = ret*16 + (c-'0');
+    } else if ('a' <= c && c <= 'f') {
+      ret = ret*16 + (c-'a'+10);
+    } else if ('A' <= c && c <= 'F') {
+      ret = ret*16 + (c-'A'+10);
+    } else {
+      FAIL("Invalid hex string: '%.*s'", (int)len, s);
+    }
+  }
+
+  return ret;
+}
+
+static u32 parse_hex_u32(const char *s, size_t len)
+{
+  if (len > 8) FAIL("Hex string too long to fit in u16");
+  return (u32)parse_hex_u64(s, len);
+}
+
+static u16 parse_hex_u16(const char *s, size_t len)
+{
+  if (len > 4) FAIL("Hex string too long to fit in u16");
+  return (u16)parse_hex_u64(s, len);
+}
+
+static u8 parse_hex_u8(const char *s, size_t len)
+{
+  if (len > 2) FAIL("Hex string too long to fit in u16");
+  return (u16)parse_hex_u64(s, len);
+}
