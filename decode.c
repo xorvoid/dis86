@@ -151,24 +151,57 @@ static inline operand_t operand_m32(binary_t *b, u8 modrm, int sreg)
   return o;
 }
 
+static inline operand_t operand_src(int sz)
+{
+  operand_t o = {};
+  o.type = OPERAND_TYPE_MEM;
+  o.u.mem.sz = sz;
+  o.u.mem.sreg = REG_DS; // TODO FIMXE: ARE SEG OVERRIDES ALLOWED FOR THESE??
+  o.u.mem.reg1 = REG_SI;
+  o.u.mem.reg2 = REG_INVAL;
+  o.u.mem.off  = 0;
+  return o;
+}
+
+static inline operand_t operand_dst(int sz)
+{
+  operand_t o = {};
+  o.type = OPERAND_TYPE_MEM;
+  o.u.mem.sz = sz;
+  o.u.mem.sreg = REG_ES; // TODO FIMXE: ARE SEG OVERRIDES ALLOWED FOR THESE??
+  o.u.mem.reg1 = REG_DI;
+  o.u.mem.reg2 = REG_INVAL;
+  o.u.mem.off  = 0;
+  return o;
+}
+
 dis86_instr_t *dis86_next(dis86_t *d)
 {
   dis86_instr_t *ins = d->ins;
   memset(ins, 0, sizeof(*ins));
 
   size_t start_loc = binary_location(d->b);
-  int b = binary_fetch_u8(d->b);
 
   // First parse any prefixes
-  int sreg = 0;
-  if      (b == 0x26) sreg = REG_ES;
-  else if (b == 0x2e) sreg = REG_CS;
-  else if (b == 0x36) sreg = REG_SS;
-  else if (b == 0x3e) sreg = REG_DS;
+  int sreg = REG_INVAL;
+  int rep = REP_NONE;
+  while (1) {
+    int b = binary_peek_u8(d->b);
 
-  if (sreg) b = binary_fetch_u8(d->b);
+    if      (b == 0x26) sreg = REG_ES;
+    else if (b == 0x2e) sreg = REG_CS;
+    else if (b == 0x36) sreg = REG_SS;
+    else if (b == 0x3e) sreg = REG_DS;
+    else if (b == 0x3e) sreg = REG_DS;
+    else if (b == 0xf2) rep = REP_NE;
+    else if (b == 0xf3) rep = REP_E;
+    else break; // not a prefix!
 
-  int opcode1 = b;
+    binary_advance_u8(d->b);
+  }
+
+  // Now parse the main level1 opcode
+  int opcode1 = binary_fetch_u8(d->b);
   int opcode2 = -1;
 
   instr_fmt_t *fmt = NULL;
@@ -205,6 +238,7 @@ dis86_instr_t *dis86_next(dis86_t *d)
   operand_t * oper_far32    = NULL;
 
   // Decode everything else
+  ins->rep = rep;
   ins->opcode = fmt->op;
   for (size_t i = 0; i < OPERAND_MAX; i++) {
     int operand = (&fmt->operand1)[i];
@@ -244,10 +278,10 @@ dis86_instr_t *dis86_next(dis86_t *d)
       case OPER_LIT3:  ins->operand[i] = operand_imm8(3); break;
 
       // Implied string operations operands
-      case OPER_SRC8:  UNIMPL(); break;
-      case OPER_SRC16: UNIMPL(); break;
-      case OPER_DST8:  UNIMPL(); break;
-      case OPER_DST16: UNIMPL(); break;
+      case OPER_SRC8:  ins->operand[i] = operand_src(SIZE_8);  break;
+      case OPER_SRC16: ins->operand[i] = operand_src(SIZE_16); break;
+      case OPER_DST8:  ins->operand[i] = operand_dst(SIZE_8);  break;
+      case OPER_DST16: ins->operand[i] = operand_dst(SIZE_16); break;
 
       // Explicit register operands
       case OPER_R8:   need_modrm = 1; oper_reg8  = &ins->operand[i]; break;

@@ -233,5 +233,5 @@ TEST({ 0x0000025a,     { 1,  {0x50},                              }, "push   ax"
 TEST({ 0x0000025b,     { 1,  {0x90},                              }, "nop" })
 TEST({ 0x0000025c,     { 1,  {0x0e},                              }, "push   cs" })
 TEST({ 0x0000025d,     { 3,  {0xe8, 0xcd, 0x00},                  }, "call   0x32d" })
-TEST({ 0x00000034,     { 2,  {0xf2, 0xae},                        }, "repnz scas al,BYTE PTR es:[di]" })
-TEST({ 0x000000b9,     { 2,  {0xf3, 0xaa},                        }, "rep stos BYTE PTR es:[di],al" })
+TEST({ 0x00000034,     { 2,  {0xf2, 0xae},                        }, "repne scas   al,BYTE PTR es:[di]" })
+TEST({ 0x000000b9,     { 2,  {0xf3, 0xaa},                        }, "rep stos   BYTE PTR es:[di],al" })

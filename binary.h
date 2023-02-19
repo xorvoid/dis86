@@ -31,10 +31,15 @@ static inline u8 binary_peek_u8(binary_t *b)
   return byte;
 }
 
+static inline void binary_advance_u8(binary_t *b)
+{
+  b->idx++;
+}
+
 static inline u8 binary_fetch_u8(binary_t *b)
 {
-  u8 byte = binary_byte_at(b, b->idx);
-  b->idx++;
+  u8 byte = binary_peek_u8(b);
+  binary_advance_u8(b);
   return byte;
 }
 

@@ -377,7 +377,7 @@ static instr_fmt_t instr_tbl[] = {
   {  OP_STOS,      0xab,     -1,   OPER_DST16,   OPER_AX,      -1,             0x0 },
   {  OP_LODS,      0xac,     -1,   OPER_AL,      OPER_SRC8,    -1,             0x0 },
   {  OP_LODS,      0xad,     -1,   OPER_AX,      OPER_SRC16,   -1,             0x0 },
-  {  OP_SCAS,      0xae,     -1,   OPER_DST8,    OPER_AL,      -1,             0x0 },
+  {  OP_SCAS,      0xae,     -1,   OPER_AL,      OPER_DST8,    -1,             0x0 },
   {  OP_SCAS,      0xaf,     -1,   OPER_DST16,   OPER_AX,      -1,             0x0 },
   {  OP_MOV,       0xb0,     -1,   OPER_AL,      OPER_IMM8,    -1,             0x0 },
   {  OP_MOV,       0xb1,     -1,   OPER_CL,      OPER_IMM8,    -1,             0x0 },
@@ -487,6 +487,7 @@ static instr_fmt_t instr_tbl[] = {
   {  OP_OUT,       0xef,     -1,   OPER_DX,      OPER_AX,      -1,             0x0 },
   {  OP_INVAL,     0xf0,     -1,   -1,           -1,           -1,             0x0 },
   {  OP_INVAL,     0xf1,     -1,   -1,           -1,           -1,             0x0 },
+  // REPNE: 0xf2, REPE: 0xf3
   {  OP_INVAL,     0xf2,     -1,   -1,           -1,           -1,             0x0 },
   {  OP_INVAL,     0xf3,     -1,   -1,           -1,           -1,             0x0 },
   {  OP_HLT,       0xf4,     -1,   -1,           -1,           -1,             0x0 },

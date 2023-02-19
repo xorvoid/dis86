@@ -38,6 +38,9 @@ char *dis86_print_intel_syntax(dis86_t *d, dis86_instr_t *ins, size_t addr, size
   str_t s[1];
   str_init(s);
 
+  if (ins->rep == REP_NE) str_fmt(s, "repne ");
+  else if (ins->rep == REP_E)  str_fmt(s, "rep ");
+
   str_fmt(s, "%-5s", instr_op_mneumonic(ins->opcode));
 
   int n_operands = 0;

@@ -116,8 +116,15 @@ struct operand
   } u;
 };
 
+enum {
+  REP_NONE = 0,
+  REP_NE,
+  REP_E,
+};
+
 struct dis86_instr
 {
+  int       rep;
   int       opcode;
   operand_t operand[OPERAND_MAX];
   size_t    addr;
