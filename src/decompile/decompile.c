@@ -2,6 +2,24 @@
 #include "instr_tbl.h"
 #include "str.h"
 
+#define MAX_LABELS 256
+
+typedef struct labels labels_t;
+struct labels
+{
+  u32 addr[MAX_LABELS];
+  size_t n_addr;
+};
+
+// FIXME: O(n) search
+static bool is_label(labels_t *labels, u32 addr)
+{
+  for (size_t i = 0; i < labels->n_addr; i++) {
+    if (labels->addr[i] == addr) return true;
+  }
+  return false;
+}
+
 static int code_c_type[] = {
 #define ELT(_1, _2, ty, _4) ty,
   INSTR_OP_ARRAY(ELT)
@@ -55,6 +73,48 @@ static const char *lookup_name(operand_mem_t *m)
   return NULL;
 }
 
+static u32 branch_destination(dis86_instr_t *ins)
+{
+  i16 rel = 0;
+  switch (ins->opcode) {
+    case OP_JO:  rel = (i16)ins->operand[0].u.rel.val; break;
+    case OP_JNO: rel = (i16)ins->operand[0].u.rel.val; break;
+    case OP_JB:  rel = (i16)ins->operand[0].u.rel.val; break;
+    case OP_JAE: rel = (i16)ins->operand[0].u.rel.val; break;
+    case OP_JE:  rel = (i16)ins->operand[0].u.rel.val; break;
+    case OP_JNE: rel = (i16)ins->operand[0].u.rel.val; break;
+    case OP_JBE: rel = (i16)ins->operand[0].u.rel.val; break;
+    case OP_JA:  rel = (i16)ins->operand[0].u.rel.val; break;
+    case OP_JS:  rel = (i16)ins->operand[0].u.rel.val; break;
+    case OP_JNS: rel = (i16)ins->operand[0].u.rel.val; break;
+    case OP_JP:  rel = (i16)ins->operand[0].u.rel.val; break;
+    case OP_JNP: rel = (i16)ins->operand[0].u.rel.val; break;
+    case OP_JL:  rel = (i16)ins->operand[0].u.rel.val; break;
+    case OP_JGE: rel = (i16)ins->operand[0].u.rel.val; break;
+    case OP_JLE: rel = (i16)ins->operand[0].u.rel.val; break;
+    case OP_JG:  rel = (i16)ins->operand[0].u.rel.val; break;
+    case OP_JMP: rel = (i16)ins->operand[0].u.rel.val; break;
+    default: return 0;
+  }
+
+  u16 effective = ins->addr + ins->n_bytes + rel;
+  return effective;
+}
+
+static void find_labels(labels_t *labels, dis86_instr_t *ins_arr, size_t n_ins)
+{
+  labels->n_addr = 0;
+
+  for (size_t i = 0; i < n_ins; i++) {
+    dis86_instr_t *ins = &ins_arr[i];
+    u16 dst = branch_destination(ins);
+    if (!dst) continue;
+
+    assert(labels->n_addr < ARRAY_SIZE(labels->addr));
+    labels->addr[labels->n_addr++] = dst;
+  }
+}
+
 static void print_operand_code_c(str_t *s, dis86_instr_t *ins, operand_t *o)
 {
   switch (o->type) {
@@ -95,14 +155,17 @@ static void print_operand_code_c(str_t *s, dis86_instr_t *ins, operand_t *o)
   }
 }
 
-char *dis86_decompile(dis86_t *d, dis86_instr_t *ins_arr, size_t n_ins)
+char *dis86_decompile(dis86_t *d, const char *func_name, dis86_instr_t *ins_arr, size_t n_ins)
 {
   char buf[32];
+  const char *cs, *as;
+
+  labels_t labels[1];
+  find_labels(labels, ins_arr, n_ins);
 
   str_t ret_s[1];
   str_init(ret_s);
-
-  str_fmt(ret_s, "void func(void)\n");
+  str_fmt(ret_s, "void %s(void)\n", func_name);
   str_fmt(ret_s, "{\n");
 
   for (size_t i = 0; i < n_ins; i++) {
@@ -110,6 +173,125 @@ char *dis86_decompile(dis86_t *d, dis86_instr_t *ins_arr, size_t n_ins)
     str_init(s);
 
     dis86_instr_t *ins = &ins_arr[i];
+    if (is_label(labels, (u32)ins->addr)) {
+      str_fmt(ret_s, "\n label_%08x:\n", (u32)ins->addr);
+    }
+
+    // Special handling for cmp+jmp
+    if (ins->opcode == OP_CMP) {
+      const char *oper = NULL;
+      int sign = 0;
+      if (i+1 < n_ins) {
+        dis86_instr_t *next_ins = &ins_arr[i+1];
+        switch (next_ins->opcode) {
+          case OP_JB:  oper = "<";  break;
+          case OP_JBE: oper = "<="; break;
+          case OP_JA:  oper = ">";  break;
+          case OP_JAE: oper = ">="; break;
+          case OP_JE:  oper = "=="; break;
+          case OP_JNE: oper = "!="; break;
+          case OP_JL:  oper = "<";  sign = 1; break;
+          case OP_JLE: oper = "<="; sign = 1; break;
+          case OP_JG:  oper = ">";  sign = 1; break;
+          case OP_JGE: oper = ">="; sign = 1; break;
+        }
+        if (oper) {
+          u32 dest = branch_destination(next_ins);
+          str_fmt(s, "if (");
+          if (sign) str_fmt(s, "(i16)");
+          assert(ins->operand[0].type != OPERAND_TYPE_NONE);
+          print_operand_code_c(s, ins, &ins->operand[0]);
+          str_fmt(s, " %s ", oper);
+          if (sign) str_fmt(s, "(i16)");
+          assert(ins->operand[1].type != OPERAND_TYPE_NONE);
+          print_operand_code_c(s, ins, &ins->operand[1]);
+          str_fmt(s, ") goto label_%08x;", dest);
+
+          as = dis86_print_intel_syntax(d, ins, false);
+          str_fmt(ret_s, "  %-50s // %s\n", "", as);
+          free((void*)as);
+
+          cs = str_to_cstr(s);
+          as = dis86_print_intel_syntax(d, next_ins, false);
+          str_fmt(ret_s, "  %-50s // %s\n", cs, as);
+          free((void*)as);
+          free((void*)cs);
+
+          i++; // advance one extra
+          continue;
+        }
+      }
+    }
+
+    // Special handling for or reg,reg + je / jne
+    if (ins->opcode == OP_OR &&
+        ins->operand[0].type == OPERAND_TYPE_REG &&
+        ins->operand[1].type == OPERAND_TYPE_REG &&
+        ins->operand[0].u.reg.id == ins->operand[1].u.reg.id
+    ) {
+      const char *oper = NULL;
+      if (i+1 < n_ins) {
+        dis86_instr_t *next_ins = &ins_arr[i+1];
+        switch (next_ins->opcode) {
+          case OP_JE:  oper = "=="; break;
+          case OP_JNE: oper = "!="; break;
+        }
+        if (oper) {
+          u32 dest = branch_destination(next_ins);
+          str_fmt(s, "if (");
+          print_operand_code_c(s, ins, &ins->operand[0]);
+          str_fmt(s, " %s 0) goto label_%08x;", oper, dest);
+
+          as = dis86_print_intel_syntax(d, ins, false);
+          str_fmt(ret_s, "  %-50s // %s\n", "", as);
+          free((void*)as);
+
+          cs = str_to_cstr(s);
+          as = dis86_print_intel_syntax(d, next_ins, false);
+          str_fmt(ret_s, "  %-50s // %s\n", cs, as);
+          free((void*)as);
+          free((void*)cs);
+
+          i++; // advance one extra
+          continue;
+        }
+      }
+    }
+
+    if (ins->opcode == OP_JMP) {
+      u32 dest = branch_destination(ins);
+      str_fmt(s, "goto label_%08x;", dest);
+
+      cs = str_to_cstr(s);
+      as = dis86_print_intel_syntax(d, ins, false);
+      str_fmt(ret_s, "  %-50s // %s\n", cs, as);
+      free((void*)as);
+      free((void*)cs);
+
+      continue;
+    }
+
+    if (ins->opcode == OP_LDS || ins->opcode == OP_LES) {
+      print_operand_code_c(s, ins, &ins->operand[0]);
+      str_fmt(s, " = (u16)(");
+      print_operand_code_c(s, ins, &ins->operand[2]);
+      str_fmt(s, " >> 16); ");
+      print_operand_code_c(s, ins, &ins->operand[1]);
+      str_fmt(s, " = (u16)(");
+      print_operand_code_c(s, ins, &ins->operand[2]);
+      str_fmt(s, ");");
+
+      cs = str_to_cstr(s);
+      as = dis86_print_intel_syntax(d, ins, false);
+      str_fmt(ret_s, "  %-50s // %s\n", cs, as);
+      free((void*)as);
+      free((void*)cs);
+
+      continue;
+    }
+
+    /////////////////
+    // GENERIC
 
     int type = code_c_type[ins->opcode];
     const char *str = code_c_str[ins->opcode];
@@ -154,10 +336,9 @@ char *dis86_decompile(dis86_t *d, dis86_instr_t *ins_arr, size_t n_ins)
         FAIL("Unknown code type: %d\n", type);
     }
 
-    const char *cs = str_to_cstr(s);
-    const char *as = dis86_print_intel_syntax(d, ins, false);
-    if (i != 0) str_fmt(ret_s, "\n");
-    str_fmt(ret_s, "  %-30s // %s", cs, as);
+    cs = str_to_cstr(s);
+    as = dis86_print_intel_syntax(d, ins, false);
+    str_fmt(ret_s, "  %-50s // %s\n", cs, as);
     free((void*)as);
     free((void*)cs);
   }

@@ -59,7 +59,7 @@ char *dis86_print_intel_syntax(dis86_t *d, dis86_instr_t *ins, bool with_detail)
 /*****************************************************************/
 
 /* Decompile to C code */
-char *dis86_decompile(dis86_t *d, dis86_instr_t *ins, size_t n_ins);
+char *dis86_decompile(dis86_t *d, const char *func_name, dis86_instr_t *ins, size_t n_ins);
 
 #ifdef __cplusplus
 }

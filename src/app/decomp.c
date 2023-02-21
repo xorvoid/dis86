@@ -28,7 +28,10 @@ static int exec_mode_decomp(const char *filename, segoff_t start, segoff_t end)
   size_t n_instr = 0;
   dis86_instr_t *instr = (dis86_instr_t*)array_borrow(ins_arr, &n_instr);
 
-  const char *s = dis86_decompile(d, instr, n_instr);
+  char func_name[256];
+  sprintf(func_name, "func_%08x", (u32)start_idx);
+
+  const char *s = dis86_decompile(d, func_name, instr, n_instr);
   printf("%-30s\n", s);
   free((void*)s);
 

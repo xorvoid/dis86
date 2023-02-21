@@ -169,7 +169,7 @@ enum {
   _(  OP_TEST,    "test",     CODE_C_UNKNOWN,     ""       )\
   _(  OP_XCHG,    "xchg",     CODE_C_UNKNOWN,     ""       )\
   _(  OP_XLAT,    "xlat",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_XOR,     "xor",      CODE_C_UNKNOWN,     ""       )\
+  _(  OP_XOR,     "xor",      CODE_C_OPERATOR,    "^="     )\
 
 enum {
 #define ELT(enum_symbol, _2, _3, _4) enum_symbol,
