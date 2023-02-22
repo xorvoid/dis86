@@ -151,8 +151,8 @@ enum {
   _(  OP_PUSHF,   "pushf",    CODE_C_UNKNOWN,     ""       )\
   _(  OP_RCL,     "rcl",      CODE_C_UNKNOWN,     ""       )\
   _(  OP_RCR,     "rcr",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_RET,     "ret",      CODE_C_LITERAL,     "return;")\
-  _(  OP_RETF,    "retf",     CODE_C_LITERAL,     "return; /* far */" ) \
+  _(  OP_RET,     "ret",      CODE_C_LITERAL,     "RETURN_NEAR();")\
+  _(  OP_RETF,    "retf",     CODE_C_LITERAL,     "RETURN_FAR();" ) \
   _(  OP_ROL,     "rol",      CODE_C_UNKNOWN,     ""       )\
   _(  OP_ROR,     "ror",      CODE_C_UNKNOWN,     ""       )\
   _(  OP_SAHF,    "sahf",     CODE_C_UNKNOWN,     ""       )\
