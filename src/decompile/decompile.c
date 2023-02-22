@@ -272,12 +272,11 @@ char *dis86_decompile(dis86_t *d, const char *func_name, dis86_instr_t *ins_arr,
     }
 
     if (ins->opcode == OP_LDS || ins->opcode == OP_LES) {
+      str_fmt(s, "LOAD_SEG_OFF(");
       print_operand_code_c(s, ins, &ins->operand[0]);
-      str_fmt(s, " = (u16)(");
-      print_operand_code_c(s, ins, &ins->operand[2]);
-      str_fmt(s, " >> 16); ");
+      str_fmt(s, ", ");
       print_operand_code_c(s, ins, &ins->operand[1]);
-      str_fmt(s, " = (u16)(");
+      str_fmt(s, ", ");
       print_operand_code_c(s, ins, &ins->operand[2]);
       str_fmt(s, ");");
 
