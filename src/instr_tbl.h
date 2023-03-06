@@ -290,7 +290,7 @@ static instr_fmt_t instr_tbl[] = {
   {  OP_PUSH,      0x68,     -1,   OPER_IMM16,   -1,           -1,             0x0 },
   {  OP_INVAL,     0x69,     -1,   -1,           -1,           -1,             0x0 },
   {  OP_PUSH,      0x6a,     -1,   OPER_IMM8,    -1,           -1,             0x0 },
-  {  OP_INVAL,     0x6b,     -1,   -1,           -1,           -1,             0x0 },
+  {  OP_IMUL,      0x6b,     -1,   OPER_R16,     OPER_RM16,    OPER_IMM8,      0x0 },
   {  OP_INS,       0x6c,     -1,   OPER_M8,      OPER_DX,      -1,             0x0 },
   {  OP_INS,       0x6d,     -1,   OPER_M16,     OPER_DX,      -1,             0x0 },
   {  OP_OUTS,      0x6e,     -1,   OPER_DX,      OPER_M8,      -1,             0x0 },

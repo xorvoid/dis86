@@ -235,3 +235,6 @@ TEST({ 0x0000025c,     { 1,  {0x0e},                              }, "push   cs"
 TEST({ 0x0000025d,     { 3,  {0xe8, 0xcd, 0x00},                  }, "call   0x32d" })
 TEST({ 0x00000034,     { 2,  {0xf2, 0xae},                        }, "repne scas   al,BYTE PTR es:[di]" })
 TEST({ 0x000000b9,     { 2,  {0xf3, 0xaa},                        }, "rep stos   BYTE PTR es:[di],al" })
+TEST({ 0x00000000,     { 3,  {0x6b, 0xc0, 0x06},                  }, "imul   ax,ax,0x6" })
+TEST({ 0x00000000,     { 3,  {0x6b, 0xff, 0x07},                  }, "imul   di,di,0x7" })
+TEST({ 0x00000000,     { 5,  {0x6b, 0x1e, 0x79, 0x1e, 0x6b},      }, "imul   bx,WORD PTR ds:0x1e79,0x6b" })
