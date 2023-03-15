@@ -82,7 +82,7 @@ enum {
   _(  OP_ADC,     "adc",      CODE_C_UNKNOWN,     ""       )\
   _(  OP_ADD,     "add",      CODE_C_OPERATOR,    "+="     )\
   _(  OP_AND,     "and",      CODE_C_OPERATOR,    "&="     )\
-  _(  OP_CALL,    "call",     CODE_C_FUNCTION,    "CALL"   )\
+  _(  OP_CALL,    "call",     CODE_C_UNKNOWN,     ""       )\
   _(  OP_CALLF,   "callf",    CODE_C_UNKNOWN,     ""       )\
   _(  OP_CBW,     "cbw",      CODE_C_UNKNOWN,     ""       )\
   _(  OP_CLC,     "clc",      CODE_C_UNKNOWN,     ""       )\
@@ -288,7 +288,7 @@ static instr_fmt_t instr_tbl[] = {
   {  OP_INVAL,     0x66,     -1,   -1,           -1,           -1,             0x0 },
   {  OP_INVAL,     0x67,     -1,   -1,           -1,           -1,             0x0 },
   {  OP_PUSH,      0x68,     -1,   OPER_IMM16,   -1,           -1,             0x0 },
-  {  OP_INVAL,     0x69,     -1,   -1,           -1,           -1,             0x0 },
+  {  OP_IMUL,      0x69,     -1,   OPER_R16,     OPER_RM16,    OPER_IMM16,     0x0 },
   {  OP_PUSH,      0x6a,     -1,   OPER_IMM8,    -1,           -1,             0x0 },
   {  OP_IMUL,      0x6b,     -1,   OPER_R16,     OPER_RM16,    OPER_IMM8,      0x0 },
   {  OP_INS,       0x6c,     -1,   OPER_M8,      OPER_DX,      -1,             0x0 },

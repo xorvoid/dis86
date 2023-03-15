@@ -127,11 +127,11 @@ static void print_operand_code_c(str_t *s, dis86_instr_t *ins, operand_t *o)
         break; // all done
       }
       switch (m->sz) {
-        case SIZE_8:  str_fmt(s, "*(u8*)"); break;
-        case SIZE_16: str_fmt(s, "*(u16*)"); break;
-        case SIZE_32: str_fmt(s, "*(u32*)"); break;
+        case SIZE_8:  str_fmt(s, "*PTR_8("); break;
+        case SIZE_16: str_fmt(s, "*PTR_16("); break;
+        case SIZE_32: UNIMPL(); //str_fmt(s, "*(u32*)("); break;
       }
-      str_fmt(s, "(%s:", as_upper(reg_name(m->sreg)));
+      str_fmt(s, "%s, ", as_upper(reg_name(m->sreg)));
       if (!m->reg1 && !m->reg2) {
         if (m->off) str_fmt(s, "0x%x", m->off);
       } else {
@@ -279,6 +279,63 @@ char *dis86_decompile(dis86_t *d, const char *func_name, dis86_instr_t *ins_arr,
       str_fmt(s, ", ");
       print_operand_code_c(s, ins, &ins->operand[2]);
       str_fmt(s, ");");
+
+      cs = str_to_cstr(s);
+      as = dis86_print_intel_syntax(d, ins, false);
+      str_fmt(ret_s, "  %-50s // %s\n", cs, as);
+      free((void*)as);
+      free((void*)cs);
+
+      continue;
+    }
+
+    if (ins->opcode == OP_CALLF) {
+      assert(ins->operand[0].type == OPERAND_TYPE_FAR);
+      operand_far_t *far = &ins->operand[0].u.far;
+      str_fmt(s, "CALL_FAR(0x%04x, 0x%04x);", far->seg, far->off);
+
+      cs = str_to_cstr(s);
+      as = dis86_print_intel_syntax(d, ins, false);
+      str_fmt(ret_s, "  %-50s // %s\n", cs, as);
+      free((void*)as);
+      free((void*)cs);
+
+      continue;
+    }
+
+    if (ins->opcode == OP_LEA) {
+      assert(ins->operand[0].type == OPERAND_TYPE_REG);
+      operand_reg_t *reg = &ins->operand[0].u.reg;
+
+      assert(ins->operand[1].type == OPERAND_TYPE_MEM);
+      operand_mem_t *mem = &ins->operand[1].u.mem;
+      assert(mem->sz == SIZE_16);
+      assert(mem->reg1);
+      assert(!mem->reg2);
+      assert(mem->off);
+
+      str_fmt(s, "%s", as_upper(reg_name(reg->id)));
+      str_fmt(s, " = %s - 0x%x;", as_upper(reg_name(mem->reg1)), -(i16)mem->off);
+
+      cs = str_to_cstr(s);
+      as = dis86_print_intel_syntax(d, ins, false);
+      str_fmt(ret_s, "  %-50s // %s\n", cs, as);
+      free((void*)as);
+      free((void*)cs);
+
+      continue;
+    }
+
+    if (ins->opcode == OP_IMUL) {
+      assert(ins->operand[0].type == OPERAND_TYPE_REG);
+      operand_reg_t *reg1 = &ins->operand[0].u.reg;
+      assert(ins->operand[1].type == OPERAND_TYPE_REG);
+      operand_reg_t *reg2 = &ins->operand[1].u.reg;
+      assert(ins->operand[2].type == OPERAND_TYPE_IMM);
+      operand_imm_t *imm = &ins->operand[2].u.imm;
+
+      str_fmt(s, "%s = (i16)%s * (i16)0x%x;", as_upper(reg_name(reg1->id)),
+              as_upper(reg_name(reg2->id)), imm->val);
 
       cs = str_to_cstr(s);
       as = dis86_print_intel_syntax(d, ins, false);

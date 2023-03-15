@@ -82,8 +82,8 @@ struct operand_mem
 {
   int sz;   // SIZE_
   int sreg; // always must be populated
-  int reg1; // -1 if unused
-  int reg2; // -1 if unused
+  int reg1; // 0 if unused
+  int reg2; // 0 if unused
   u16 off;  // 0 if unused
 };
 
