@@ -129,7 +129,7 @@ static void print_operand_code_c(str_t *s, dis86_instr_t *ins, operand_t *o)
       switch (m->sz) {
         case SIZE_8:  str_fmt(s, "*PTR_8("); break;
         case SIZE_16: str_fmt(s, "*PTR_16("); break;
-        case SIZE_32: UNIMPL(); //str_fmt(s, "*(u32*)("); break;
+        case SIZE_32: str_fmt(s, "*PTR_32("); break;
       }
       str_fmt(s, "%s, ", as_upper(reg_name(m->sreg)));
       if (!m->reg1 && !m->reg2) {
