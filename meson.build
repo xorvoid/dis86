@@ -77,6 +77,12 @@ add_global_arguments(flags_release, language : 'cpp')
 # add_global_arguments(flags_debug, language : 'cpp')
 
 ##################################
+## Subprojects
+
+bsl = subproject('bsl')
+libbsl_dep = bsl.get_variable('libbsl_dep')
+
+##################################
 ## Definitions
 
 subdir('src')

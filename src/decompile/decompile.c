@@ -1,6 +1,7 @@
 #include "dis86_private.h"
 #include "instr_tbl.h"
 #include "str.h"
+#include "config.h"
 
 #define MAX_LABELS 256
 
@@ -155,8 +156,20 @@ static void print_operand_code_c(str_t *s, dis86_instr_t *ins, operand_t *o)
   }
 }
 
-char *dis86_decompile(dis86_t *d, const char *func_name, dis86_instr_t *ins_arr, size_t n_ins)
+char *dis86_decompile( dis86_t *                  d,
+                       dis86_decompile_config_t * opt_cfg,
+                       const char *               func_name,
+                       dis86_instr_t *            ins_arr,
+                       size_t                     n_ins )
 {
+  // Default config?
+  dis86_decompile_config_t * default_cfg = NULL;
+  dis86_decompile_config_t * cfg = opt_cfg;
+  if (!cfg) {
+    default_cfg = config_default_new();
+    cfg = default_cfg;
+  }
+
   char buf[32];
   const char *cs, *as;
 
@@ -292,7 +305,13 @@ char *dis86_decompile(dis86_t *d, const char *func_name, dis86_instr_t *ins_arr,
     if (ins->opcode == OP_CALLF) {
       if (ins->operand[0].type == OPERAND_TYPE_FAR) {
         operand_far_t *far = &ins->operand[0].u.far;
-        str_fmt(s, "CALL_FAR(0x%04x, 0x%04x);", far->seg, far->off);
+        segoff_t addr = {far->seg, far->off};
+        const char *name = config_lookup_func(cfg, addr);
+        if (name) {
+          str_fmt(s, "CALL_FUNC(%s);", name);
+        } else {
+          str_fmt(s, "CALL_FAR(0x%04x, 0x%04x);", far->seg, far->off);
+        }
       }
       // HAX
       else {
@@ -406,5 +425,6 @@ char *dis86_decompile(dis86_t *d, const char *func_name, dis86_instr_t *ins_arr,
 
   str_fmt(ret_s, "}\n");
 
+  if (default_cfg) config_delete(default_cfg);
   return str_to_cstr(ret_s);
 }

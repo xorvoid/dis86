@@ -7,11 +7,13 @@ SRC = [
   'datamap.c',
   'print_intel_syntax.c',
   'decompile/decompile.c',
+  'decompile/config.c',
 ]
 
 libdis86 = static_library(
   'dis86', SRC,
-  link_with: libcmdarg)
+  link_with: libcmdarg,
+  dependencies : libbsl_dep)
 
 subdir('app')
 subdir('test')
