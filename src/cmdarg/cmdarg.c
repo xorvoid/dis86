@@ -42,7 +42,7 @@ static inline bool parse_i64(const char *s, int64_t *_num)
   return true;
 }
 
-bool cmdarg_option(int * _argc, char *** _argv, const char * name)
+bool cmdarg_option(int * _argc, char *** _argv, const char * name, bool *_out)
 {
   char ** argv = *_argv;
   int     argc = *_argc;
@@ -56,7 +56,7 @@ bool cmdarg_option(int * _argc, char *** _argv, const char * name)
     }
   }
 
-  // Return default on failure
+  // Not found
   if (found_idx == -1) return false;
 
   // On success, remove from the arg list
@@ -66,11 +66,12 @@ bool cmdarg_option(int * _argc, char *** _argv, const char * name)
   argc--;
 
   *_argc = argc;
+  if (_out) *_out = true;
   return true;
 }
 
 
-const char * cmdarg_string(int * _argc, char *** _argv, const char * name, const char * default_)
+bool cmdarg_string(int * _argc, char *** _argv, const char * name, const char ** _out)
 {
   char ** argv = *_argv;
   int     argc = *_argc;
@@ -84,8 +85,8 @@ const char * cmdarg_string(int * _argc, char *** _argv, const char * name, const
     }
   }
 
-  // Return default on failure
-  if (found_idx == -1 || found_idx+1 == argc) return default_;
+  // Failure
+  if (found_idx == -1 || found_idx+1 == argc) return false;
 
   // Capture return value
   const char *ret =  argv[found_idx+1];
@@ -97,10 +98,11 @@ const char * cmdarg_string(int * _argc, char *** _argv, const char * name, const
   argc -= 2;
 
   *_argc = argc;
-  return ret;
+  if (_out) *_out = ret;
+  return true;
 }
 
-uint64_t cmdarg_u64(int * _argc, char *** _argv, const char * name, uint64_t default_)
+bool cmdarg_u64(int * _argc, char *** _argv, const char * name, uint64_t *_out)
 {
   char ** argv = *_argv;
   int     argc = *_argc;
@@ -114,15 +116,13 @@ uint64_t cmdarg_u64(int * _argc, char *** _argv, const char * name, uint64_t def
     }
   }
 
-  // Return default on failure
-  if (found_idx == -1 || found_idx+1 == argc) return default_;
+  // Failure
+  if (found_idx == -1 || found_idx+1 == argc) return false;
 
   // Try to parse that value
   uint64_t ret = 0;
   const char *data =  argv[found_idx+1];
-  if (!parse_u64(data, &ret)) {
-    return default_;
-  }
+  if (!parse_u64(data, &ret)) return false;
 
   // On success, remove from the arg list
   for (int i = found_idx+2; i < argc; i++) {
@@ -131,10 +131,11 @@ uint64_t cmdarg_u64(int * _argc, char *** _argv, const char * name, uint64_t def
   argc -= 2;
 
   *_argc = argc;
-  return ret;
+  if (_out) *_out = ret;
+  return true;
 }
 
-int64_t cmdarg_i64(int * _argc, char *** _argv, const char * name, int64_t  default_)
+bool cmdarg_i64(int * _argc, char *** _argv, const char * name, int64_t *_out)
 {
   char ** argv = *_argv;
   int     argc = *_argc;
@@ -148,15 +149,13 @@ int64_t cmdarg_i64(int * _argc, char *** _argv, const char * name, int64_t  defa
     }
   }
 
-  // Return default on failure
-  if (found_idx == -1 || found_idx+1 == argc) return default_;
+  // Failure
+  if (found_idx == -1 || found_idx+1 == argc) return false;
 
   // Try to parse that value
   int64_t ret = 0;
   const char *data =  argv[found_idx+1];
-  if (!parse_i64(data, &ret)) {
-    return default_;
-  }
+  if (!parse_i64(data, &ret)) return false;
 
   // On success, remove from the arg list
   for (int i = found_idx+2; i < argc; i++) {
@@ -165,5 +164,6 @@ int64_t cmdarg_i64(int * _argc, char *** _argv, const char * name, int64_t  defa
   argc -= 2;
 
   *_argc = argc;
-  return ret;
+  if (_out) *_out = ret;
+  return true;
 }
