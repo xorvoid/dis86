@@ -468,7 +468,7 @@ static instr_fmt_t instr_tbl[] = {
   {  OP_INVAL,     0xd4,     -1,   -1,           -1,           -1,             0x0 },
   {  OP_INVAL,     0xd5,     -1,   -1,           -1,           -1,             0x0 },
   {  OP_INVAL,     0xd6,     -1,   -1,           -1,           -1,             0x0 },
-  {  OP_XLAT,      0xd7,     -1,   OPER_AL,      OPER_M8,      -1,             0x0 },
+  {  OP_XLAT,      0xd7,     -1,   OPER_AL,      OPER_DS,      OPER_BX,        0x0 },
   {  OP_INVAL,     0xd8,     -1,   -1,           -1,           -1,             0x0 },
   {  OP_INVAL,     0xd9,     -1,   -1,           -1,           -1,             0x0 },
   {  OP_INVAL,     0xda,     -1,   -1,           -1,           -1,             0x0 },

@@ -290,9 +290,14 @@ char *dis86_decompile(dis86_t *d, const char *func_name, dis86_instr_t *ins_arr,
     }
 
     if (ins->opcode == OP_CALLF) {
-      assert(ins->operand[0].type == OPERAND_TYPE_FAR);
-      operand_far_t *far = &ins->operand[0].u.far;
-      str_fmt(s, "CALL_FAR(0x%04x, 0x%04x);", far->seg, far->off);
+      if (ins->operand[0].type == OPERAND_TYPE_FAR) {
+        operand_far_t *far = &ins->operand[0].u.far;
+        str_fmt(s, "CALL_FAR(0x%04x, 0x%04x);", far->seg, far->off);
+      }
+      // HAX
+      else {
+        str_fmt(s, "UNKNOWN_CALL_FAR()");
+      }
 
       cs = str_to_cstr(s);
       as = dis86_print_intel_syntax(d, ins, false);
