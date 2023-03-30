@@ -170,9 +170,6 @@ char *dis86_decompile( dis86_t *                  d,
     cfg = default_cfg;
   }
 
-  config_print(cfg);
-  exit(87);
-
   char buf[32];
   const char *cs, *as;
 
