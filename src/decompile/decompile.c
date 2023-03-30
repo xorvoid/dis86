@@ -306,12 +306,14 @@ char *dis86_decompile( dis86_t *                  d,
       if (ins->operand[0].type == OPERAND_TYPE_FAR) {
         operand_far_t *far = &ins->operand[0].u.far;
         segoff_t addr = {far->seg, far->off};
-        const char *name = config_lookup_func(cfg, addr);
+        bool remapped = config_seg_remap(cfg, &addr.seg);
+        const char *name = config_func_lookup(cfg, addr);
         if (name) {
           str_fmt(s, "CALL_FUNC(%s);", name);
         } else {
-          str_fmt(s, "CALL_FAR(0x%04x, 0x%04x);", far->seg, far->off);
+          str_fmt(s, "CALL_FAR(0x%04x, 0x%04x);", addr.seg, addr.off);
         }
+        if (remapped) str_fmt(s, " /* remapped */");
       }
       // HAX
       else {

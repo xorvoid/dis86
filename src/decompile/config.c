@@ -98,7 +98,7 @@ void config_print(config_t *cfg)
   }
 }
 
-const char * config_lookup_func(config_t *cfg, segoff_t s)
+const char * config_func_lookup(config_t *cfg, segoff_t s)
 {
   for (size_t i = 0; i < cfg->func_len; i++) {
     config_func_t *f = &cfg->func_arr[i];
@@ -107,6 +107,19 @@ const char * config_lookup_func(config_t *cfg, segoff_t s)
     }
   }
   return NULL;
+}
+
+bool config_seg_remap(config_t *cfg, u16 *_seg)
+{
+  u16 seg = *_seg;
+  for (size_t i = 0; i < cfg->segmap_len; i++) {
+    config_segmap_t *sm = &cfg->segmap_arr[i];
+    if (seg == sm->from) {
+      *_seg = sm->to;
+      return true;
+    }
+  }
+  return false;
 }
 
 dis86_decompile_config_t * dis86_decompile_config_read_new(const char *path)

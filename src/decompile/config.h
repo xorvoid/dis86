@@ -36,4 +36,5 @@ config_t *   config_default_new(void);
 void         config_delete(config_t *cfg);
 
 void         config_print(config_t *cfg);
-const char * config_lookup_func(config_t *cfg, segoff_t s);
+const char * config_func_lookup(config_t *cfg, segoff_t s);
+bool         config_seg_remap(config_t *cfg, u16 *inout_seg);
