@@ -1,3 +1,4 @@
+subdir('cmdarg')
 
 SRC = [
   'core.c',
@@ -8,7 +9,9 @@ SRC = [
   'decompile/decompile.c',
 ]
 
-libdis86 = static_library('dis86', SRC)
+libdis86 = static_library(
+  'dis86', SRC,
+  link_with: libcmdarg)
 
 subdir('app')
 subdir('test')
