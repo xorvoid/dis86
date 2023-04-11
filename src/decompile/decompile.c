@@ -56,7 +56,7 @@ static const char *lookup_name(operand_mem_t *m)
 
   // Data section?
   if (m->sreg == REG_DS && !m->reg1 && !m->reg2) {
-    sprintf(buf, "_data_%04x", (u16)off);
+    sprintf(buf, "G_data_%04x", (u16)off);
     return buf;
   }
 
