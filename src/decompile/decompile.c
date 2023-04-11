@@ -284,6 +284,23 @@ char *dis86_decompile( dis86_t *                  d,
       continue;
     }
 
+    if (ins->opcode == OP_XOR &&
+        ins->operand[0].type == OPERAND_TYPE_REG &&
+        ins->operand[1].type == OPERAND_TYPE_REG &&
+        ins->operand[0].u.reg.id == ins->operand[1].u.reg.id) {
+
+      print_operand_code_c(s, ins, &ins->operand[0]);
+      str_fmt(s, " = 0;");
+
+      cs = str_to_cstr(s);
+      as = dis86_print_intel_syntax(d, ins, false);
+      str_fmt(ret_s, "  %-50s // %s\n", cs, as);
+      free((void*)as);
+      free((void*)cs);
+
+      continue;
+    }
+
     if (ins->opcode == OP_LDS || ins->opcode == OP_LES) {
       str_fmt(s, "LOAD_SEG_OFF(");
       print_operand_code_c(s, ins, &ins->operand[0]);
@@ -319,6 +336,20 @@ char *dis86_decompile( dis86_t *                  d,
       else {
         str_fmt(s, "UNKNOWN_CALL_FAR()");
       }
+
+      cs = str_to_cstr(s);
+      as = dis86_print_intel_syntax(d, ins, false);
+      str_fmt(ret_s, "  %-50s // %s\n", cs, as);
+      free((void*)as);
+      free((void*)cs);
+
+      continue;
+    }
+
+    if (ins->opcode == OP_CALL) {
+      assert(ins->operand[0].type == OPERAND_TYPE_REL);
+      u16 effective = ins->addr + ins->n_bytes + ins->operand[0].u.rel.val;
+      str_fmt(s, "CALL_NEAR(0x%04x);", effective);
 
       cs = str_to_cstr(s);
       as = dis86_print_intel_syntax(d, ins, false);
@@ -378,8 +409,12 @@ char *dis86_decompile( dis86_t *                  d,
     int type = code_c_type[ins->opcode];
     const char *str = code_c_str[ins->opcode];
 
+    bool unknown = false;
     switch (type) {
-      case CODE_C_UNKNOWN:   str_fmt(s, "UNKNOWN();"); break;
+      case CODE_C_UNKNOWN: {
+        unknown = true;
+        str_fmt(s, "UNKNOWN();");
+      } break;
       case CODE_C_OPERATOR: {
         assert(ins->operand[0].type != OPERAND_TYPE_NONE);
         print_operand_code_c(s, ins, &ins->operand[0]);
@@ -420,9 +455,15 @@ char *dis86_decompile( dis86_t *                  d,
 
     cs = str_to_cstr(s);
     as = dis86_print_intel_syntax(d, ins, false);
+
+    if (unknown) {
+      fprintf(stderr, "WARN: UNKNOWN C CONVERSION FOR INSTRUCTION '%s'\n", as);
+    }
+
     str_fmt(ret_s, "  %-50s // %s\n", cs, as);
     free((void*)as);
     free((void*)cs);
+
   }
 
   str_fmt(ret_s, "}\n");
