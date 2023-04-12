@@ -50,6 +50,11 @@ bool variable_deduce(variable_t *v, operand_mem_t *m)
   return false;
 }
 
+size_t variable_size_bytes(variable_t *v)
+{
+  return size_in_bytes(v->sz);
+}
+
 char * variable_name(variable_t *v, char *buf, size_t buf_sz)
 {
   switch (v->type) {

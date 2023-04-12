@@ -102,13 +102,49 @@ static void decompiler_initial_analysis(decompiler_t *d)
 
 static void decompiler_emit_preamble(decompiler_t *d, str_t *s)
 {
+  static char buf[128];
+
+  // Emit locals
+  symtab_iter_t it[1];
+  symtab_iter_begin(it, d->sym);
+  while (1) {
+    variable_t *var = symtab_iter_next(it);
+    if (!var) break;
+
+    if (var->type == VAR_TYPE_LOCAL) {
+      const char *name = variable_name(var, buf, ARRAY_SIZE(buf));
+      str_fmt(s, "#define %s LOCAL_%zu(0x%x)\n", name, 8*variable_size_bytes(var), -var->off);
+    }
+
+    if (var->type == VAR_TYPE_PARAM) {
+      const char *name = variable_name(var, buf, ARRAY_SIZE(buf));
+      str_fmt(s, "#define %s ARG_%zu(0x%x)\n", name, 8*variable_size_bytes(var), var->off);
+    }
+  }
+
   str_fmt(s, "void %s(void)\n", d->func_name);
   str_fmt(s, "{\n");
 }
 
 static void decompiler_emit_postamble(decompiler_t *d, str_t *s)
 {
+  static char buf[128];
+
   str_fmt(s, "}\n");
+
+  // Cleanup locals
+  symtab_iter_t it[1];
+  symtab_iter_begin(it, d->sym);
+  while (1) {
+    variable_t *var = symtab_iter_next(it);
+    if (!var) break;
+
+    if (var->type == VAR_TYPE_LOCAL ||
+        var->type == VAR_TYPE_PARAM) {
+      const char *name = variable_name(var, buf, ARRAY_SIZE(buf));
+      str_fmt(s, "#undef %s\n", name);
+    }
+  }
 }
 
 static void variable_lvalue(str_t *s, variable_t *var, operand_mem_t *mem)
