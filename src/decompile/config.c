@@ -33,12 +33,33 @@ config_t * config_read_new(const char *path)
     bsl_t *f = (bsl_t*)val;
 
     const char *addr_str = bsl_get_str(f, "addr");
-    if (!addr_str) FAIL("No function addr property");
+    if (!addr_str) FAIL("No function addr property for '%s'", key);
 
     assert(cfg->func_len < ARRAY_SIZE(cfg->func_arr));
     config_func_t *cf = &cfg->func_arr[cfg->func_len++];
     cf->name = strdup(key);
     cf->addr = parse_segoff(addr_str);
+  }
+
+  bsl_t *glob = bsl_get_node(root, "dis86.globals");
+  if (!glob) FAIL("Failed to get globals node");
+
+  bsl_iter_begin(it, glob);
+  while (bsl_iter_next(it, &type, &key, &val)) {
+    if (type != BSL_TYPE_NODE) FAIL("Expected global properties");
+    bsl_t *f = (bsl_t*)val;
+
+    const char *off_str = bsl_get_str(f, "off");
+    if (!off_str) FAIL("No global off property for '%s'", key);
+
+    const char *type_str = bsl_get_str(f, "type");
+    if (!type_str) FAIL("No global type property for '%s'", key);
+
+    assert(cfg->global_len < ARRAY_SIZE(cfg->global_arr));
+    config_global_t *g = &cfg->global_arr[cfg->global_len++];
+    g->name   = strdup(key);
+    g->offset = parse_hex_u16(off_str, strlen(off_str));
+    g->type   = strdup(type_str);
   }
 
   bsl_t *segmap = bsl_get_node(root, "dis86.segmap");
@@ -50,11 +71,11 @@ config_t * config_read_new(const char *path)
     bsl_t *s = (bsl_t*)val;
 
     const char *from_str = bsl_get_str(s, "from");
-    if (!from_str) FAIL("No segmap 'from' property");
+    if (!from_str) FAIL("No segmap 'from' property for '%s'", key);
     u16 from = parse_hex_u16(from_str, strlen(from_str));
 
     const char *to_str = bsl_get_str(s, "to");
-    if (!to_str) FAIL("No segmap 'to' property");
+    if (!to_str) FAIL("No segmap 'to' property for '%s'", key);
     u16 to = parse_hex_u16(to_str, strlen(to_str));
 
     assert(cfg->segmap_len < ARRAY_SIZE(cfg->segmap_arr));
@@ -77,6 +98,10 @@ void config_delete(config_t *cfg)
   for (size_t i = 0; i < cfg->func_len; i++) {
     free(cfg->func_arr[i].name);
   }
+  for (size_t i = 0; i < cfg->global_len; i++) {
+    free(cfg->global_arr[i].name);
+    free(cfg->global_arr[i].type);
+  }
   for (size_t i = 0; i < cfg->segmap_len; i++) {
     free(cfg->segmap_arr[i].name);
   }
@@ -89,6 +114,12 @@ void config_print(config_t *cfg)
   for (size_t i = 0; i < cfg->func_len; i++) {
     config_func_t *f = &cfg->func_arr[i];
     printf("  %-30s  %04x:%04x\n", f->name, f->addr.seg, f->addr.off);
+  }
+  printf("\n");
+  printf("globals:\n");
+  for (size_t i = 0; i < cfg->global_len; i++) {
+    config_global_t *g = &cfg->global_arr[i];
+    printf("  %-30s  %04x  %s\n", g->name, g->offset, g->type);
   }
   printf("\n");
   printf("segmap:\n");

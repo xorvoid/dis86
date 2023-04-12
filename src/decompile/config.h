@@ -3,16 +3,25 @@
 #include "segoff.h"
 
 #define MAX_CONFIG_FUNCS   1024
+#define MAX_CONFIG_GLOBALS 1024
 #define MAX_CONFIG_SEGMAPS 1024
 
 typedef struct dis86_decompile_config config_t;
 typedef struct config_func            config_func_t;
+typedef struct config_global          config_global_t;
 typedef struct config_segmap          config_segmap_t;
 
 struct config_func
 {
   char *   name;
   segoff_t addr;
+};
+
+struct config_global
+{
+  char *   name;
+  u16      offset;
+  char *   type;
 };
 
 struct config_segmap
@@ -26,6 +35,9 @@ struct dis86_decompile_config
 {
   size_t          func_len;
   config_func_t   func_arr[MAX_CONFIG_FUNCS];
+
+  size_t          global_len;
+  config_global_t global_arr[MAX_CONFIG_GLOBALS];
 
   size_t          segmap_len;
   config_segmap_t segmap_arr[MAX_CONFIG_SEGMAPS];
