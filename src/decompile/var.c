@@ -1,4 +1,5 @@
 #include "decompile_private.h"
+#include <stdalign.h>
 
 bool variable_deduce(variable_t *v, operand_mem_t *m)
 {
@@ -90,4 +91,28 @@ variable_t * symtab_lookup_or_create(symtab_t *s, operand_mem_t *mem, bool *_cre
 
   if (_created) *_created = true;
   return &s->var[s->n_var-1];
+}
+
+typedef struct iter_impl iter_impl_t;
+struct __attribute__((aligned(16))) iter_impl
+{
+  symtab_t * s;
+  size_t     idx;
+  char       _extra[16];
+};
+static_assert(sizeof(iter_impl_t) == sizeof(symtab_iter_t), "");
+static_assert(alignof(iter_impl_t) == alignof(symtab_iter_t), "");
+
+void symtab_iter_begin(symtab_iter_t *_it, symtab_t *s)
+{
+  iter_impl_t *it = (iter_impl_t*)_it;
+  it->s = s;
+  it->idx = 0;
+}
+
+variable_t * symtab_iter_next(symtab_iter_t *_it)
+{
+  iter_impl_t *it = (iter_impl_t*)_it;
+  if (it->idx >= it->s->n_var) return NULL;
+  return &it->s->var[it->idx++];
 }
