@@ -8,6 +8,6 @@
 
 #define LOG_INFO(fmt, ...) do { \
     fprintf(stderr, "INFO: "); \
-    fprintf(stderr, fmt, __VA_ARGS__); \
+    fprintf(stderr, fmt, ##__VA_ARGS__); \
     fprintf(stderr, "\n"); \
   } while(0)

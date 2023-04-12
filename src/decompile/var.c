@@ -1,6 +1,26 @@
 #include "decompile_private.h"
 #include <stdalign.h>
 
+static size_t size_in_bytes(int sz)
+{
+  switch (sz) {
+    case SIZE_8:  return 1;
+    case SIZE_16: return 2;
+    case SIZE_32: return 4;
+    default: FAIL("Unknown size type");
+  }
+}
+
+static int bytes_to_size(size_t n)
+{
+  switch (n) {
+    case 1: return SIZE_8;
+    case 2: return SIZE_16;
+    case 4: return SIZE_32;
+    default: FAIL("Cannot reepresent %zu bytes as a size type", n);
+  }
+}
+
 bool variable_deduce(variable_t *v, operand_mem_t *m)
 {
   i16 off = (i16)m->off;
@@ -8,7 +28,8 @@ bool variable_deduce(variable_t *v, operand_mem_t *m)
   // Global?
   if (m->sreg == REG_DS && !m->reg1 && !m->reg2) {
     v->type = VAR_TYPE_GLOBAL;
-    v->num = (u16)off;
+    v->off = off;
+    v->sz = m->sz;
     return true;
   }
 
@@ -16,10 +37,12 @@ bool variable_deduce(variable_t *v, operand_mem_t *m)
   if (m->sreg == REG_SS && m->reg1 == REG_BP && !m->reg2) {
     if (off < 0) {
       v->type = VAR_TYPE_LOCAL;
-      v->num = (u16)-off;
+      v->off = off;
+      v->sz  = m->sz;
     } else {
       v->type = VAR_TYPE_PARAM;
-      v->num = (u16)off;
+      v->off = off;
+      v->sz  = m->sz;
     }
     return true;
   }
@@ -31,24 +54,33 @@ char * variable_name(variable_t *v, char *buf, size_t buf_sz)
 {
   switch (v->type) {
     case VAR_TYPE_PARAM: {
-      snprintf(buf, buf_sz, "_param_%04x", v->num);
+      snprintf(buf, buf_sz, "_param_%04x", (u16)v->off);
     } break;
     case VAR_TYPE_LOCAL: {
-      snprintf(buf, buf_sz, "_local_%04x", v->num);
+      snprintf(buf, buf_sz, "_local_%04x", (u16)-v->off);
     } break;
     case VAR_TYPE_GLOBAL: {
-      snprintf(buf, buf_sz, "G_data_%04x", v->num);
+      snprintf(buf, buf_sz, "G_data_%04x", (u16)v->off);
     } break;
     default: FAIL("Unknown variable type: %d", v->type);
   }
   return buf;
 }
 
-static bool variable_match(variable_t *a, variable_t *b)
+static bool variable_overlaps(variable_t *a, variable_t *b)
 {
+  // WLOG: Let a->off <= b->off
+  if (b->off < a->off) {
+    variable_t *tmp = a;
+    a = b;
+    b = tmp;
+  }
+
+  i16 end = (i16)a->off + size_in_bytes(a->sz);
+
   return
     a->type == b->type &&
-    a->num == b->num;
+    b->off < end;
 }
 
 #define MAX_VARIABLES 128
@@ -73,24 +105,46 @@ void symtab_delete(symtab_t *s)
   free(s);
 }
 
-variable_t * symtab_lookup_or_create(symtab_t *s, operand_mem_t *mem, bool *_created)
+bool symtab_add(symtab_t *s, operand_mem_t *mem)
 {
-  if (_created) *_created = false;
+  variable_t var[1];
+  if (!variable_deduce(var, mem)) return false;
 
+  for (size_t i = 0; i < s->n_var; i++) {
+    variable_t *cand = &s->var[i];
+    if (!variable_overlaps(var, cand)) continue;
+
+    // Overlaps: grow to encapsulate both!
+
+    i16 new_start = MIN(var->off, cand->off);
+    i16 new_end   = MAX(var->off + size_in_bytes(var->sz), cand->off + size_in_bytes(cand->sz));
+    int new_sz = bytes_to_size(new_end - new_start);
+
+    // Update var
+    var->off = new_start;
+    var->sz  = new_sz;
+
+    // Remove the candidate (avoid duplicates)
+    s->var[i] = s->var[--s->n_var];
+    i--;
+  }
+
+  assert(s->n_var < ARRAY_SIZE(s->var));
+  s->var[s->n_var++] = *var;
+  return true;
+}
+
+variable_t * symtab_find(symtab_t *s, operand_mem_t *mem)
+{
   variable_t var[1];
   if (!variable_deduce(var, mem)) return NULL;
 
   for (size_t i = 0; i < s->n_var; i++) {
     variable_t *cand = &s->var[i];
-    if (variable_match(var, cand)) return cand;
+    if (variable_overlaps(var, cand)) return cand;
   }
 
-  // not found, create it
-  assert(s->n_var < ARRAY_SIZE(s->var));
-  s->var[s->n_var++] = *var;
-
-  if (_created) *_created = true;
-  return &s->var[s->n_var-1];
+  return NULL;
 }
 
 typedef struct iter_impl iter_impl_t;
