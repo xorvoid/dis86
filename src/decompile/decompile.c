@@ -82,7 +82,7 @@ static const char *lookup_name(operand_mem_t *m)
   return variable_name(var, buf, ARRAY_SIZE(buf));
 }
 
-static void print_operand_code_c(str_t *s, dis86_instr_t *ins, operand_t *o)
+static void operand_str(str_t *s, dis86_instr_t *ins, operand_t *o)
 {
   switch (o->type) {
     case OPERAND_TYPE_REG: str_fmt(s, "%s", as_upper(reg_name(o->u.reg.id))); break;
@@ -160,11 +160,11 @@ static void decompiler_process_ins(decompiler_t *d, size_t *ins_idx, str_t *ret_
         str_fmt(s, "if (");
         if (sign) str_fmt(s, "(i16)");
         assert(ins->operand[0].type != OPERAND_TYPE_NONE);
-        print_operand_code_c(s, ins, &ins->operand[0]);
+        operand_str(s, ins, &ins->operand[0]);
         str_fmt(s, " %s ", oper);
         if (sign) str_fmt(s, "(i16)");
         assert(ins->operand[1].type != OPERAND_TYPE_NONE);
-        print_operand_code_c(s, ins, &ins->operand[1]);
+        operand_str(s, ins, &ins->operand[1]);
         str_fmt(s, ") goto label_%08x;", dest);
 
         as = dis86_print_intel_syntax(d->dis, ins, false);
@@ -198,7 +198,7 @@ static void decompiler_process_ins(decompiler_t *d, size_t *ins_idx, str_t *ret_
       if (oper) {
         u32 dest = branch_destination(next_ins);
         str_fmt(s, "if (");
-        print_operand_code_c(s, ins, &ins->operand[0]);
+        operand_str(s, ins, &ins->operand[0]);
         str_fmt(s, " %s 0) goto label_%08x;", oper, dest);
 
         as = dis86_print_intel_syntax(d->dis, ins, false);
@@ -235,7 +235,7 @@ static void decompiler_process_ins(decompiler_t *d, size_t *ins_idx, str_t *ret_
       ins->operand[1].type == OPERAND_TYPE_REG &&
       ins->operand[0].u.reg.id == ins->operand[1].u.reg.id) {
 
-    print_operand_code_c(s, ins, &ins->operand[0]);
+    operand_str(s, ins, &ins->operand[0]);
     str_fmt(s, " = 0;");
 
     cs = str_to_cstr(s);
@@ -249,11 +249,11 @@ static void decompiler_process_ins(decompiler_t *d, size_t *ins_idx, str_t *ret_
 
   if (ins->opcode == OP_LDS || ins->opcode == OP_LES) {
     str_fmt(s, "LOAD_SEG_OFF(");
-    print_operand_code_c(s, ins, &ins->operand[0]);
+    operand_str(s, ins, &ins->operand[0]);
     str_fmt(s, ", ");
-    print_operand_code_c(s, ins, &ins->operand[1]);
+    operand_str(s, ins, &ins->operand[1]);
     str_fmt(s, ", ");
-    print_operand_code_c(s, ins, &ins->operand[2]);
+    operand_str(s, ins, &ins->operand[2]);
     str_fmt(s, ");");
 
     cs = str_to_cstr(s);
@@ -363,10 +363,10 @@ static void decompiler_process_ins(decompiler_t *d, size_t *ins_idx, str_t *ret_
     } break;
     case CODE_C_OPERATOR: {
       assert(ins->operand[0].type != OPERAND_TYPE_NONE);
-      print_operand_code_c(s, ins, &ins->operand[0]);
+      operand_str(s, ins, &ins->operand[0]);
       str_fmt(s, " %s ", str);
       if (ins->operand[1].type != OPERAND_TYPE_NONE) {
-        print_operand_code_c(s, ins, &ins->operand[1]);
+        operand_str(s, ins, &ins->operand[1]);
       }
       str_fmt(s, ";");
     } break;
@@ -376,19 +376,19 @@ static void decompiler_process_ins(decompiler_t *d, size_t *ins_idx, str_t *ret_
         operand_t *o = &ins->operand[i];
         if (o->type == OPERAND_TYPE_NONE) break;
         if (i != 0) str_fmt(s, ", ");
-        print_operand_code_c(s, ins, o);
+        operand_str(s, ins, o);
       }
       str_fmt(s, ");", str);
     } break;
     case CODE_C_RFUNCTION: {
       assert(ins->operand[0].type != OPERAND_TYPE_NONE);
-      print_operand_code_c(s, ins, &ins->operand[0]);
+      operand_str(s, ins, &ins->operand[0]);
       str_fmt(s, " = %s(", str);
       for (size_t i = 1; i < ARRAY_SIZE(ins->operand); i++) {
         operand_t *o = &ins->operand[i];
         if (o->type == OPERAND_TYPE_NONE) break;
         if (i != 1) str_fmt(s, ", ");
-        print_operand_code_c(s, ins, o);
+        operand_str(s, ins, o);
       }
       str_fmt(s, ");", str);
     } break;
