@@ -1,6 +1,8 @@
 #include "decompile_private.h"
 #include "str.h"
 
+#define DEBUG_REPORT_SYMBOLS 0
+
 static int code_c_type[] = {
 #define ELT(_1, _2, ty, _4) ty,
   INSTR_OP_ARRAY(ELT)
@@ -24,8 +26,8 @@ struct decompiler
   dis86_instr_t *            ins;
   size_t                     n_ins;
 
-  symtab_t *sym;
-  labels_t labels[1];
+  symbols_t * symbols;
+  labels_t    labels[1];
 };
 
 static decompiler_t * decompiler_new( dis86_t *                  dis,
@@ -46,24 +48,38 @@ static decompiler_t * decompiler_new( dis86_t *                  dis,
   d->ins       = ins_arr;
   d->n_ins     = n_ins;
 
-  d->sym = symtab_new();
+  d->symbols = symbols_new();
   return d;
 }
 
 static void decompiler_delete(decompiler_t *d)
 {
   if (d->default_cfg) config_delete(d->default_cfg);
-  symtab_delete(d->sym);
+  symbols_delete(d->symbols);
   free(d);
 }
 
-static const char *size_as_type(int sz)
+static const char *n_bytes_as_type(u16 n_bytes)
 {
-  switch (sz) {
-    case SIZE_8:  return "u8";
-    case SIZE_16: return "u16";
-    case SIZE_32: return "u32";
+  switch (n_bytes) {
+    case 1: return "u8";
+    case 2: return "u16";
+    case 4: return "u32";
     default: FAIL("Unknown size type");
+  }
+}
+
+static void dump_symtab(symtab_t *symtab)
+{
+  symtab_iter_t it[1];
+  symtab_iter_begin(it, symtab);
+  while (1) {
+    sym_t *var = symtab_iter_next(it);
+    if (!var) break;
+
+    static char buf[128];
+    const char *size = n_bytes_as_type(var->len);
+    LOG_INFO("  %-30s | %04x | %s", sym_name(var, buf, ARRAY_SIZE(buf)), (u16)var->off, size);
   }
 }
 
@@ -71,6 +87,19 @@ static void decompiler_initial_analysis(decompiler_t *d)
 {
   // Pass to find all labels
   find_labels(d->labels, d->ins, d->n_ins);
+
+  // Load all global symbols from config into the symtab
+  for (size_t i = 0; i < d->cfg->global_len; i++) {
+    config_global_t *g = &d->cfg->global_arr[i];
+
+    type_t type[1];
+    if (!type_parse(type, g->type)) {
+      LOG_WARN("For global '%s', failed to parse type '%s' ... skipping", g->name, g->type);
+      continue;
+    }
+
+    symbols_add_global(d->symbols, g->name, g->offset, type_size(type));
+  }
 
   // Pass to locate all symbols
   for (size_t i = 0; i < d->n_ins; i++) {
@@ -83,43 +112,52 @@ static void decompiler_initial_analysis(decompiler_t *d)
     for (size_t j = 0; j < ARRAY_SIZE(ins->operand); j++) {
       operand_t *o = &ins->operand[j];
       if (o->type != OPERAND_TYPE_MEM) continue;
-      symtab_add(d->sym, &o->u.mem);
+
+      sym_t deduced_sym[1];
+      if (!sym_deduce(deduced_sym, &o->u.mem)) continue;
+
+      if (!symbols_insert_deduced(d->symbols, deduced_sym)) {
+        static char buf[128];
+        const char *name = sym_name(deduced_sym, buf, ARRAY_SIZE(buf));
+        LOG_WARN("Unknown global | name: %s  off: 0x%04x  size: %u", name, (u16)deduced_sym->off, deduced_sym->len);
+      }
     }
   }
 
   // Report the symbols
-  symtab_iter_t it[1];
-  symtab_iter_begin(it, d->sym);
-  while (1) {
-    variable_t *var = symtab_iter_next(it);
-    if (!var) break;
-
-    static char buf[128];
-    const char *size = size_as_type(var->sz);
-    LOG_INFO("Symbol: %s | %s", variable_name(var, buf, ARRAY_SIZE(buf)), size);
+  if (DEBUG_REPORT_SYMBOLS) {
+    LOG_INFO("Globals:");
+    dump_symtab(d->symbols->globals);
+    LOG_INFO("Params:");
+    dump_symtab(d->symbols->params);
+    LOG_INFO("Locals:");
+    dump_symtab(d->symbols->locals);
   }
 }
 
 static void decompiler_emit_preamble(decompiler_t *d, str_t *s)
 {
   static char buf[128];
-
-  // Emit locals
   symtab_iter_t it[1];
-  symtab_iter_begin(it, d->sym);
+
+  // Emit params
+  symtab_iter_begin(it, d->symbols->params);
   while (1) {
-    variable_t *var = symtab_iter_next(it);
+    sym_t *var = symtab_iter_next(it);
     if (!var) break;
 
-    if (var->type == VAR_TYPE_LOCAL) {
-      const char *name = variable_name(var, buf, ARRAY_SIZE(buf));
-      str_fmt(s, "#define %s LOCAL_%zu(0x%x)\n", name, 8*variable_size_bytes(var), -var->off);
-    }
+    const char *name = sym_name(var, buf, ARRAY_SIZE(buf));
+    str_fmt(s, "#define %s ARG_%zu(0x%x)\n", name, 8*sym_size_bytes(var), var->off);
+  }
 
-    if (var->type == VAR_TYPE_PARAM) {
-      const char *name = variable_name(var, buf, ARRAY_SIZE(buf));
-      str_fmt(s, "#define %s ARG_%zu(0x%x)\n", name, 8*variable_size_bytes(var), var->off);
-    }
+  // Emit locals
+  symtab_iter_begin(it, d->symbols->locals);
+  while (1) {
+    sym_t *var = symtab_iter_next(it);
+    if (!var) break;
+
+    const char *name = sym_name(var, buf, ARRAY_SIZE(buf));
+    str_fmt(s, "#define %s LOCAL_%zu(0x%x)\n", name, 8*sym_size_bytes(var), -var->off);
   }
 
   str_fmt(s, "void %s(void)\n", d->func_name);
@@ -129,31 +167,50 @@ static void decompiler_emit_preamble(decompiler_t *d, str_t *s)
 static void decompiler_emit_postamble(decompiler_t *d, str_t *s)
 {
   static char buf[128];
+  symtab_iter_t it[1];
 
   str_fmt(s, "}\n");
 
-  // Cleanup locals
-  symtab_iter_t it[1];
-  symtab_iter_begin(it, d->sym);
+  // Cleanup params
+  symtab_iter_begin(it, d->symbols->params);
   while (1) {
-    variable_t *var = symtab_iter_next(it);
+    sym_t *var = symtab_iter_next(it);
     if (!var) break;
+    str_fmt(s, "#undef %s\n", sym_name(var, buf, ARRAY_SIZE(buf)));
+  }
 
-    if (var->type == VAR_TYPE_LOCAL ||
-        var->type == VAR_TYPE_PARAM) {
-      const char *name = variable_name(var, buf, ARRAY_SIZE(buf));
-      str_fmt(s, "#undef %s\n", name);
-    }
+  // Cleanup locals
+  symtab_iter_begin(it, d->symbols->locals);
+  while (1) {
+    sym_t *var = symtab_iter_next(it);
+    if (!var) break;
+    str_fmt(s, "#undef %s\n", sym_name(var, buf, ARRAY_SIZE(buf)));
   }
 }
 
-static void variable_lvalue(str_t *s, variable_t *var, operand_mem_t *mem)
+static u16 size_in_bytes(int sz)
+{
+  switch (sz) {
+    case SIZE_8:  return 1;
+    case SIZE_16: return 2;
+    case SIZE_32: return 4;
+    default: FAIL("Unknown size type");
+  }
+}
+
+static const char * size_as_type(int sz)
+{
+  return n_bytes_as_type(size_in_bytes(sz));
+}
+
+static void sym_lvalue(str_t *s, sym_t *var, operand_mem_t *mem)
 {
   static char buf[128];
-  const char *name = variable_name(var, buf, ARRAY_SIZE(buf));
+  const char *name = sym_name(var, buf, ARRAY_SIZE(buf));
 
+  u16 mem_len = size_in_bytes(mem->sz);
   if (var->off == (i16)mem->off &&
-      var->sz == mem->sz) {
+      var->len == mem_len) {
     str_fmt(s, "%s", name);
   }
 
@@ -163,13 +220,14 @@ static void variable_lvalue(str_t *s, variable_t *var, operand_mem_t *mem)
   }
 }
 
-static void variable_rvalue(str_t *s, variable_t *var, operand_mem_t *mem)
+static void sym_rvalue(str_t *s, sym_t *var, operand_mem_t *mem)
 {
   static char buf[128];
-  const char *name = variable_name(var, buf, ARRAY_SIZE(buf));
+  const char *name = sym_name(var, buf, ARRAY_SIZE(buf));
 
+  u16 mem_len = size_in_bytes(mem->sz);
   if (var->off == (i16)mem->off) {
-    if (var->sz == mem->sz) {
+    if (var->len == mem_len) {
       str_fmt(s, "%s", name);
     } else {
       // Offset is the same, so just truncate it down
@@ -191,10 +249,10 @@ static void operand_str(decompiler_t *d, str_t *s, dis86_instr_t *ins, operand_t
     case OPERAND_TYPE_REG: str_fmt(s, "%s", as_upper(reg_name(o->u.reg.id))); break;
     case OPERAND_TYPE_MEM: {
       operand_mem_t *m = &o->u.mem;
-      variable_t *var = symtab_find(d->sym, m);
-      if (var) {
-        if (lvalue) variable_lvalue(s, var, m);
-        else variable_rvalue(s, var, m);
+      sym_t *sym = symbols_find(d->symbols, m);
+      if (sym) {
+        if (lvalue) sym_lvalue(s, sym, m);
+        else sym_rvalue(s, sym, m);
         break; // all done
       }
       switch (m->sz) {

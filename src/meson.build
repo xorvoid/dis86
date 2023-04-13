@@ -8,7 +8,8 @@ SRC = [
   'print_intel_syntax.c',
   'decompile/decompile.c',
   'decompile/config.c',
-  'decompile/var.c',
+  'decompile/type.c',
+  'decompile/symbols.c',
 ]
 
 libdis86 = static_library(
