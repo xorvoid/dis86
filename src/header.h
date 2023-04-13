@@ -93,3 +93,21 @@ static u8 parse_hex_u8(const char *s, size_t len)
   if (len > 2) FAIL("Hex string too long to fit in u16");
   return (u16)parse_hex_u64(s, len);
 }
+
+static inline bool parse_bytes_u64(const char *buf, size_t len, uint64_t *_num)
+{
+  if (len == 0) return false;
+
+  uint64_t num = 0;
+  for (size_t i = 0; i < len; i++) {
+    char c = buf[i];
+    if (!('0' <= c && c <= '9')) return false; // not a decimal digit
+
+    uint64_t next_num = 10*num + (uint64_t)(c-'0');
+    if (next_num < num) return false; // overflow!
+    num = next_num;
+  }
+
+  *_num = num;
+  return true;
+}

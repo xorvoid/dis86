@@ -38,13 +38,13 @@ static bool basetype_parse(const char *s, size_t len, int *out)
 
 bool type_parse(type_t *typ, const char *str)
 {
-  const char *p = str;
-  while (*p && *p != '[') p++;
+  const char *lbrace = str;
+  while (*lbrace && *lbrace != '[') lbrace++;
 
   int base;
-  if (!basetype_parse(str, p-str, &base)) return false;
+  if (!basetype_parse(str, lbrace-str, &base)) return false;
 
-  if (!*p) { // not an array?
+  if (!*lbrace) { // not an array?
     typ->basetype  = base;
     typ->is_array  = false;
     typ->array_len = 0;
@@ -52,11 +52,23 @@ bool type_parse(type_t *typ, const char *str)
   }
 
   // is an array
-  fprintf(stderr, "WARN: TYPE IS AN ARRAY BUT WE'RE ASSUMING 1 ELEMENT: '%s'\n", str);
+
+  // find ending ']'
+  const char *rbrace = lbrace+1;
+  while (*rbrace && *rbrace != ']') rbrace++;
+  if (*rbrace == 0 || *(rbrace+1) != 0) return false;
+
+  const char * size_str = lbrace+1;
+  size_t       size_len = rbrace - size_str;
+
+  u64 size;
+  if (!parse_bytes_u64(size_str, size_len, &size)) {
+    return false;
+  }
 
   typ->basetype  = base;
   typ->is_array  = true;
-  typ->array_len = 1;
+  typ->array_len = size;
   return true;
 }
 

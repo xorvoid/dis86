@@ -65,7 +65,7 @@ static const char *n_bytes_as_type(u16 n_bytes)
     case 1: return "u8";
     case 2: return "u16";
     case 4: return "u32";
-    default: FAIL("Unknown size type");
+    default: FAIL("Unknown size type | n_bytes: %u", n_bytes);
   }
 }
 
@@ -78,8 +78,13 @@ static void dump_symtab(symtab_t *symtab)
     if (!var) break;
 
     static char buf[128];
-    const char *size = n_bytes_as_type(var->len);
-    LOG_INFO("  %-30s | %04x | %s", sym_name(var, buf, ARRAY_SIZE(buf)), (u16)var->off, size);
+    const char *size;
+    if (var->len <= 4) {
+      size = n_bytes_as_type(var->len);
+    } else {
+      size = "UNKNOWN";
+    }
+    LOG_INFO("  %-30s | %04x | %6u | %s", sym_name(var, buf, ARRAY_SIZE(buf)), (u16)var->off, var->len, size);
   }
 }
 
