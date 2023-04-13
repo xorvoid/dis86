@@ -1,5 +1,4 @@
 #include "decompile_private.h"
-#include "str.h"
 
 #define DEBUG_REPORT_SYMBOLS 0
 
@@ -28,6 +27,8 @@ struct decompiler
 
   symbols_t * symbols;
   labels_t    labels[1];
+
+  meh_t *meh;
 };
 
 static decompiler_t * decompiler_new( dis86_t *                  dis,
@@ -49,11 +50,13 @@ static decompiler_t * decompiler_new( dis86_t *                  dis,
   d->n_ins     = n_ins;
 
   d->symbols = symbols_new();
+  d->meh = NULL;
   return d;
 }
 
 static void decompiler_delete(decompiler_t *d)
 {
+  if (d->meh) meh_delete(d->meh);
   if (d->default_cfg) config_delete(d->default_cfg);
   symbols_delete(d->symbols);
   free(d);
@@ -128,6 +131,9 @@ static void decompiler_initial_analysis(decompiler_t *d)
       }
     }
   }
+
+  // Pass to convert to expression structures
+  d->meh = meh_new(d->ins, d->n_ins);
 
   // Report the symbols
   if (DEBUG_REPORT_SYMBOLS) {
@@ -281,8 +287,9 @@ static void operand_str(decompiler_t *d, str_t *s, dis86_instr_t *ins, operand_t
     } break;
     case OPERAND_TYPE_IMM: str_fmt(s, "0x%x", o->u.imm.val); break;
     case OPERAND_TYPE_REL: {
-      u16 effective = ins->addr + ins->n_bytes + o->u.rel.val;
-      str_fmt(s, "0x%x", effective);
+      /* u16 effective = ins->addr + ins->n_bytes + o->u.rel.val; */
+      /* str_fmt(s, "0x%x", effective); */
+      str_fmt(s, "REL_ADDR_BROKEN");
     } break;
       //case OPERAND_TYPE_FAR: break;
     default: FAIL("INVALID OPERAND TYPE: %d", o->type);
@@ -578,6 +585,64 @@ static void decompiler_process_ins(decompiler_t *d, size_t *ins_idx, str_t *ret_
   free((void*)cs);
 }
 
+static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
+{
+  str_t s[1];
+  str_init(s);
+
+  switch (expr->kind) {
+    case EXPR_KIND_UNKNOWN: {
+      str_fmt(s, "UNKNOWN();");
+    } break;
+    case EXPR_KIND_OPERATOR: {
+      expr_operator_t *k = expr->k.operator;
+      operand_str(d, s, NULL, &k->oper1, true);
+      str_fmt(s, " %s ", k->operator);
+      if (k->oper2.type != OPERAND_TYPE_NONE) {
+        operand_str(d, s, NULL, &k->oper2, false);
+      }
+      str_fmt(s, ";");
+    } break;
+    case EXPR_KIND_FUNCTION: {
+      expr_function_t *k = expr->k.function;
+      if (k->ret.type != OPERAND_TYPE_NONE) {
+        operand_str(d, s, NULL, &k->ret, true);
+        str_fmt(s, " = ");
+      }
+      str_fmt(s, "%s(", k->func_name);
+      for (size_t i = 0; i < ARRAY_SIZE(k->args); i++) {
+        operand_t *o = &k->args[i];
+        if (o->type == OPERAND_TYPE_NONE) break;
+        if (i != 0) str_fmt(s, ", ");
+        operand_str(d, s, NULL, o, false);
+      }
+      str_fmt(s, ");");
+    } break;
+    case EXPR_KIND_BRANCH: {
+      expr_branch_t *k = expr->k.branch;
+      str_fmt(s, "if (");
+      if (k->signed_cmp) str_fmt(s, "(i16)");
+      operand_str(d, s, NULL, &k->oper1, false);
+      str_fmt(s, " %s ", k->operator);
+      if (k->signed_cmp) str_fmt(s, "(i16)");
+      operand_str(d, s, NULL, &k->oper2, false);
+      str_fmt(s, ") goto label_%08x;", k->target);
+    } break;
+    default: {
+      str_fmt(s, "UNIMPL();");
+    } break;
+  }
+
+  const char *code_str = str_to_cstr(s);
+  for (size_t i = 0; i < expr->n_ins; i++) {
+    const char *as = dis86_print_intel_syntax(d->dis, &expr->ins[i], false);
+    const char *cs = i+1 == expr->n_ins ? code_str : "";
+    str_fmt(ret_s, "  %-50s // %s\n", cs, as);
+    free((void*)as);
+  }
+  free((void*)code_str);
+}
+
 char *dis86_decompile( dis86_t *                  dis,
                        dis86_decompile_config_t * opt_cfg,
                        const char *               func_name,
@@ -590,8 +655,12 @@ char *dis86_decompile( dis86_t *                  dis,
   decompiler_t *d = decompiler_new(dis, opt_cfg, func_name, ins_arr, n_ins);
   decompiler_initial_analysis(d);
   decompiler_emit_preamble(d, ret_s);
-  for (size_t i = 0; i < n_ins; i++) {
-    decompiler_process_ins(d, &i, ret_s);
+  /* for (size_t i = 0; i < n_ins; i++) { */
+  /*   decompiler_process_ins(d, &i, ret_s); */
+  /* } */
+  for (size_t i = 0; i < d->meh->expr_len; i++) {
+    expr_t *expr = &d->meh->expr_arr[i];
+    decompiler_emit_expr(d, expr, ret_s);
   }
   decompiler_emit_postamble(d, ret_s);
   return str_to_cstr(ret_s);

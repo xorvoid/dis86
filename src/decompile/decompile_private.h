@@ -6,6 +6,8 @@
 #include "config.h"
 #include "labels.h"
 #include "type.h"
+#include "expr.h"
+#include "str.h"
 
 #define LOG_INFO(fmt, ...) do { \
     fprintf(stderr, "INFO: "); \
