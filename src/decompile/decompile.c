@@ -2,6 +2,16 @@
 
 #define DEBUG_REPORT_SYMBOLS 0
 
+static const char *n_bytes_as_type(u16 n_bytes)
+{
+  switch (n_bytes) {
+    case 1: return "u8";
+    case 2: return "u16";
+    case 4: return "u32";
+    default: FAIL("Unknown size type | n_bytes: %u", n_bytes);
+  }
+}
+
 typedef struct decompiler decompiler_t;
 struct decompiler
 {
@@ -47,16 +57,6 @@ static void decompiler_delete(decompiler_t *d)
   if (d->default_cfg) config_delete(d->default_cfg);
   symbols_delete(d->symbols);
   free(d);
-}
-
-static const char *n_bytes_as_type(u16 n_bytes)
-{
-  switch (n_bytes) {
-    case 1: return "u8";
-    case 2: return "u16";
-    case 4: return "u32";
-    default: FAIL("Unknown size type | n_bytes: %u", n_bytes);
-  }
 }
 
 static void dump_symtab(symtab_t *symtab)
@@ -107,10 +107,6 @@ static void decompiler_initial_analysis(decompiler_t *d)
   // Pass to locate all symbols
   for (size_t i = 0; i < d->n_ins; i++) {
     dis86_instr_t *ins = &d->ins[i];
-
-    /* const char *as = dis86_print_intel_syntax(d->dis, ins, false); */
-    /* LOG_INFO("INS: '%s'", as); */
-    /* free((void*)as); */
 
     for (size_t j = 0; j < ARRAY_SIZE(ins->operand); j++) {
       operand_t *o = &ins->operand[j];
@@ -193,103 +189,6 @@ static void decompiler_emit_postamble(decompiler_t *d, str_t *s)
     sym_t *var = symtab_iter_next(it);
     if (!var) break;
     str_fmt(s, "#undef %s\n", sym_name(var, buf, ARRAY_SIZE(buf)));
-  }
-}
-
-static u16 size_in_bytes(int sz)
-{
-  switch (sz) {
-    case SIZE_8:  return 1;
-    case SIZE_16: return 2;
-    case SIZE_32: return 4;
-    default: FAIL("Unknown size type");
-  }
-}
-
-static const char * size_as_type(int sz)
-{
-  return n_bytes_as_type(size_in_bytes(sz));
-}
-
-static void sym_lvalue(str_t *s, sym_t *var, operand_mem_t *mem)
-{
-  static char buf[128];
-  const char *name = sym_name(var, buf, ARRAY_SIZE(buf));
-
-  u16 mem_len = size_in_bytes(mem->sz);
-  if (var->off == (i16)mem->off &&
-      var->len == mem_len) {
-    str_fmt(s, "%s", name);
-  }
-
-  else {
-    u16 bytes = (i16)mem->off - var->off;
-    str_fmt(s, "*(%s*)((u8*)&%s + %u)", size_as_type(mem->sz), name, bytes);
-  }
-}
-
-static void sym_rvalue(str_t *s, sym_t *var, operand_mem_t *mem)
-{
-  static char buf[128];
-  const char *name = sym_name(var, buf, ARRAY_SIZE(buf));
-
-  u16 mem_len = size_in_bytes(mem->sz);
-  if (var->off == (i16)mem->off) {
-    if (var->len == mem_len) {
-      str_fmt(s, "%s", name);
-    } else {
-      // Offset is the same, so just truncate it down
-      str_fmt(s, "(%s)%s", size_as_type(mem->sz), name);
-    }
-  }
-
-  else {
-    u16 bits = 8 * ((i16)mem->off - var->off);
-    str_fmt(s, "(%s)(%s>>%u)", size_as_type(mem->sz), name, bits);
-  }
-}
-
-static void operand_str(decompiler_t *d, str_t *s, dis86_instr_t *ins, operand_t *o, bool lvalue)
-{
-  static char buf[128];
-
-  switch (o->type) {
-    case OPERAND_TYPE_REG: str_fmt(s, "%s", as_upper(reg_name(o->u.reg.id))); break;
-    case OPERAND_TYPE_MEM: {
-      operand_mem_t *m = &o->u.mem;
-      symref_t symref = symbols_find_mem(d->symbols, m);
-      if (symref.symbol) {
-        if (lvalue) sym_lvalue(s, symref.symbol, m);
-        else sym_rvalue(s, symref.symbol, m);
-        break; // all done
-      }
-      switch (m->sz) {
-        case SIZE_8:  str_fmt(s, "*PTR_8("); break;
-        case SIZE_16: str_fmt(s, "*PTR_16("); break;
-        case SIZE_32: str_fmt(s, "*PTR_32("); break;
-      }
-      str_fmt(s, "%s, ", as_upper(reg_name(m->sreg)));
-      if (!m->reg1 && !m->reg2) {
-        if (m->off) str_fmt(s, "0x%x", m->off);
-      } else {
-        if (m->reg1) str_fmt(s, "%s", as_upper(reg_name(m->reg1)));
-        if (m->reg2) str_fmt(s, "+%s", as_upper(reg_name(m->reg2)));
-        if (m->off) {
-          i16 disp = (i16)m->off;
-          if (disp >= 0) str_fmt(s, "+0x%x", (u16)disp);
-          else           str_fmt(s, "-0x%x", (u16)-disp);
-        }
-      }
-      str_fmt(s, ")");
-    } break;
-    case OPERAND_TYPE_IMM: str_fmt(s, "0x%x", o->u.imm.val); break;
-    case OPERAND_TYPE_REL: {
-      /* u16 effective = ins->addr + ins->n_bytes + o->u.rel.val; */
-      /* str_fmt(s, "0x%x", effective); */
-      str_fmt(s, "REL_ADDR_BROKEN");
-    } break;
-      //case OPERAND_TYPE_FAR: break;
-    default: FAIL("INVALID OPERAND TYPE: %d", o->type);
   }
 }
 
