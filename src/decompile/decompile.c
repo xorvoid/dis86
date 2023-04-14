@@ -319,10 +319,6 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
       }
       str_fmt(s, ");");
     } break;
-    case EXPR_KIND_LITERAL: {
-      expr_literal_t *k = expr->k.literal;
-      str_fmt(s, "%s", k->text);
-    } break;
     case EXPR_KIND_BRANCH_COND: {
       expr_branch_cond_t *k = expr->k.branch_cond;
       str_fmt(s, "if (");

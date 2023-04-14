@@ -33,7 +33,6 @@ static info_t instr_info(dis86_instr_t *instr)
 #define OPERATOR3(op, s) do { info.type = INFO_TYPE_OP3;   info.u.op3.oper = op; info.u.op3.sign = s; } while(0)
 #define ABSTRACT(s)      do { info.type = INFO_TYPE_ABSTRACT;     info.u.abstract  = s; } while(0)
 #define ABSTRACT_RET(s)  do { info.type = INFO_TYPE_ABSTRACT_RET; info.u.abstract_ret = s; } while(0)
-#define LITERAL(s)       do { info.type = INFO_TYPE_LIT;   info.u.lit   = s; } while(0)
 
   int type = -1;
   const char *op = NULL;
@@ -92,7 +91,8 @@ static info_t instr_info(dis86_instr_t *instr)
     case OP_LAHF:                                    break;
     case OP_LDS:    ABSTRACT("LOAD_SEG_OFF");        break;
     case OP_LEA:                                     break;
-    case OP_LEAVE:  LITERAL("SP = BP; BP = POP();"); break;
+    case OP_LEAVE:  ABSTRACT("LEAVE");               break;
+      //case OP_LEAVE:  LITERAL("SP = BP; BP = POP();"); break;
     case OP_LES:    ABSTRACT("LOAD_SEG_OFF");        break;
     case OP_LODS:                                    break;
     case OP_LOOP:                                    break;
@@ -143,7 +143,6 @@ static info_t instr_info(dis86_instr_t *instr)
 #undef OPERATOR3
 #undef ABSTRACT
 #undef ABSTRACT_RET
-#undef LITERAL
 }
 
 #define OPERAND_IMM_ZERO ({\
@@ -380,11 +379,6 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
         if (o->type == OPERAND_TYPE_NONE) break;
         k->args[k->n_args++] = value_from_operand(o, symbols);
       }
-    } break;
-    case INFO_TYPE_LIT: {
-      expr->kind = EXPR_KIND_LITERAL;
-      expr_literal_t *k = expr->k.literal;
-      k->text = info.u.lit;
     } break;
     default: {
       FAIL("Unknown code type: %d\n", info.type);

@@ -418,7 +418,7 @@ static instr_fmt_t instr_tbl[] = {
   {  OP_MOV,       0xc6,      0,   OPER_RM8,     OPER_IMM8,    -1,             0x0 },
   {  OP_MOV,       0xc7,      0,   OPER_RM16,    OPER_IMM16,   -1,             0x0 },
   {  OP_ENTER,     0xc8,     -1,   OPER_BP,      OPER_IMM16,   OPER_IMM8,      0x0 },
-  {  OP_LEAVE,     0xc9,     -1,   OPER_BP,      -1,           -1,             0x1 },
+  {  OP_LEAVE,     0xc9,     -1,   OPER_BP,      OPER_SP,      -1,             0x3 },
   {  OP_RETF,      0xca,     -1,   OPER_IMM16,   -1,           -1,             0x0 },
   {  OP_RETF,      0xcb,     -1,   -1,           -1,           -1,             0x0 },
   {  OP_INT,       0xcc,     -1,   OPER_LIT3,    OPER_FLAGS,   -1,             0x2 },

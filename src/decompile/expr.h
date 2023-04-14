@@ -6,11 +6,9 @@ typedef struct expr_operator1   expr_operator1_t;
 typedef struct expr_operator2   expr_operator2_t;
 typedef struct expr_operator3   expr_operator3_t;
 typedef struct expr_function    expr_function_t;
-typedef struct expr_literal     expr_literal_t;
 typedef struct expr_branch_cond expr_branch_cond_t;
 typedef struct expr_branch      expr_branch_t;
 typedef struct expr_call        expr_call_t;
-typedef struct expr_lea         expr_lea_t;
 
 enum {
   ADDR_TYPE_FAR,
@@ -40,7 +38,6 @@ enum {
   EXPR_KIND_OPERATOR2,
   EXPR_KIND_OPERATOR3,
   EXPR_KIND_FUNCTION,
-  EXPR_KIND_LITERAL,
   EXPR_KIND_BRANCH_COND,
   EXPR_KIND_BRANCH,
   EXPR_KIND_CALL,
@@ -75,11 +72,6 @@ struct expr_function
   value_t      args[3];
 };
 
-struct expr_literal
-{
-  const char *text;
-};
-
 struct expr_branch_cond
 {
   operator_t   operator;
@@ -100,13 +92,6 @@ struct expr_call
   const char * name; // optional
 };
 
-struct expr_lea
-{
-  value_t dest;               // required
-  int     addr_base_reg;      // required
-  u16     addr_offset;        // required
-};
-
 struct expr
 {
   int kind;
@@ -115,11 +100,9 @@ struct expr
     expr_operator2_t   operator2[1];
     expr_operator3_t   operator3[1];
     expr_function_t    function[1];
-    expr_literal_t     literal[1];
     expr_branch_cond_t branch_cond[1];
     expr_branch_t      branch[1];
     expr_call_t        call[1];
-    expr_lea_t         lea[1];
   } k;
 
   size_t          n_ins;
