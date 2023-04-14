@@ -5,8 +5,8 @@ enum {
   INFO_TYPE_OP1,
   INFO_TYPE_OP2,
   INFO_TYPE_OP3,
-  INFO_TYPE_FUNC,
-  INFO_TYPE_RFUNC,
+  INFO_TYPE_ABSTRACT,
+  INFO_TYPE_ABSTRACT_RET,
   INFO_TYPE_LIT,
 };
 
@@ -18,8 +18,8 @@ struct info
     operator_t op1;
     operator_t op2;
     operator_t op3;
-    const char *func;
-    const char *rfunc;
+    const char *abstract;
+    const char *abstract_ret;
     const char *lit;
   } u;
 };
@@ -31,9 +31,9 @@ static info_t instr_info(dis86_instr_t *instr)
 #define OPERATOR1(op, s) do { info.type = INFO_TYPE_OP1;   info.u.op1.oper = op; info.u.op1.sign = s; } while(0)
 #define OPERATOR2(op, s) do { info.type = INFO_TYPE_OP2;   info.u.op2.oper = op; info.u.op2.sign = s; } while(0)
 #define OPERATOR3(op, s) do { info.type = INFO_TYPE_OP3;   info.u.op3.oper = op; info.u.op3.sign = s; } while(0)
-#define FUNCTION(s)  do { info.type = INFO_TYPE_FUNC;  info.u.func  = s; } while(0)
-#define RFUNCTION(s) do { info.type = INFO_TYPE_RFUNC; info.u.rfunc = s; } while(0)
-#define LITERAL(s)   do { info.type = INFO_TYPE_LIT;   info.u.lit   = s; } while(0)
+#define ABSTRACT(s)      do { info.type = INFO_TYPE_ABSTRACT;     info.u.abstract  = s; } while(0)
+#define ABSTRACT_RET(s)  do { info.type = INFO_TYPE_ABSTRACT_RET; info.u.abstract_ret = s; } while(0)
+#define LITERAL(s)       do { info.type = INFO_TYPE_LIT;   info.u.lit   = s; } while(0)
 
   int type = -1;
   const char *op = NULL;
@@ -90,10 +90,10 @@ static info_t instr_info(dis86_instr_t *instr)
     case OP_JP:                                      break;
     case OP_JS:                                      break;
     case OP_LAHF:                                    break;
-    case OP_LDS:    FUNCTION("LOAD_SEG_OFF");        break;
+    case OP_LDS:    ABSTRACT("LOAD_SEG_OFF");        break;
     case OP_LEA:                                     break;
     case OP_LEAVE:  LITERAL("SP = BP; BP = POP();"); break;
-    case OP_LES:    FUNCTION("LOAD_SEG_OFF");        break;
+    case OP_LES:    ABSTRACT("LOAD_SEG_OFF");        break;
     case OP_LODS:                                    break;
     case OP_LOOP:                                    break;
     case OP_LOOPE:                                   break;
@@ -107,10 +107,10 @@ static info_t instr_info(dis86_instr_t *instr)
     case OP_OR:     OPERATOR2("|=", 0);              break;
     case OP_OUT:                                     break;
     case OP_OUTS:                                    break;
-    case OP_POP:    RFUNCTION("POP");                break;
+    case OP_POP:    ABSTRACT_RET("POP");             break;
     case OP_POPA:                                    break;
     case OP_POPF:                                    break;
-    case OP_PUSH:   FUNCTION("PUSH");                break;
+    case OP_PUSH:   ABSTRACT("PUSH");                break;
     case OP_PUSHA:                                   break;
     case OP_PUSHF:                                   break;
     case OP_RCL:                                     break;
@@ -138,9 +138,11 @@ static info_t instr_info(dis86_instr_t *instr)
   }
   return info;
 
-#undef OPERATOR
-#undef FUNCTION
-#undef RFUNCTION
+#undef OPERATOR1
+#undef OPERATOR2
+#undef OPERATOR3
+#undef ABSTRACT
+#undef ABSTRACT_RET
 #undef LITERAL
 }
 
@@ -352,10 +354,10 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
       k->left     = value_from_operand(&ins->operand[1], symbols);
       k->right    = value_from_operand(&ins->operand[2], symbols);
     } break;
-    case INFO_TYPE_FUNC: {
+    case INFO_TYPE_ABSTRACT: {
       expr->kind = EXPR_KIND_FUNCTION;
       expr_function_t *k = expr->k.function;
-      k->func_name = info.u.func;
+      k->func_name = info.u.abstract;
       k->ret = VALUE_NONE;
       k->n_args = 0;
       assert(ARRAY_SIZE(k->args) <= ARRAY_SIZE(ins->operand));
@@ -365,11 +367,11 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
         k->args[k->n_args++] = value_from_operand(o, symbols);
       }
     } break;
-    case INFO_TYPE_RFUNC: {
+    case INFO_TYPE_ABSTRACT_RET: {
       assert(ins->operand[0].type != OPERAND_TYPE_NONE);
       expr->kind = EXPR_KIND_FUNCTION;
       expr_function_t *k = expr->k.function;
-      k->func_name = info.u.rfunc;
+      k->func_name = info.u.abstract_ret;
       k->ret = value_from_operand(&ins->operand[0], symbols);
       k->n_args = 0;
       assert(ARRAY_SIZE(k->args) <= ARRAY_SIZE(ins->operand));
