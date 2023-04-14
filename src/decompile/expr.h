@@ -40,10 +40,9 @@ enum {
 
 struct expr_operator
 {
-  // TODO: REMOVE dis86 instr operands
   const char * operator;
-  operand_t    oper1;           // required
-  operand_t    oper2;           // optional
+  value_t      dest;
+  value_t      src;
 };
 
 struct expr_operator3
@@ -57,7 +56,6 @@ struct expr_operator3
 
 struct expr_function
 {
-  // TODO: REMOVE dis86 instr operands
   const char * func_name;
   value_t      ret;
   u16          n_args;
@@ -92,7 +90,6 @@ struct expr_call
 
 struct expr_lea
 {
-  // TODO: REMOVE dis86 instr operands
   value_t dest;               // required
   int     addr_base_reg;      // required
   u16     addr_offset;        // required

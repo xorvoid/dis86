@@ -249,8 +249,8 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
     expr->kind = EXPR_KIND_OPERATOR;
     expr_operator_t *k = expr->k.operator;
     k->operator = "=";
-    k->oper1 = ins->operand[0];
-    k->oper2 = OPERAND_IMM_ZERO;
+    k->dest = value_from_operand(&ins->operand[0], symbols);
+    k->src = VALUE_IMM_ZERO;
 
     expr->n_ins = 1;
     expr->ins   = ins;
@@ -355,8 +355,12 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
       expr->kind = EXPR_KIND_OPERATOR;
       expr_operator_t *k = expr->k.operator;
       k->operator = info.u.op;
-      k->oper1    = ins->operand[0];
-      k->oper2    = ins->operand[1];
+      k->dest     = value_from_operand(&ins->operand[0], symbols);
+      if (ins->operand[1].type != OPERAND_TYPE_NONE) {
+        k->src = value_from_operand(&ins->operand[1], symbols);
+      } else {
+        k->src = VALUE_NONE;
+      }
     } break;
     case INFO_TYPE_FUNC: {
       expr->kind = EXPR_KIND_FUNCTION;

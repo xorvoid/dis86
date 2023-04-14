@@ -296,7 +296,14 @@ static void operand_str(decompiler_t *d, str_t *s, dis86_instr_t *ins, operand_t
 static void symref_lvalue_str(symref_t ref, const char *name, str_t *s)
 {
   assert(ref.symbol);
-  str_fmt(s, "%s", name);
+
+  if (ref.off == 0 && ref.len == ref.symbol->len) {
+    str_fmt(s, "%s", name);
+  }
+
+  else {
+    str_fmt(s, "*(%s*)((u8*)&%s + %u)", n_bytes_as_type(ref.len), name, ref.off);
+  }
 }
 
 static void symref_rvalue_str(symref_t ref, const char *name, str_t *s)
@@ -370,11 +377,9 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
     } break;
     case EXPR_KIND_OPERATOR: {
       expr_operator_t *k = expr->k.operator;
-      operand_str(d, s, NULL, &k->oper1, true);
+      value_str(&k->dest, s, true);
       str_fmt(s, " %s ", k->operator);
-      if (k->oper2.type != OPERAND_TYPE_NONE) {
-        operand_str(d, s, NULL, &k->oper2, false);
-      }
+      if (!VALUE_IS_NONE(k->src)) value_str(&k->src, s, false);
       str_fmt(s, ";");
     } break;
     case EXPR_KIND_OPERATOR3: {
