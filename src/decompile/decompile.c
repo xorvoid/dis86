@@ -259,7 +259,12 @@ static void value_str(value_t *v, str_t *s, bool as_lvalue)
       str_fmt(s, ")");
     } break;
     case VALUE_TYPE_IMM: {
-      str_fmt(s, "0x%x", v->u.imm->value);
+      u16 val = v->u.imm->value;
+      if (val == 0) {
+        str_fmt(s, "0");
+      } else {
+        str_fmt(s, "0x%x", val);
+      }
     } break;
     default: FAIL("Unknown value type: %d\n", v->type);
   }
