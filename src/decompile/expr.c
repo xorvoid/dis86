@@ -214,9 +214,7 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
       k->right = value_from_operand(&ins->operand[1], symbols);
       k->target = branch_destination(next_ins);
 
-      expr->n_ins = 2;
-      expr->ins   = ins;
-      return expr->n_ins;
+      return 2;
     }
   }
 
@@ -240,9 +238,7 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
       k->right = VALUE_IMM_ZERO;
       k->target = branch_destination(next_ins);
 
-      expr->n_ins = 2;
-      expr->ins   = ins;
-      return expr->n_ins;
+      return 2;
     }
   }
 
@@ -259,9 +255,7 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
     k->dest = value_from_operand(&ins->operand[0], symbols);
     k->src = VALUE_IMM_ZERO;
 
-    expr->n_ins = 1;
-    expr->ins   = ins;
-    return expr->n_ins;
+    return 1;
   }
 
   // Special handling for uncond jmp
@@ -270,9 +264,7 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
     expr_branch_t *k = expr->k.branch;
     k->target = branch_destination(ins);
 
-    expr->n_ins = 1;
-    expr->ins   = ins;
-    return expr->n_ins;
+    return 1;
   }
 
   // Special handling for callf
@@ -289,9 +281,7 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
     k->remapped   = remapped;
     k->name       = name;
 
-    expr->n_ins = 1;
-    expr->ins   = ins;
-    return expr->n_ins;
+    return 1;
   }
 
   // Special handling for call
@@ -306,9 +296,7 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
     k->remapped    = false;
     k->name        = NULL;
 
-    expr->n_ins = 1;
-    expr->ins   = ins;
-    return expr->n_ins;
+    return 1;
   }
 
   // Special handling for lea
@@ -330,9 +318,7 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
     k->left = value_from_symref(symbols_find_reg(symbols, mem->reg1));
     k->right = value_from_imm(-(i16)mem->off);
 
-    expr->n_ins = 1;
-    expr->ins   = ins;
-    return expr->n_ins;
+    return 1;
   }
 
   switch (info.type) {
@@ -402,11 +388,7 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
       FAIL("Unknown code type: %d\n", info.type);
     } break;
   }
-
-  expr->n_ins = 1;
-  expr->ins   = ins;
-
-  return expr->n_ins;
+  return 1;
 }
 
 meh_t * meh_new(config_t *cfg, symbols_t *symbols, dis86_instr_t *ins, size_t n_ins)
@@ -419,6 +401,8 @@ meh_t * meh_new(config_t *cfg, symbols_t *symbols, dis86_instr_t *ins, size_t n_
     expr_t *expr = &m->expr_arr[m->expr_len];
     size_t consumed = extract_expr(expr, cfg, symbols, ins, n_ins);
     assert(consumed <= n_ins);
+    expr->ins = ins;
+    expr->n_ins = consumed;
     m->expr_len++;
 
     ins += consumed;
