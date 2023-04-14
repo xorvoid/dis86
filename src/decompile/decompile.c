@@ -703,6 +703,9 @@ char *dis86_decompile( dis86_t *                  dis,
   /* } */
   for (size_t i = 0; i < d->meh->expr_len; i++) {
     expr_t *expr = &d->meh->expr_arr[i];
+    if (is_label(d->labels, (u32)expr->ins->addr)) {
+      str_fmt(ret_s, "\n label_%08x:\n", (u32)expr->ins->addr);
+    }
     decompiler_emit_expr(d, expr, ret_s);
   }
   decompiler_emit_postamble(d, ret_s);
