@@ -44,7 +44,6 @@ enum {
   EXPR_KIND_BRANCH_COND,
   EXPR_KIND_BRANCH,
   EXPR_KIND_CALL,
-  EXPR_KIND_LEA,
 };
 
 struct expr_operator1

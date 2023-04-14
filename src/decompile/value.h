@@ -45,6 +45,8 @@ struct value
 };
 
 value_t value_from_operand(operand_t *o, symbols_t *symbols);
+value_t value_from_symref(symref_t ref);
+value_t value_from_imm(u16 imm);
 
 #define VALUE_NONE ({ \
   value_t v = {}; \

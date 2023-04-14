@@ -351,11 +351,6 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
       }
       if (k->remapped) str_fmt(s, " /* remapped */");
     } break;
-    case EXPR_KIND_LEA: {
-      expr_lea_t *k = expr->k.lea;
-      value_str(&k->dest, s, false);
-      str_fmt(s, " = %s - 0x%x;", as_upper(reg_name(k->addr_base_reg)), -(i16)k->addr_offset);
-    } break;
     default: {
       str_fmt(s, "UNIMPL();");
     } break;

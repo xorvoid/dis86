@@ -312,7 +312,7 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
   }
 
   // Special handling for lea
-    if (ins->opcode == OP_LEA) {
+  if (ins->opcode == OP_LEA) {
     assert(ins->operand[0].type != OPERAND_TYPE_NONE);
 
     assert(ins->operand[1].type == OPERAND_TYPE_MEM);
@@ -322,12 +322,13 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
     assert(!mem->reg2);
     assert(mem->off);
 
-
-    expr->kind = EXPR_KIND_LEA;
-    expr_lea_t *k = expr->k.lea;
-    k->dest          = value_from_operand(&ins->operand[0], symbols);
-    k->addr_base_reg = mem->reg1;
-    k->addr_offset   = mem->off;
+    expr->kind = EXPR_KIND_OPERATOR3;
+    expr_operator3_t *k = expr->k.operator3;
+    k->operator.oper = "-";
+    k->operator.sign = 0;
+    k->dest = value_from_operand(&ins->operand[0], symbols);
+    k->left = value_from_symref(symbols_find_reg(symbols, mem->reg1));
+    k->right = value_from_imm(-(i16)mem->off);
 
     expr->n_ins = 1;
     expr->ins   = ins;

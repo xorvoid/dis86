@@ -44,3 +44,22 @@ value_t value_from_operand(operand_t *o, symbols_t *symbols)
 
   return *val;
 }
+
+value_t value_from_symref(symref_t ref)
+{
+  assert(ref.symbol);
+
+  value_t val[1];
+  val->type = VALUE_TYPE_SYM;
+  val->u.sym->ref = ref;
+  return *val;
+}
+
+value_t value_from_imm(u16 imm)
+{
+  value_t val[1];
+  val->type = VALUE_TYPE_IMM;
+  val->u.imm->sz = SIZE_16;
+  val->u.imm->value = imm;
+  return *val;
+}
