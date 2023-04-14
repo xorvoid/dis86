@@ -78,10 +78,55 @@ static void dump_symtab(symtab_t *symtab)
   }
 }
 
+static void sym_register(sym_t *sym, int reg)
+{
+  u16 off, len;
+  const char *name;
+
+  switch (reg) {
+    case REG_AX:    off =  0; len = 2; name = "AX";    break;
+    case REG_CX:    off =  2; len = 2; name = "CX";    break;
+    case REG_DX:    off =  4; len = 2; name = "DX";    break;
+    case REG_BX:    off =  6; len = 2; name = "BX";    break;
+    case REG_SP:    off =  8; len = 2; name = "SP";    break;
+    case REG_BP:    off = 10; len = 2; name = "BP";    break;
+    case REG_SI:    off = 12; len = 2; name = "SI";    break;
+    case REG_DI:    off = 14; len = 2; name = "DI";    break;
+    case REG_AL:    off =  0; len = 1; name = "AL";    break;
+    case REG_CL:    off =  2; len = 1; name = "CL";    break;
+    case REG_DL:    off =  4; len = 1; name = "DL";    break;
+    case REG_BL:    off =  6; len = 1; name = "BL";    break;
+    case REG_AH:    off =  1; len = 1; name = "AH";    break;
+    case REG_CH:    off =  3; len = 1; name = "CH";    break;
+    case REG_DH:    off =  5; len = 1; name = "DH";    break;
+    case REG_BH:    off =  7; len = 1; name = "CH";    break;
+    case REG_ES:    off = 16; len = 2; name = "ES";    break;
+    case REG_CS:    off = 18; len = 2; name = "CS";    break;
+    case REG_SS:    off = 20; len = 2; name = "SS";    break;
+    case REG_DS:    off = 22; len = 2; name = "DS";    break;
+    case REG_IP:    off = 24; len = 2; name = "IP";    break;
+    case REG_FLAGS: off = 26; len = 2; name = "FLAGS"; break;
+    default: FAIL("Unknown register: %d", reg);
+  }
+
+  sym->kind = SYM_KIND_REGISTER;
+  sym->off  = (i16)off;
+  sym->len  = len;
+  sym->name = name;
+}
+
 static void decompiler_initial_analysis(decompiler_t *d)
 {
   // Pass to find all labels
   find_labels(d->labels, d->ins, d->n_ins);
+
+  // Populate registers
+  for (int reg = 1; reg < _REG_LAST; reg++) {
+    sym_t sym[1];
+    sym_register(sym, reg);
+    if (sym->len != 2) continue; // skip the small overlap regs
+    symbols_insert_deduced(d->symbols, sym);
+  }
 
   // Load all global symbols from config into the symtab
   for (size_t i = 0; i < d->cfg->global_len; i++) {
@@ -124,6 +169,8 @@ static void decompiler_initial_analysis(decompiler_t *d)
 
   // Report the symbols
   if (DEBUG_REPORT_SYMBOLS) {
+    LOG_INFO("Registers:");
+    dump_symtab(d->symbols->registers);
     LOG_INFO("Globals:");
     dump_symtab(d->symbols->globals);
     LOG_INFO("Params:");

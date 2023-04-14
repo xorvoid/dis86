@@ -10,6 +10,7 @@ typedef struct symtab_iter symtab_iter_t;
 struct __attribute__((aligned(16))) symtab_iter { char _opaque[32]; };
 
 enum {
+  SYM_KIND_REGISTER,
   SYM_KIND_PARAM,
   SYM_KIND_LOCAL,
   SYM_KIND_GLOBAL,
@@ -29,6 +30,7 @@ size_t       sym_size_bytes(sym_t *v);
 
 struct symbols
 {
+  symtab_t * registers;
   symtab_t * globals;
   symtab_t * params;
   symtab_t * locals;

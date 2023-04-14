@@ -44,6 +44,7 @@ enum {
 #define ELT(r, _1, _2, _3) r,
   REGISTER_ARRAY(ELT)
 #undef ELT
+  _REG_LAST,
 };
 
 static inline const char *reg_name(int reg)
@@ -51,6 +52,18 @@ static inline const char *reg_name(int reg)
   static const char *arr[] = {
     NULL,
 #define ELT(_1, _2, s, _3) s,
+  REGISTER_ARRAY(ELT)
+#undef ELT
+  };
+  if ((size_t)reg >= ARRAY_SIZE(arr)) return NULL;
+  return arr[reg];
+}
+
+static inline const char *reg_name_upper(int reg)
+{
+  static const char *arr[] = {
+    NULL,
+#define ELT(_1, _2, _3, s) s,
   REGISTER_ARRAY(ELT)
 #undef ELT
   };

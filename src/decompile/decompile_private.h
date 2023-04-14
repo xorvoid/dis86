@@ -6,6 +6,7 @@
 #include "config.h"
 #include "labels.h"
 #include "type.h"
+#include "value.h"
 #include "expr.h"
 #include "str.h"
 

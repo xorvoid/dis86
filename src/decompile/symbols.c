@@ -89,14 +89,16 @@ static bool sym_overlaps(sym_t *a, sym_t *b)
 symbols_t * symbols_new(void)
 {
   symbols_t *s = calloc(1, sizeof(symbols_t));
-  s->globals = symtab_new();
-  s->params  = symtab_new();
-  s->locals  = symtab_new();
+  s->registers = symtab_new();
+  s->globals   = symtab_new();
+  s->params    = symtab_new();
+  s->locals    = symtab_new();
   return s;
 }
 
 void symbols_delete(symbols_t *s)
 {
+  symtab_delete(s->registers);
   symtab_delete(s->globals);
   symtab_delete(s->params);
   symtab_delete(s->locals);
@@ -186,8 +188,9 @@ sym_t * symtab_iter_next(symtab_iter_t *_it)
 bool symbols_insert_deduced(symbols_t *s, sym_t *deduced_sym)
 {
   switch (deduced_sym->kind) {
-    case SYM_KIND_PARAM:  symtab_add_merge(s->params,  deduced_sym); break;
-    case SYM_KIND_LOCAL:  symtab_add_merge(s->locals,  deduced_sym); break;
+    case SYM_KIND_REGISTER: symtab_add_merge(s->registers, deduced_sym); break;
+    case SYM_KIND_PARAM:    symtab_add_merge(s->params,    deduced_sym); break;
+    case SYM_KIND_LOCAL:    symtab_add_merge(s->locals,    deduced_sym); break;
     case SYM_KIND_GLOBAL: {
       // Globals are special in that we don't merge them in. We require that globals
       // are set up via a config file. So, here, we simply verify that our deduced
