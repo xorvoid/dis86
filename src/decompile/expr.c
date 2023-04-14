@@ -281,13 +281,13 @@ static size_t _impl_abstract_jump(expr_t *expr, symbols_t *symbols, dis86_instr_
   return 1;
 }
 
-#define OPERATOR1(_oper, _sign)  return _impl_operator1(expr, symbols, ins, _oper, _sign)
-#define OPERATOR2(_oper, _sign)  return _impl_operator2(expr, symbols, ins, _oper, _sign)
-#define OPERATOR3(_oper, _sign)  return _impl_operator3(expr, symbols, ins, _oper, _sign)
-#define ABSTRACT(_name)          return _impl_abstract(expr, symbols, ins, _name)
-#define ABSTRACT_RET(_name)      return _impl_abstract_ret(expr, symbols, ins, _name)
-#define ABSTRACT_FLAGS(_name)    return _impl_abstract_flags(expr, symbols, ins, _name)
-#define ABSTRACT_JUMP(_op)       return _impl_abstract_jump(expr, symbols, ins, _op)
+#define OPERATOR1(_oper, _sign)  _impl_operator1(expr, symbols, ins, _oper, _sign)
+#define OPERATOR2(_oper, _sign)  _impl_operator2(expr, symbols, ins, _oper, _sign)
+#define OPERATOR3(_oper, _sign)  _impl_operator3(expr, symbols, ins, _oper, _sign)
+#define ABSTRACT(_name)          _impl_abstract(expr, symbols, ins, _name)
+#define ABSTRACT_RET(_name)      _impl_abstract_ret(expr, symbols, ins, _name)
+#define ABSTRACT_FLAGS(_name)    _impl_abstract_flags(expr, symbols, ins, _name)
+#define ABSTRACT_JUMP(_op)       _impl_abstract_jump(expr, symbols, ins, _op)
 
 static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
                            dis86_instr_t *ins, size_t n_ins)
@@ -296,100 +296,100 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
   if (consumed) return consumed;
 
   switch (ins->opcode) {
-    case OP_AAA:                                     break;
-    case OP_AAS:                                     break;
-    case OP_ADC:                                     break;
-    case OP_ADD:    OPERATOR2("+=", 0);              break;
-    case OP_AND:    OPERATOR2("&=", 0);              break;
-    case OP_CALL:                                    break;
-    case OP_CALLF:                                   break;
-    case OP_CBW:                                     break;
-    case OP_CLC:                                     break;
-    case OP_CLD:                                     break;
-    case OP_CLI:                                     break;
-    case OP_CMC:                                     break;
-    case OP_CMP:    ABSTRACT_FLAGS("CMP");           break;
-    case OP_CMPS:                                    break;
-    case OP_CWD:                                     break;
-    case OP_DAA:                                     break;
-    case OP_DAS:                                     break;
-    case OP_DEC:    OPERATOR1("-= 1", 0);            break;
-    case OP_DIV:                                     break;
-    case OP_ENTER:                                   break;
-    case OP_HLT:                                     break;
-    case OP_IMUL:   OPERATOR3("*", 1);               break;
-    case OP_IN:                                      break;
-    case OP_INC:    OPERATOR1("+= 1", 0);            break;
-    case OP_INS:                                     break;
-    case OP_INT:                                     break;
-    case OP_INTO:                                    break;
-    case OP_INVAL:                                   break;
-    case OP_IRET:                                    break;
-    case OP_JA:    ABSTRACT_JUMP("JA");              break;
-    case OP_JAE:   ABSTRACT_JUMP("JAE");             break;
-    case OP_JB:    ABSTRACT_JUMP("JB");              break;
-    case OP_JBE:   ABSTRACT_JUMP("JBE");             break;
-    case OP_JCXZ:                                    break;
-    case OP_JE:    ABSTRACT_JUMP("JE");              break;
-    case OP_JG:    ABSTRACT_JUMP("JG");              break;
-    case OP_JGE:   ABSTRACT_JUMP("JGE");             break;
-    case OP_JL:    ABSTRACT_JUMP("JL");              break;
-    case OP_JLE:   ABSTRACT_JUMP("JLE");             break;
-    case OP_JMP:                                     break;
-    case OP_JMPF:                                    break;
-    case OP_JNE:   ABSTRACT_JUMP("JNE");             break;
-    case OP_JNO:                                     break;
-    case OP_JNP:                                     break;
-    case OP_JNS:                                     break;
-    case OP_JO:                                      break;
-    case OP_JP:                                      break;
-    case OP_JS:                                      break;
-    case OP_LAHF:                                    break;
-    case OP_LDS:    ABSTRACT("LOAD_SEG_OFF");        break;
-    case OP_LEA:                                     break;
-    case OP_LEAVE:  ABSTRACT("LEAVE");               break;
-      //case OP_LEAVE:  LITERAL("SP = BP; BP = POP();"); break;
-    case OP_LES:    ABSTRACT("LOAD_SEG_OFF");        break;
-    case OP_LODS:                                    break;
-    case OP_LOOP:                                    break;
-    case OP_LOOPE:                                   break;
-    case OP_LOOPNE:                                  break;
-    case OP_MOV:    OPERATOR2("=", 0);               break;
-    case OP_MOVS:                                    break;
-    case OP_MUL:                                     break;
-    case OP_NEG:                                     break;
-    case OP_NOP:                                     break;
-    case OP_NOT:                                     break;
-    case OP_OR:     OPERATOR2("|=", 0);              break;
-    case OP_OUT:                                     break;
-    case OP_OUTS:                                    break;
-    case OP_POP:    ABSTRACT_RET("POP");             break;
-    case OP_POPA:                                    break;
-    case OP_POPF:                                    break;
-    case OP_PUSH:   ABSTRACT("PUSH");                break;
-    case OP_PUSHA:                                   break;
-    case OP_PUSHF:                                   break;
-    case OP_RCL:                                     break;
-    case OP_RCR:                                     break;
-    case OP_RET:    ABSTRACT("RETURN_NEAR");         break;
-    case OP_RETF:   ABSTRACT("RETURN_FAR");          break;
-    case OP_ROL:                                     break;
-    case OP_ROR:                                     break;
-    case OP_SAHF:                                    break;
-    case OP_SAR:                                     break;
-    case OP_SBB:                                     break;
-    case OP_SCAS:                                    break;
-    case OP_SHL:    OPERATOR2("<<=", 0);             break;
-    case OP_SHR:    OPERATOR2(">>=", 0);             break;
-    case OP_STC:                                     break;
-    case OP_STD:                                     break;
-    case OP_STI:                                     break;
-    case OP_STOS:                                    break;
-    case OP_SUB:    OPERATOR2("-=", 0);              break;
-    case OP_TEST:   ABSTRACT_FLAGS("TEST");          break;
-    case OP_XCHG:                                    break;
-    case OP_XLAT:                                    break;
-    case OP_XOR:    OPERATOR2("^=", 0);              break;
+    case OP_AAA:    break;
+    case OP_AAS:    break;
+    case OP_ADC:    break;
+    case OP_ADD:    return OPERATOR2("+=", 0);
+    case OP_AND:    return OPERATOR2("&=", 0);
+    case OP_CALL:   break;
+    case OP_CALLF:  break;
+    case OP_CBW:    break;
+    case OP_CLC:    break;
+    case OP_CLD:    break;
+    case OP_CLI:    break;
+    case OP_CMC:    break;
+    case OP_CMP:    return ABSTRACT_FLAGS("CMP");
+    case OP_CMPS:   break;
+    case OP_CWD:    break;
+    case OP_DAA:    break;
+    case OP_DAS:    break;
+    case OP_DEC:    return OPERATOR1("-= 1", 0);
+    case OP_DIV:    break;
+    case OP_ENTER:  break;
+    case OP_HLT:    break;
+    case OP_IMUL:   return OPERATOR3("*", 1);
+    case OP_IN:     break;
+    case OP_INC:    return OPERATOR1("+= 1", 0);
+    case OP_INS:    break;
+    case OP_INT:    break;
+    case OP_INTO:   break;
+    case OP_INVAL:  break;
+    case OP_IRET:   break;
+    case OP_JA:     return ABSTRACT_JUMP("JA");
+    case OP_JAE:    return ABSTRACT_JUMP("JAE");
+    case OP_JB:     return ABSTRACT_JUMP("JB");
+    case OP_JBE:    return ABSTRACT_JUMP("JBE");
+    case OP_JCXZ:   break;
+    case OP_JE:     return ABSTRACT_JUMP("JE");
+    case OP_JG:     return ABSTRACT_JUMP("JG");
+    case OP_JGE:    return ABSTRACT_JUMP("JGE");
+    case OP_JL:     return ABSTRACT_JUMP("JL");
+    case OP_JLE:    return ABSTRACT_JUMP("JLE");
+    case OP_JMP:    break;
+    case OP_JMPF:   break;
+    case OP_JNE:    return ABSTRACT_JUMP("JNE");
+    case OP_JNO:    break;
+    case OP_JNP:    break;
+    case OP_JNS:    break;
+    case OP_JO:     break;
+    case OP_JP:     break;
+    case OP_JS:     break;
+    case OP_LAHF:   break;
+    case OP_LDS:    return ABSTRACT("LOAD_SEG_OFF");
+    case OP_LEA:    break;
+    case OP_LEAVE:  return ABSTRACT("LEAVE");
+      //case OP_LEAVE:  LITERAL("SP = BP; BP = POP();
+    case OP_LES:    return ABSTRACT("LOAD_SEG_OFF");
+    case OP_LODS:   break;
+    case OP_LOOP:   break;
+    case OP_LOOPE:  break;
+    case OP_LOOPNE: break;
+    case OP_MOV:    return OPERATOR2("=", 0);
+    case OP_MOVS:   break;
+    case OP_MUL:    break;
+    case OP_NEG:    break;
+    case OP_NOP:    break;
+    case OP_NOT:    break;
+    case OP_OR:     return OPERATOR2("|=", 0);
+    case OP_OUT:    break;
+    case OP_OUTS:   break;
+    case OP_POP:    return ABSTRACT_RET("POP");
+    case OP_POPA:   break;
+    case OP_POPF:   break;
+    case OP_PUSH:   return ABSTRACT("PUSH");
+    case OP_PUSHA:  break;
+    case OP_PUSHF:  break;
+    case OP_RCL:    break;
+    case OP_RCR:    break;
+    case OP_RET:    return ABSTRACT("RETURN_NEAR");
+    case OP_RETF:   return ABSTRACT("RETURN_FAR");
+    case OP_ROL:    break;
+    case OP_ROR:    break;
+    case OP_SAHF:   break;
+    case OP_SAR:    break;
+    case OP_SBB:    break;
+    case OP_SCAS:   break;
+    case OP_SHL:    return OPERATOR2("<<=", 0);
+    case OP_SHR:    return OPERATOR2(">>=", 0);
+    case OP_STC:    break;
+    case OP_STD:    break;
+    case OP_STI:    break;
+    case OP_STOS:   break;
+    case OP_SUB:    return OPERATOR2("-=", 0);
+    case OP_TEST:   return ABSTRACT_FLAGS("TEST");
+    case OP_XCHG:   break;
+    case OP_XLAT:   break;
+    case OP_XOR:    return OPERATOR2("^=", 0);
     default: FAIL("Unknown Instruction: %d", ins->opcode);
   }
 
