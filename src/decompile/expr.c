@@ -2,7 +2,9 @@
 
 enum {
   INFO_TYPE_UNKNOWN = 0,
-  INFO_TYPE_OP,
+  INFO_TYPE_OP1,
+  INFO_TYPE_OP2,
+  INFO_TYPE_OP3,
   INFO_TYPE_FUNC,
   INFO_TYPE_RFUNC,
   INFO_TYPE_LIT,
@@ -13,7 +15,9 @@ struct info
 {
   int type;
   union {
-    const char *op;
+    const char *op1;
+    const char *op2;
+    const char *op3;
     const char *func;
     const char *rfunc;
     const char *lit;
@@ -24,7 +28,9 @@ static info_t instr_info(dis86_instr_t *instr)
 {
   info_t info = {};
 
-#define OPERATOR(s)  do { info.type = INFO_TYPE_OP;    info.u.op    = s; } while(0)
+#define OPERATOR1(s) do { info.type = INFO_TYPE_OP1;   info.u.op1   = s; } while(0)
+#define OPERATOR2(s) do { info.type = INFO_TYPE_OP2;   info.u.op2   = s; } while(0)
+#define OPERATOR3(s) do { info.type = INFO_TYPE_OP3;   info.u.op3   = s; } while(0)
 #define FUNCTION(s)  do { info.type = INFO_TYPE_FUNC;  info.u.func  = s; } while(0)
 #define RFUNCTION(s) do { info.type = INFO_TYPE_RFUNC; info.u.rfunc = s; } while(0)
 #define LITERAL(s)   do { info.type = INFO_TYPE_LIT;   info.u.lit   = s; } while(0)
@@ -38,8 +44,8 @@ static info_t instr_info(dis86_instr_t *instr)
     case OP_AAA:                                     break;
     case OP_AAS:                                     break;
     case OP_ADC:                                     break;
-    case OP_ADD:    OPERATOR("+=");                  break;
-    case OP_AND:    OPERATOR("&=");                  break;
+    case OP_ADD:    OPERATOR2("+=");                 break;
+    case OP_AND:    OPERATOR2("&=");                 break;
     case OP_CALL:                                    break;
     case OP_CALLF:                                   break;
     case OP_CBW:                                     break;
@@ -52,13 +58,13 @@ static info_t instr_info(dis86_instr_t *instr)
     case OP_CWD:                                     break;
     case OP_DAA:                                     break;
     case OP_DAS:                                     break;
-    case OP_DEC:    OPERATOR("-= 1");                break;
+    case OP_DEC:    OPERATOR1("-= 1");               break;
     case OP_DIV:                                     break;
     case OP_ENTER:                                   break;
     case OP_HLT:                                     break;
     case OP_IMUL:                                    break;
     case OP_IN:                                      break;
-    case OP_INC:    OPERATOR("+= 1");                break;
+    case OP_INC:    OPERATOR1("+= 1");               break;
     case OP_INS:                                     break;
     case OP_INT:                                     break;
     case OP_INTO:                                    break;
@@ -92,13 +98,13 @@ static info_t instr_info(dis86_instr_t *instr)
     case OP_LOOP:                                    break;
     case OP_LOOPE:                                   break;
     case OP_LOOPNE:                                  break;
-    case OP_MOV:    OPERATOR("=");                   break;
+    case OP_MOV:    OPERATOR2("=");                  break;
     case OP_MOVS:                                    break;
     case OP_MUL:                                     break;
     case OP_NEG:                                     break;
     case OP_NOP:                                     break;
     case OP_NOT:                                     break;
-    case OP_OR:     OPERATOR("|=");                  break;
+    case OP_OR:     OPERATOR2("|=");                 break;
     case OP_OUT:                                     break;
     case OP_OUTS:                                    break;
     case OP_POP:    RFUNCTION("POP");                break;
@@ -117,17 +123,17 @@ static info_t instr_info(dis86_instr_t *instr)
     case OP_SAR:                                     break;
     case OP_SBB:                                     break;
     case OP_SCAS:                                    break;
-    case OP_SHL:    OPERATOR("<<=");                 break;
-    case OP_SHR:    OPERATOR(">>=");                 break;
+    case OP_SHL:    OPERATOR2("<<=");                break;
+    case OP_SHR:    OPERATOR2(">>=");                break;
     case OP_STC:                                     break;
     case OP_STD:                                     break;
     case OP_STI:                                     break;
     case OP_STOS:                                    break;
-    case OP_SUB:    OPERATOR("-=");                  break;
+    case OP_SUB:    OPERATOR2("-=");                 break;
     case OP_TEST:                                    break;
     case OP_XCHG:                                    break;
     case OP_XLAT:                                    break;
-    case OP_XOR:    OPERATOR("^=");                  break;
+    case OP_XOR:    OPERATOR2("^=");                 break;
     default: FAIL("Unknown Instruction: %d", instr->opcode);
   }
   return info;
@@ -246,8 +252,8 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
       ins->operand[1].type == OPERAND_TYPE_REG &&
       ins->operand[0].u.reg.id == ins->operand[1].u.reg.id) {
 
-    expr->kind = EXPR_KIND_OPERATOR;
-    expr_operator_t *k = expr->k.operator;
+    expr->kind = EXPR_KIND_OPERATOR2;
+    expr_operator2_t *k = expr->k.operator2;
     k->operator = "=";
     k->dest = value_from_operand(&ins->operand[0], symbols);
     k->src = VALUE_IMM_ZERO;
@@ -350,17 +356,21 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
     case INFO_TYPE_UNKNOWN: {
       expr->kind = EXPR_KIND_UNKNOWN;
     } break;
-    case INFO_TYPE_OP: {
+    case INFO_TYPE_OP1: {
       assert(ins->operand[0].type != OPERAND_TYPE_NONE);
-      expr->kind = EXPR_KIND_OPERATOR;
-      expr_operator_t *k = expr->k.operator;
-      k->operator = info.u.op;
+      expr->kind = EXPR_KIND_OPERATOR1;
+      expr_operator1_t *k = expr->k.operator1;
+      k->operator = info.u.op1;
       k->dest     = value_from_operand(&ins->operand[0], symbols);
-      if (ins->operand[1].type != OPERAND_TYPE_NONE) {
-        k->src = value_from_operand(&ins->operand[1], symbols);
-      } else {
-        k->src = VALUE_NONE;
-      }
+    } break;
+    case INFO_TYPE_OP2: {
+      assert(ins->operand[0].type != OPERAND_TYPE_NONE);
+      assert(ins->operand[1].type != OPERAND_TYPE_NONE);
+      expr->kind = EXPR_KIND_OPERATOR2;
+      expr_operator2_t *k = expr->k.operator2;
+      k->operator = info.u.op2;
+      k->dest     = value_from_operand(&ins->operand[0], symbols);
+      k->src = value_from_operand(&ins->operand[1], symbols);
     } break;
     case INFO_TYPE_FUNC: {
       expr->kind = EXPR_KIND_FUNCTION;

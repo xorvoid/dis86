@@ -2,7 +2,8 @@
 
 typedef struct meh              meh_t;
 typedef struct expr             expr_t;
-typedef struct expr_operator    expr_operator_t;
+typedef struct expr_operator1   expr_operator1_t;
+typedef struct expr_operator2   expr_operator2_t;
 typedef struct expr_operator3   expr_operator3_t;
 typedef struct expr_function    expr_function_t;
 typedef struct expr_literal     expr_literal_t;
@@ -28,7 +29,8 @@ struct addr
 
 enum {
   EXPR_KIND_UNKNOWN,
-  EXPR_KIND_OPERATOR,
+  EXPR_KIND_OPERATOR1,
+  EXPR_KIND_OPERATOR2,
   EXPR_KIND_OPERATOR3,
   EXPR_KIND_FUNCTION,
   EXPR_KIND_LITERAL,
@@ -38,7 +40,13 @@ enum {
   EXPR_KIND_LEA,
 };
 
-struct expr_operator
+struct expr_operator1
+{
+  const char * operator;
+  value_t      dest;
+};
+
+struct expr_operator2
 {
   const char * operator;
   value_t      dest;
@@ -99,7 +107,8 @@ struct expr
 {
   int kind;
   union {
-    expr_operator_t    operator[1];
+    expr_operator1_t   operator1[1];
+    expr_operator2_t   operator2[1];
     expr_operator3_t   operator3[1];
     expr_function_t    function[1];
     expr_literal_t     literal[1];

@@ -274,11 +274,17 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
     case EXPR_KIND_UNKNOWN: {
       str_fmt(s, "UNKNOWN();");
     } break;
-    case EXPR_KIND_OPERATOR: {
-      expr_operator_t *k = expr->k.operator;
+    case EXPR_KIND_OPERATOR1: {
+      expr_operator1_t *k = expr->k.operator1;
       value_str(&k->dest, s, true);
       str_fmt(s, " %s ", k->operator);
-      if (!VALUE_IS_NONE(k->src)) value_str(&k->src, s, false);
+      str_fmt(s, ";");
+    } break;
+    case EXPR_KIND_OPERATOR2: {
+      expr_operator2_t *k = expr->k.operator2;
+      value_str(&k->dest, s, true);
+      str_fmt(s, " %s ", k->operator);
+      value_str(&k->src, s, false);
       str_fmt(s, ";");
     } break;
     case EXPR_KIND_OPERATOR3: {
