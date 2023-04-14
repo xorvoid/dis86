@@ -329,6 +329,12 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
       value_str(&k->right, s, false);
       str_fmt(s, ") goto label_%08x;", k->target);
     } break;
+    case EXPR_KIND_BRANCH_FLAGS: {
+      expr_branch_flags_t *k = expr->k.branch_flags;
+      str_fmt(s, "if (%s(", k->op);
+      value_str(&k->flags, s, false);
+      str_fmt(s, ")) goto label_%08x;", k->target);
+    } break;
     case EXPR_KIND_BRANCH: {
       expr_branch_t *k = expr->k.branch;
       str_fmt(s, "goto label_%08x;", k->target);

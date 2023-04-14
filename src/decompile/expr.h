@@ -7,6 +7,7 @@ typedef struct expr_operator2   expr_operator2_t;
 typedef struct expr_operator3   expr_operator3_t;
 typedef struct expr_abstract    expr_abstract_t;
 typedef struct expr_branch_cond expr_branch_cond_t;
+typedef struct expr_branch_flags expr_branch_flags_t;
 typedef struct expr_branch      expr_branch_t;
 typedef struct expr_call        expr_call_t;
 
@@ -39,6 +40,7 @@ enum {
   EXPR_KIND_OPERATOR3,
   EXPR_KIND_ABSTRACT,
   EXPR_KIND_BRANCH_COND,
+  EXPR_KIND_BRANCH_FLAGS,
   EXPR_KIND_BRANCH,
   EXPR_KIND_CALL,
 };
@@ -80,6 +82,13 @@ struct expr_branch_cond
   u32          target;
 };
 
+struct expr_branch_flags
+{
+  const char * op; // FIXME
+  value_t      flags;
+  u32          target;
+};
+
 struct expr_branch
 {
   u32 target;
@@ -96,13 +105,14 @@ struct expr
 {
   int kind;
   union {
-    expr_operator1_t   operator1[1];
-    expr_operator2_t   operator2[1];
-    expr_operator3_t   operator3[1];
-    expr_abstract_t    abstract[1];
-    expr_branch_cond_t branch_cond[1];
-    expr_branch_t      branch[1];
-    expr_call_t        call[1];
+    expr_operator1_t    operator1[1];
+    expr_operator2_t    operator2[1];
+    expr_operator3_t    operator3[1];
+    expr_abstract_t     abstract[1];
+    expr_branch_cond_t  branch_cond[1];
+    expr_branch_flags_t branch_flags[1];
+    expr_branch_t       branch[1];
+    expr_call_t         call[1];
   } k;
 
   size_t          n_ins;
