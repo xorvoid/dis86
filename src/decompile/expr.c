@@ -93,69 +93,6 @@ static size_t extract_expr_special(expr_t *expr, config_t *cfg, symbols_t *symbo
     return 1;
   }
 
-  // Special handling for uncond jmp
-  if (ins->opcode == OP_JMP) {
-    expr->kind = EXPR_KIND_BRANCH;
-    expr_branch_t *k = expr->k.branch;
-    k->target = branch_destination(ins);
-
-    return 1;
-  }
-
-  // Special handling for callf
-  if (ins->opcode == OP_CALLF && ins->operand[0].type == OPERAND_TYPE_FAR) {
-    operand_far_t *far = &ins->operand[0].u.far;
-    segoff_t addr = {far->seg, far->off};
-    bool remapped = config_seg_remap(cfg, &addr.seg);
-    const char *name = config_func_lookup(cfg, addr);
-
-    expr->kind = EXPR_KIND_CALL;
-    expr_call_t *k = expr->k.call;
-    k->addr.type  = ADDR_TYPE_FAR;
-    k->addr.u.far = addr;
-    k->remapped   = remapped;
-    k->name       = name;
-
-    return 1;
-  }
-
-  // Special handling for call
-  if (ins->opcode == OP_CALL) {
-    assert(ins->operand[0].type == OPERAND_TYPE_REL);
-    u16 effective = ins->addr + ins->n_bytes + ins->operand[0].u.rel.val;
-
-    expr->kind = EXPR_KIND_CALL;
-    expr_call_t *k = expr->k.call;
-    k->addr.type   = ADDR_TYPE_NEAR;
-    k->addr.u.near = effective;
-    k->remapped    = false;
-    k->name        = NULL;
-
-    return 1;
-  }
-
-  // Special handling for lea
-  if (ins->opcode == OP_LEA) {
-    assert(ins->operand[0].type != OPERAND_TYPE_NONE);
-
-    assert(ins->operand[1].type == OPERAND_TYPE_MEM);
-    operand_mem_t *mem = &ins->operand[1].u.mem;
-    assert(mem->sz == SIZE_16);
-    assert(mem->reg1);
-    assert(!mem->reg2);
-    assert(mem->off);
-
-    expr->kind = EXPR_KIND_OPERATOR3;
-    expr_operator3_t *k = expr->k.operator3;
-    k->operator.oper = "-";
-    k->operator.sign = 0;
-    k->dest = value_from_operand(&ins->operand[0], symbols);
-    k->left = value_from_symref(symbols_find_reg(symbols, mem->reg1));
-    k->right = value_from_imm(-(i16)mem->off);
-
-    return 1;
-  }
-
   return 0;
 }
 
@@ -281,6 +218,63 @@ static size_t _impl_abstract_jump(expr_t *expr, symbols_t *symbols, dis86_instr_
   return 1;
 }
 
+static size_t _impl_call_far(expr_t *expr, config_t *cfg, symbols_t *symbols, dis86_instr_t *ins)
+{
+  // FIXME BROKEN!!!
+  assert(ins->operand[0].type == OPERAND_TYPE_FAR);
+
+  operand_far_t *far = &ins->operand[0].u.far;
+  segoff_t addr = {far->seg, far->off};
+  bool remapped = config_seg_remap(cfg, &addr.seg);
+  const char *name = config_func_lookup(cfg, addr);
+
+  expr->kind = EXPR_KIND_CALL;
+  expr_call_t *k = expr->k.call;
+  k->addr.type  = ADDR_TYPE_FAR;
+  k->addr.u.far = addr;
+  k->remapped   = remapped;
+  k->name       = name;
+
+  return 1;
+}
+
+static size_t _impl_call_near(expr_t *expr, symbols_t *symbols, dis86_instr_t *ins)
+{
+  assert(ins->operand[0].type == OPERAND_TYPE_REL);
+  u16 effective = ins->addr + ins->n_bytes + ins->operand[0].u.rel.val;
+
+  expr->kind = EXPR_KIND_CALL;
+  expr_call_t *k = expr->k.call;
+  k->addr.type   = ADDR_TYPE_NEAR;
+  k->addr.u.near = effective;
+  k->remapped    = false;
+  k->name        = NULL;
+
+  return 1;
+}
+
+static size_t _impl_load_effective_addr(expr_t *expr, symbols_t *symbols, dis86_instr_t *ins)
+{
+  assert(ins->operand[0].type != OPERAND_TYPE_NONE);
+
+  assert(ins->operand[1].type == OPERAND_TYPE_MEM);
+  operand_mem_t *mem = &ins->operand[1].u.mem;
+  assert(mem->sz == SIZE_16);
+  assert(mem->reg1);
+  assert(!mem->reg2);
+  assert(mem->off);
+
+  expr->kind = EXPR_KIND_OPERATOR3;
+  expr_operator3_t *k = expr->k.operator3;
+  k->operator.oper = "-";
+  k->operator.sign = 0;
+  k->dest = value_from_operand(&ins->operand[0], symbols);
+  k->left = value_from_symref(symbols_find_reg(symbols, mem->reg1));
+  k->right = value_from_imm(-(i16)mem->off);
+
+  return 1;
+}
+
 #define OPERATOR1(_oper, _sign)  _impl_operator1(expr, symbols, ins, _oper, _sign)
 #define OPERATOR2(_oper, _sign)  _impl_operator2(expr, symbols, ins, _oper, _sign)
 #define OPERATOR3(_oper, _sign)  _impl_operator3(expr, symbols, ins, _oper, _sign)
@@ -288,6 +282,9 @@ static size_t _impl_abstract_jump(expr_t *expr, symbols_t *symbols, dis86_instr_
 #define ABSTRACT_RET(_name)      _impl_abstract_ret(expr, symbols, ins, _name)
 #define ABSTRACT_FLAGS(_name)    _impl_abstract_flags(expr, symbols, ins, _name)
 #define ABSTRACT_JUMP(_op)       _impl_abstract_jump(expr, symbols, ins, _op)
+#define CALL_FAR()               _impl_call_far(expr, cfg, symbols, ins)
+#define CALL_NEAR()              _impl_call_near(expr, symbols, ins)
+#define LOAD_EFFECTIVE_ADDR()    _impl_load_effective_addr(expr, symbols, ins)
 
 static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
                            dis86_instr_t *ins, size_t n_ins)
@@ -301,8 +298,8 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
     case OP_ADC:    break;
     case OP_ADD:    return OPERATOR2("+=", 0);
     case OP_AND:    return OPERATOR2("&=", 0);
-    case OP_CALL:   break;
-    case OP_CALLF:  break;
+    case OP_CALL:   return CALL_NEAR();
+    case OP_CALLF:  return CALL_FAR();
     case OP_CBW:    break;
     case OP_CLC:    break;
     case OP_CLD:    break;
@@ -335,7 +332,12 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
     case OP_JGE:    return ABSTRACT_JUMP("JGE");
     case OP_JL:     return ABSTRACT_JUMP("JL");
     case OP_JLE:    return ABSTRACT_JUMP("JLE");
-    case OP_JMP:    break;
+    case OP_JMP: {
+      expr->kind = EXPR_KIND_BRANCH;
+      expr_branch_t *k = expr->k.branch;
+      k->target = branch_destination(ins);
+      return 1;
+    } break;
     case OP_JMPF:   break;
     case OP_JNE:    return ABSTRACT_JUMP("JNE");
     case OP_JNO:    break;
@@ -346,7 +348,7 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
     case OP_JS:     break;
     case OP_LAHF:   break;
     case OP_LDS:    return ABSTRACT("LOAD_SEG_OFF");
-    case OP_LEA:    break;
+    case OP_LEA:    return LOAD_EFFECTIVE_ADDR();
     case OP_LEAVE:  return ABSTRACT("LEAVE");
       //case OP_LEAVE:  LITERAL("SP = BP; BP = POP();
     case OP_LES:    return ABSTRACT("LOAD_SEG_OFF");
