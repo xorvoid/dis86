@@ -1,158 +1,5 @@
 #include "decompile_private.h"
 
-enum {
-  INFO_TYPE_UNKNOWN = 0,
-  INFO_TYPE_OP1,
-  INFO_TYPE_OP2,
-  INFO_TYPE_OP3,
-  INFO_TYPE_ABSTRACT,
-  INFO_TYPE_ABSTRACT_RET,
-  INFO_TYPE_ABSTRACT_FLAGS,
-  INFO_TYPE_ABSTRACT_JUMP,
-  INFO_TYPE_LIT,
-};
-
-typedef struct info info_t;
-struct info
-{
-  int type;
-  union {
-    operator_t op1;
-    operator_t op2;
-    operator_t op3;
-    const char *abstract;
-    const char *abstract_ret;
-    const char *abstract_flags;
-    const char *abstract_jump;
-    const char *lit;
-  } u;
-};
-
-static info_t instr_info(dis86_instr_t *instr)
-{
-  info_t info = {};
-
-#define OPERATOR1(op, s)  do { info.type = INFO_TYPE_OP1;   info.u.op1.oper = op; info.u.op1.sign = s; } while(0)
-#define OPERATOR2(op, s)  do { info.type = INFO_TYPE_OP2;   info.u.op2.oper = op; info.u.op2.sign = s; } while(0)
-#define OPERATOR3(op, s)  do { info.type = INFO_TYPE_OP3;   info.u.op3.oper = op; info.u.op3.sign = s; } while(0)
-#define ABSTRACT(s)       do { info.type = INFO_TYPE_ABSTRACT;     info.u.abstract  = s; } while(0)
-#define ABSTRACT_RET(s)   do { info.type = INFO_TYPE_ABSTRACT_RET; info.u.abstract_ret = s; } while(0)
-#define ABSTRACT_FLAGS(s) do { info.type = INFO_TYPE_ABSTRACT_FLAGS; info.u.abstract_flags = s; } while(0)
-#define ABSTRACT_JUMP(s) do { info.type = INFO_TYPE_ABSTRACT_JUMP; info.u.abstract_jump = s; } while(0)
-
-  int type = -1;
-  const char *op = NULL;
-  const char *func = NULL;
-  const char *lit = NULL;
-
-  switch (instr->opcode) {
-    case OP_AAA:                                     break;
-    case OP_AAS:                                     break;
-    case OP_ADC:                                     break;
-    case OP_ADD:    OPERATOR2("+=", 0);              break;
-    case OP_AND:    OPERATOR2("&=", 0);              break;
-    case OP_CALL:                                    break;
-    case OP_CALLF:                                   break;
-    case OP_CBW:                                     break;
-    case OP_CLC:                                     break;
-    case OP_CLD:                                     break;
-    case OP_CLI:                                     break;
-    case OP_CMC:                                     break;
-    case OP_CMP:    ABSTRACT_FLAGS("CMP");           break;
-    case OP_CMPS:                                    break;
-    case OP_CWD:                                     break;
-    case OP_DAA:                                     break;
-    case OP_DAS:                                     break;
-    case OP_DEC:    OPERATOR1("-= 1", 0);            break;
-    case OP_DIV:                                     break;
-    case OP_ENTER:                                   break;
-    case OP_HLT:                                     break;
-    case OP_IMUL:   OPERATOR3("*", 1);               break;
-    case OP_IN:                                      break;
-    case OP_INC:    OPERATOR1("+= 1", 0);            break;
-    case OP_INS:                                     break;
-    case OP_INT:                                     break;
-    case OP_INTO:                                    break;
-    case OP_INVAL:                                   break;
-    case OP_IRET:                                    break;
-    case OP_JA:    ABSTRACT_JUMP("JA");              break;
-    case OP_JAE:   ABSTRACT_JUMP("JAE");             break;
-    case OP_JB:    ABSTRACT_JUMP("JB");              break;
-    case OP_JBE:   ABSTRACT_JUMP("JBE");             break;
-    case OP_JCXZ:                                    break;
-    case OP_JE:    ABSTRACT_JUMP("JE");              break;
-    case OP_JG:    ABSTRACT_JUMP("JG");              break;
-    case OP_JGE:   ABSTRACT_JUMP("JGE");             break;
-    case OP_JL:    ABSTRACT_JUMP("JL");              break;
-    case OP_JLE:   ABSTRACT_JUMP("JLE");             break;
-    case OP_JMP:                                     break;
-    case OP_JMPF:                                    break;
-    case OP_JNE:   ABSTRACT_JUMP("JNE");             break;
-    case OP_JNO:                                     break;
-    case OP_JNP:                                     break;
-    case OP_JNS:                                     break;
-    case OP_JO:                                      break;
-    case OP_JP:                                      break;
-    case OP_JS:                                      break;
-    case OP_LAHF:                                    break;
-    case OP_LDS:    ABSTRACT("LOAD_SEG_OFF");        break;
-    case OP_LEA:                                     break;
-    case OP_LEAVE:  ABSTRACT("LEAVE");               break;
-      //case OP_LEAVE:  LITERAL("SP = BP; BP = POP();"); break;
-    case OP_LES:    ABSTRACT("LOAD_SEG_OFF");        break;
-    case OP_LODS:                                    break;
-    case OP_LOOP:                                    break;
-    case OP_LOOPE:                                   break;
-    case OP_LOOPNE:                                  break;
-    case OP_MOV:    OPERATOR2("=", 0);               break;
-    case OP_MOVS:                                    break;
-    case OP_MUL:                                     break;
-    case OP_NEG:                                     break;
-    case OP_NOP:                                     break;
-    case OP_NOT:                                     break;
-    case OP_OR:     OPERATOR2("|=", 0);              break;
-    case OP_OUT:                                     break;
-    case OP_OUTS:                                    break;
-    case OP_POP:    ABSTRACT_RET("POP");             break;
-    case OP_POPA:                                    break;
-    case OP_POPF:                                    break;
-    case OP_PUSH:   ABSTRACT("PUSH");                break;
-    case OP_PUSHA:                                   break;
-    case OP_PUSHF:                                   break;
-    case OP_RCL:                                     break;
-    case OP_RCR:                                     break;
-    case OP_RET:    ABSTRACT("RETURN_NEAR");         break;
-    case OP_RETF:   ABSTRACT("RETURN_FAR");          break;
-    case OP_ROL:                                     break;
-    case OP_ROR:                                     break;
-    case OP_SAHF:                                    break;
-    case OP_SAR:                                     break;
-    case OP_SBB:                                     break;
-    case OP_SCAS:                                    break;
-    case OP_SHL:    OPERATOR2("<<=", 0);             break;
-    case OP_SHR:    OPERATOR2(">>=", 0);             break;
-    case OP_STC:                                     break;
-    case OP_STD:                                     break;
-    case OP_STI:                                     break;
-    case OP_STOS:                                    break;
-    case OP_SUB:    OPERATOR2("-=", 0);              break;
-    case OP_TEST:   ABSTRACT_FLAGS("TEST");          break;
-    case OP_XCHG:                                    break;
-    case OP_XLAT:                                    break;
-    case OP_XOR:    OPERATOR2("^=", 0);              break;
-    default: FAIL("Unknown Instruction: %d", instr->opcode);
-  }
-  return info;
-
-#undef OPERATOR1
-#undef OPERATOR2
-#undef OPERATOR3
-#undef ABSTRACT
-#undef ABSTRACT_RET
-#undef ABSTRACT_FLAGS
-#undef ABSTRACT_JUMP
-}
-
 #define VALUE_IMM(_val) ({\
   value_t v = {};\
   v.type = VALUE_TYPE_IMM;\
@@ -183,12 +30,10 @@ static bool cmp_oper(int opcode, operator_t *out)
   return true;
 }
 
-static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
-                           dis86_instr_t *ins, size_t n_ins)
+static size_t extract_expr_special(expr_t *expr, config_t *cfg, symbols_t *symbols,
+                                   dis86_instr_t *ins, size_t n_ins)
 {
   dis86_instr_t * next_ins = n_ins > 1 ? ins+1 : NULL;
-
-  info_t info = instr_info(ins);
 
   // Special handling for cmp+jmp
   if (ins->opcode == OP_CMP && next_ins) {
@@ -311,93 +156,211 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
     return 1;
   }
 
-  switch (info.type) {
-    case INFO_TYPE_UNKNOWN: {
-      expr->kind = EXPR_KIND_UNKNOWN;
-    } break;
-    case INFO_TYPE_OP1: {
-      assert(ins->operand[0].type != OPERAND_TYPE_NONE);
-      expr->kind = EXPR_KIND_OPERATOR1;
-      expr_operator1_t *k = expr->k.operator1;
-      k->operator = info.u.op1;
-      k->dest     = value_from_operand(&ins->operand[0], symbols);
-    } break;
-    case INFO_TYPE_OP2: {
-      assert(ins->operand[0].type != OPERAND_TYPE_NONE);
-      assert(ins->operand[1].type != OPERAND_TYPE_NONE);
-      expr->kind = EXPR_KIND_OPERATOR2;
-      expr_operator2_t *k = expr->k.operator2;
-      k->operator = info.u.op2;
-      k->dest     = value_from_operand(&ins->operand[0], symbols);
-      k->src      = value_from_operand(&ins->operand[1], symbols);
-    } break;
-    case INFO_TYPE_OP3: {
-      assert(ins->operand[0].type != OPERAND_TYPE_NONE);
-      assert(ins->operand[1].type != OPERAND_TYPE_NONE);
-      assert(ins->operand[2].type != OPERAND_TYPE_NONE);
-      expr->kind = EXPR_KIND_OPERATOR3;
-      expr_operator3_t *k = expr->k.operator3;
-      k->operator = info.u.op3;
-      k->dest     = value_from_operand(&ins->operand[0], symbols);
-      k->left     = value_from_operand(&ins->operand[1], symbols);
-      k->right    = value_from_operand(&ins->operand[2], symbols);
-    } break;
-    case INFO_TYPE_ABSTRACT: {
-      expr->kind = EXPR_KIND_ABSTRACT;
-      expr_abstract_t *k = expr->k.abstract;
-      k->func_name = info.u.abstract;
-      k->ret = VALUE_NONE;
-      k->n_args = 0;
-      assert(ARRAY_SIZE(k->args) <= ARRAY_SIZE(ins->operand));
-      for (size_t i = 0; i < ARRAY_SIZE(ins->operand); i++) {
-        operand_t *o = &ins->operand[i];
-        if (o->type == OPERAND_TYPE_NONE) break;
-        k->args[k->n_args++] = value_from_operand(o, symbols);
-      }
-    } break;
-    case INFO_TYPE_ABSTRACT_RET: {
-      assert(ins->operand[0].type != OPERAND_TYPE_NONE);
-      expr->kind = EXPR_KIND_ABSTRACT;
-      expr_abstract_t *k = expr->k.abstract;
-      k->func_name = info.u.abstract_ret;
-      k->ret = value_from_operand(&ins->operand[0], symbols);
-      k->n_args = 0;
-      assert(ARRAY_SIZE(k->args) <= ARRAY_SIZE(ins->operand));
-      for (size_t i = 1; i < ARRAY_SIZE(ins->operand); i++) {
-        operand_t *o = &ins->operand[i];
-        if (o->type == OPERAND_TYPE_NONE) break;
-        k->args[k->n_args++] = value_from_operand(o, symbols);
-      }
-    } break;
-    case INFO_TYPE_ABSTRACT_FLAGS: {
-      expr->kind = EXPR_KIND_ABSTRACT;
-      expr_abstract_t *k = expr->k.abstract;
-      k->func_name = info.u.abstract_flags;
-      k->ret = value_from_symref(symbols_find_reg(symbols, REG_FLAGS));
-      k->n_args = 0;
-      assert(ARRAY_SIZE(k->args) <= ARRAY_SIZE(ins->operand));
-      for (size_t i = 0; i < ARRAY_SIZE(ins->operand); i++) {
-        operand_t *o = &ins->operand[i];
-        if (o->type == OPERAND_TYPE_NONE) break;
-        k->args[k->n_args++] = value_from_operand(o, symbols);
-      }
-    } break;
-    case INFO_TYPE_ABSTRACT_JUMP: {
-      assert(ins->operand[0].type == OPERAND_TYPE_REL);
-      assert(ins->operand[1].type == OPERAND_TYPE_NONE);
-      u16 effective = ins->addr + ins->n_bytes + ins->operand[0].u.rel.val;
+  return 0;
+}
 
-      expr->kind = EXPR_KIND_BRANCH_FLAGS;
-      expr_branch_flags_t *k = expr->k.branch_flags;
-      k->op = info.u.abstract_jump;
-      k->flags = value_from_symref(symbols_find_reg(symbols, REG_FLAGS));
-      k->target = effective;
 
-    } break;
-    default: {
-      FAIL("Unknown code type: %d\n", info.type);
-    } break;
+static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
+                           dis86_instr_t *ins, size_t n_ins)
+{
+  size_t consumed = extract_expr_special(expr, cfg, symbols, ins, n_ins);
+  if (consumed) return consumed;
+
+#define OPERATOR1(_oper, _sign)  do {\
+    assert(ins->operand[0].type != OPERAND_TYPE_NONE);\
+    expr->kind = EXPR_KIND_OPERATOR1;\
+    expr_operator1_t *k = expr->k.operator1;\
+    k->operator.oper = _oper;\
+    k->operator.sign = _sign;\
+    k->dest     = value_from_operand(&ins->operand[0], symbols);\
+    return 1;\
+ } while(0)
+
+#define OPERATOR2(_oper, _sign)  do {                          \
+    assert(ins->operand[0].type != OPERAND_TYPE_NONE);\
+    assert(ins->operand[1].type != OPERAND_TYPE_NONE);\
+    expr->kind = EXPR_KIND_OPERATOR2;\
+    expr_operator2_t *k = expr->k.operator2;\
+    k->operator.oper = _oper;\
+    k->operator.sign = _sign;\
+    k->dest     = value_from_operand(&ins->operand[0], symbols);\
+    k->src      = value_from_operand(&ins->operand[1], symbols);\
+    return 1;\
+  } while(0)
+
+#define OPERATOR3(_oper, _sign)  do {\
+    assert(ins->operand[0].type != OPERAND_TYPE_NONE);\
+    assert(ins->operand[1].type != OPERAND_TYPE_NONE);\
+    assert(ins->operand[2].type != OPERAND_TYPE_NONE);\
+    expr->kind = EXPR_KIND_OPERATOR3;\
+    expr_operator3_t *k = expr->k.operator3;\
+    k->operator.oper = _oper;\
+    k->operator.sign = _sign;\
+    k->dest     = value_from_operand(&ins->operand[0], symbols);\
+    k->left     = value_from_operand(&ins->operand[1], symbols);\
+    k->right    = value_from_operand(&ins->operand[2], symbols);\
+    return 1;\
+  } while(0)
+
+#define ABSTRACT(_name)       do {\
+    expr->kind = EXPR_KIND_ABSTRACT;\
+    expr_abstract_t *k = expr->k.abstract;\
+    k->func_name = _name;\
+    k->ret = VALUE_NONE;\
+    k->n_args = 0;\
+    assert(ARRAY_SIZE(k->args) <= ARRAY_SIZE(ins->operand));\
+    for (size_t i = 0; i < ARRAY_SIZE(ins->operand); i++) {\
+      operand_t *o = &ins->operand[i];\
+      if (o->type == OPERAND_TYPE_NONE) break;\
+      k->args[k->n_args++] = value_from_operand(o, symbols);\
+    }\
+    return 1;\
+  } while(0)
+
+#define ABSTRACT_RET(_name)   do {\
+    assert(ins->operand[0].type != OPERAND_TYPE_NONE);\
+    expr->kind = EXPR_KIND_ABSTRACT;\
+    expr_abstract_t *k = expr->k.abstract;\
+    k->func_name = _name;\
+    k->ret = value_from_operand(&ins->operand[0], symbols);\
+    k->n_args = 0;\
+    assert(ARRAY_SIZE(k->args) <= ARRAY_SIZE(ins->operand));\
+    for (size_t i = 1; i < ARRAY_SIZE(ins->operand); i++) {\
+      operand_t *o = &ins->operand[i];\
+      if (o->type == OPERAND_TYPE_NONE) break;\
+      k->args[k->n_args++] = value_from_operand(o, symbols);\
+    }\
+    return 1;\
+  } while(0)
+
+#define ABSTRACT_FLAGS(_name) do {\
+    expr->kind = EXPR_KIND_ABSTRACT;\
+    expr_abstract_t *k = expr->k.abstract;\
+    k->func_name = _name;\
+    k->ret = value_from_symref(symbols_find_reg(symbols, REG_FLAGS));\
+    k->n_args = 0;\
+    assert(ARRAY_SIZE(k->args) <= ARRAY_SIZE(ins->operand));\
+    for (size_t i = 0; i < ARRAY_SIZE(ins->operand); i++) {\
+      operand_t *o = &ins->operand[i];\
+      if (o->type == OPERAND_TYPE_NONE) break;\
+      k->args[k->n_args++] = value_from_operand(o, symbols);\
+    }\
+    return 1;\
+  } while(0)
+
+#define ABSTRACT_JUMP(_op) do {\
+    assert(ins->operand[0].type == OPERAND_TYPE_REL);\
+    assert(ins->operand[1].type == OPERAND_TYPE_NONE);\
+    u16 effective = ins->addr + ins->n_bytes + ins->operand[0].u.rel.val;\
+    \
+    expr->kind = EXPR_KIND_BRANCH_FLAGS;\
+    expr_branch_flags_t *k = expr->k.branch_flags;\
+    k->op = _op;\
+    k->flags = value_from_symref(symbols_find_reg(symbols, REG_FLAGS));\
+    k->target = effective;\
+    return 1;\
+  } while(0)
+
+  switch (ins->opcode) {
+    case OP_AAA:                                     break;
+    case OP_AAS:                                     break;
+    case OP_ADC:                                     break;
+    case OP_ADD:    OPERATOR2("+=", 0);              break;
+    case OP_AND:    OPERATOR2("&=", 0);              break;
+    case OP_CALL:                                    break;
+    case OP_CALLF:                                   break;
+    case OP_CBW:                                     break;
+    case OP_CLC:                                     break;
+    case OP_CLD:                                     break;
+    case OP_CLI:                                     break;
+    case OP_CMC:                                     break;
+    case OP_CMP:    ABSTRACT_FLAGS("CMP");           break;
+    case OP_CMPS:                                    break;
+    case OP_CWD:                                     break;
+    case OP_DAA:                                     break;
+    case OP_DAS:                                     break;
+    case OP_DEC:    OPERATOR1("-= 1", 0);            break;
+    case OP_DIV:                                     break;
+    case OP_ENTER:                                   break;
+    case OP_HLT:                                     break;
+    case OP_IMUL:   OPERATOR3("*", 1);               break;
+    case OP_IN:                                      break;
+    case OP_INC:    OPERATOR1("+= 1", 0);            break;
+    case OP_INS:                                     break;
+    case OP_INT:                                     break;
+    case OP_INTO:                                    break;
+    case OP_INVAL:                                   break;
+    case OP_IRET:                                    break;
+    case OP_JA:    ABSTRACT_JUMP("JA");              break;
+    case OP_JAE:   ABSTRACT_JUMP("JAE");             break;
+    case OP_JB:    ABSTRACT_JUMP("JB");              break;
+    case OP_JBE:   ABSTRACT_JUMP("JBE");             break;
+    case OP_JCXZ:                                    break;
+    case OP_JE:    ABSTRACT_JUMP("JE");              break;
+    case OP_JG:    ABSTRACT_JUMP("JG");              break;
+    case OP_JGE:   ABSTRACT_JUMP("JGE");             break;
+    case OP_JL:    ABSTRACT_JUMP("JL");              break;
+    case OP_JLE:   ABSTRACT_JUMP("JLE");             break;
+    case OP_JMP:                                     break;
+    case OP_JMPF:                                    break;
+    case OP_JNE:   ABSTRACT_JUMP("JNE");             break;
+    case OP_JNO:                                     break;
+    case OP_JNP:                                     break;
+    case OP_JNS:                                     break;
+    case OP_JO:                                      break;
+    case OP_JP:                                      break;
+    case OP_JS:                                      break;
+    case OP_LAHF:                                    break;
+    case OP_LDS:    ABSTRACT("LOAD_SEG_OFF");        break;
+    case OP_LEA:                                     break;
+    case OP_LEAVE:  ABSTRACT("LEAVE");               break;
+      //case OP_LEAVE:  LITERAL("SP = BP; BP = POP();"); break;
+    case OP_LES:    ABSTRACT("LOAD_SEG_OFF");        break;
+    case OP_LODS:                                    break;
+    case OP_LOOP:                                    break;
+    case OP_LOOPE:                                   break;
+    case OP_LOOPNE:                                  break;
+    case OP_MOV:    OPERATOR2("=", 0);               break;
+    case OP_MOVS:                                    break;
+    case OP_MUL:                                     break;
+    case OP_NEG:                                     break;
+    case OP_NOP:                                     break;
+    case OP_NOT:                                     break;
+    case OP_OR:     OPERATOR2("|=", 0);              break;
+    case OP_OUT:                                     break;
+    case OP_OUTS:                                    break;
+    case OP_POP:    ABSTRACT_RET("POP");             break;
+    case OP_POPA:                                    break;
+    case OP_POPF:                                    break;
+    case OP_PUSH:   ABSTRACT("PUSH");                break;
+    case OP_PUSHA:                                   break;
+    case OP_PUSHF:                                   break;
+    case OP_RCL:                                     break;
+    case OP_RCR:                                     break;
+    case OP_RET:    ABSTRACT("RETURN_NEAR");         break;
+    case OP_RETF:   ABSTRACT("RETURN_FAR");          break;
+    case OP_ROL:                                     break;
+    case OP_ROR:                                     break;
+    case OP_SAHF:                                    break;
+    case OP_SAR:                                     break;
+    case OP_SBB:                                     break;
+    case OP_SCAS:                                    break;
+    case OP_SHL:    OPERATOR2("<<=", 0);             break;
+    case OP_SHR:    OPERATOR2(">>=", 0);             break;
+    case OP_STC:                                     break;
+    case OP_STD:                                     break;
+    case OP_STI:                                     break;
+    case OP_STOS:                                    break;
+    case OP_SUB:    OPERATOR2("-=", 0);              break;
+    case OP_TEST:   ABSTRACT_FLAGS("TEST");          break;
+    case OP_XCHG:                                    break;
+    case OP_XLAT:                                    break;
+    case OP_XOR:    OPERATOR2("^=", 0);              break;
+    default: FAIL("Unknown Instruction: %d", ins->opcode);
   }
+
+  // If we reach this point, the instruction wasn't mapped to any expression: UNKNOWN
+  expr->kind = EXPR_KIND_UNKNOWN;
   return 1;
 }
 
