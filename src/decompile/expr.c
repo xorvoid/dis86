@@ -145,30 +145,11 @@ static info_t instr_info(dis86_instr_t *instr)
 #undef ABSTRACT_RET
 }
 
-#define OPERAND_IMM_ZERO ({\
-  operand_t o = {};\
-  o.type = OPERAND_TYPE_IMM;\
-  o.u.imm.sz = SIZE_16;\
-  o.u.imm.val = 0;\
-  o; })
-
 #define VALUE_IMM_ZERO ({\
   value_t v = {};\
   v.type = VALUE_TYPE_IMM;\
   v.u.imm->value = 0;     \
   v; })
-
-/* static int code_c_type[] = { */
-/* #define ELT(_1, _2, ty, _4) ty, */
-/*   INSTR_OP_ARRAY(ELT) */
-/* #undef ELT */
-/* }; */
-
-/* static const char *code_c_str[] = { */
-/* #define ELT(_1, _2, _3, s) s, */
-/*   INSTR_OP_ARRAY(ELT) */
-/* #undef ELT */
-/* }; */
 
 static bool cmp_oper(int opcode, operator_t *out)
 {
