@@ -293,6 +293,30 @@ static void operand_str(decompiler_t *d, str_t *s, dis86_instr_t *ins, operand_t
   }
 }
 
+static void symref_lvalue_str(symref_t ref, const char *name, str_t *s)
+{
+  assert(ref.symbol);
+  str_fmt(s, "%s", name);
+}
+
+static void symref_rvalue_str(symref_t ref, const char *name, str_t *s)
+{
+  assert(ref.symbol);
+  if (ref.off == 0) {
+    if (ref.len == ref.symbol->len) {
+      str_fmt(s, "%s", name);
+    } else {
+      // Offset is the same, so just truncate it down
+      str_fmt(s, "(%s)%s", n_bytes_as_type(ref.len), name);
+    }
+  }
+
+  else {
+    u16 bits = 8 * ref.off;
+    str_fmt(s, "(%s)(%s>>%u)", n_bytes_as_type(ref.len), name, bits);
+  }
+}
+
 static void value_str(value_t *v, str_t *s, bool as_lvalue)
 {
   static char buf[128];
@@ -300,7 +324,11 @@ static void value_str(value_t *v, str_t *s, bool as_lvalue)
   switch (v->type) {
     case VALUE_TYPE_SYM: {
       const char *name = sym_name(v->u.sym->ref.symbol, buf, ARRAY_SIZE(buf));
-      str_fmt(s, "%s", name);
+      if (as_lvalue) {
+        symref_lvalue_str(v->u.sym->ref, name, s);
+      } else {
+        symref_rvalue_str(v->u.sym->ref, name, s);
+      }
     } break;
     case VALUE_TYPE_MEM: {
       value_mem_t *m = v->u.mem;
@@ -362,16 +390,14 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
     } break;
     case EXPR_KIND_FUNCTION: {
       expr_function_t *k = expr->k.function;
-      if (k->ret.type != OPERAND_TYPE_NONE) {
-        operand_str(d, s, NULL, &k->ret, true);
+      if (!VALUE_IS_NONE(k->ret)) {
+        value_str(&k->ret, s, true);
         str_fmt(s, " = ");
       }
       str_fmt(s, "%s(", k->func_name);
-      for (size_t i = 0; i < ARRAY_SIZE(k->args); i++) {
-        operand_t *o = &k->args[i];
-        if (o->type == OPERAND_TYPE_NONE) break;
+      for (size_t i = 0; i < k->n_args; i++) {
         if (i != 0) str_fmt(s, ", ");
-        operand_str(d, s, NULL, o, false);
+        value_str(&k->args[i], s, false);
       }
       str_fmt(s, ");");
     } break;
@@ -414,7 +440,7 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
     } break;
     case EXPR_KIND_LEA: {
       expr_lea_t *k = expr->k.lea;
-      operand_str(d, s, NULL, &k->dest, false);
+      value_str(&k->dest, s, false);
       str_fmt(s, " = %s - 0x%x;", as_upper(reg_name(k->addr_base_reg)), -(i16)k->addr_offset);
     } break;
     default: {

@@ -196,8 +196,9 @@ static symref_t symtab_find(symtab_t *s, sym_t *deduced_sym)
   for (size_t i = 0; i < s->n_var; i++) {
     sym_t *cand = &s->var[i];
     if (sym_overlaps(deduced_sym, cand)) {
+      assert(cand->off <= deduced_sym->off);
       ref.symbol = cand;
-      ref.off    = 0;
+      ref.off    = deduced_sym->off - cand->off;
       ref.len    = deduced_sym->len;
       break;
     }

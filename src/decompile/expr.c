@@ -337,7 +337,7 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
 
     expr->kind = EXPR_KIND_LEA;
     expr_lea_t *k = expr->k.lea;
-    k->dest          = ins->operand[0];
+    k->dest          = value_from_operand(&ins->operand[0], symbols);
     k->addr_base_reg = mem->reg1;
     k->addr_offset   = mem->off;
 
@@ -362,17 +362,28 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
       expr->kind = EXPR_KIND_FUNCTION;
       expr_function_t *k = expr->k.function;
       k->func_name = info.u.func;
-      memset(&k->ret, 0, sizeof(k->ret));
-      memcpy(k->args, ins->operand, sizeof(k->args));
+      k->ret = VALUE_NONE;
+      k->n_args = 0;
+      assert(ARRAY_SIZE(k->args) <= ARRAY_SIZE(ins->operand));
+      for (size_t i = 0; i < ARRAY_SIZE(ins->operand); i++) {
+        operand_t *o = &ins->operand[i];
+        if (o->type == OPERAND_TYPE_NONE) break;
+        k->args[k->n_args++] = value_from_operand(o, symbols);
+      }
     } break;
     case INFO_TYPE_RFUNC: {
       assert(ins->operand[0].type != OPERAND_TYPE_NONE);
       expr->kind = EXPR_KIND_FUNCTION;
       expr_function_t *k = expr->k.function;
       k->func_name = info.u.rfunc;
-      memcpy(&k->ret, &ins->operand[0], sizeof(operand_t));
-      memcpy(k->args, &ins->operand[1], sizeof(ins->operand)-sizeof(operand_t));
-      memset(&k->args[ARRAY_SIZE(k->args)-1], 0, sizeof(operand_t));
+      k->ret = value_from_operand(&ins->operand[0], symbols);
+      k->n_args = 0;
+      assert(ARRAY_SIZE(k->args) <= ARRAY_SIZE(ins->operand));
+      for (size_t i = 1; i < ARRAY_SIZE(ins->operand); i++) {
+        operand_t *o = &ins->operand[i];
+        if (o->type == OPERAND_TYPE_NONE) break;
+        k->args[k->n_args++] = value_from_operand(o, symbols);
+      }
     } break;
     case INFO_TYPE_LIT: {
       expr->kind = EXPR_KIND_LITERAL;

@@ -6,7 +6,8 @@ typedef struct value_mem value_mem_t;
 typedef struct value_imm value_imm_t;
 
 enum {
-  VALUE_TYPE_SYM = 0,
+  VALUE_TYPE_NONE = 0,
+  VALUE_TYPE_SYM,
   VALUE_TYPE_MEM,
   VALUE_TYPE_IMM,
 };
@@ -44,3 +45,10 @@ struct value
 };
 
 value_t value_from_operand(operand_t *o, symbols_t *symbols);
+
+#define VALUE_NONE ({ \
+  value_t v = {}; \
+  v.type = VALUE_TYPE_NONE; \
+  v; })
+
+#define VALUE_IS_NONE(v) ((v).type == VALUE_TYPE_NONE)

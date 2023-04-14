@@ -59,8 +59,9 @@ struct expr_function
 {
   // TODO: REMOVE dis86 instr operands
   const char * func_name;
-  operand_t    ret;
-  operand_t    args[OPERAND_MAX];
+  value_t      ret;
+  u16          n_args;
+  value_t      args[3];
 };
 
 struct expr_literal
@@ -92,9 +93,9 @@ struct expr_call
 struct expr_lea
 {
   // TODO: REMOVE dis86 instr operands
-  operand_t dest;               // required
-  int       addr_base_reg;      // required
-  u16       addr_offset;        // required
+  value_t dest;               // required
+  int     addr_base_reg;      // required
+  u16     addr_offset;        // required
 };
 
 struct expr
