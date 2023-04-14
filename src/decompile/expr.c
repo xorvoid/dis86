@@ -159,107 +159,141 @@ static size_t extract_expr_special(expr_t *expr, config_t *cfg, symbols_t *symbo
   return 0;
 }
 
+static size_t _impl_operator1(expr_t *expr, symbols_t *symbols, dis86_instr_t *ins,
+                              const char *_oper, int _sign)
+{
+  assert(ins->operand[0].type != OPERAND_TYPE_NONE);
+
+  expr->kind = EXPR_KIND_OPERATOR1;
+  expr_operator1_t *k = expr->k.operator1;
+  k->operator.oper = _oper;
+  k->operator.sign = _sign;
+  k->dest     = value_from_operand(&ins->operand[0], symbols);
+
+  return 1;
+}
+
+static size_t _impl_operator2(expr_t *expr, symbols_t *symbols, dis86_instr_t *ins,
+                              const char *_oper, int _sign)
+{
+  assert(ins->operand[0].type != OPERAND_TYPE_NONE);
+  assert(ins->operand[1].type != OPERAND_TYPE_NONE);
+
+  expr->kind = EXPR_KIND_OPERATOR2;
+  expr_operator2_t *k = expr->k.operator2;
+  k->operator.oper = _oper;
+  k->operator.sign = _sign;
+  k->dest     = value_from_operand(&ins->operand[0], symbols);
+  k->src      = value_from_operand(&ins->operand[1], symbols);
+
+  return 1;
+}
+
+static size_t _impl_operator3(expr_t *expr, symbols_t *symbols, dis86_instr_t *ins,
+                              const char *_oper, int _sign)
+{
+  assert(ins->operand[0].type != OPERAND_TYPE_NONE);
+  assert(ins->operand[1].type != OPERAND_TYPE_NONE);
+  assert(ins->operand[2].type != OPERAND_TYPE_NONE);
+
+  expr->kind = EXPR_KIND_OPERATOR3;
+  expr_operator3_t *k = expr->k.operator3;
+  k->operator.oper = _oper;
+  k->operator.sign = _sign;
+  k->dest     = value_from_operand(&ins->operand[0], symbols);
+  k->left     = value_from_operand(&ins->operand[1], symbols);
+  k->right    = value_from_operand(&ins->operand[2], symbols);
+
+  return 1;
+}
+
+static size_t _impl_abstract(expr_t *expr, symbols_t *symbols, dis86_instr_t *ins,
+                             const char *_name)
+{
+  expr->kind = EXPR_KIND_ABSTRACT;
+  expr_abstract_t *k = expr->k.abstract;
+  k->func_name = _name;
+  k->ret = VALUE_NONE;
+  k->n_args = 0;
+
+  assert(ARRAY_SIZE(k->args) <= ARRAY_SIZE(ins->operand));
+  for (size_t i = 0; i < ARRAY_SIZE(ins->operand); i++) {
+    operand_t *o = &ins->operand[i];
+    if (o->type == OPERAND_TYPE_NONE) break;
+    k->args[k->n_args++] = value_from_operand(o, symbols);
+  }
+
+  return 1;
+}
+
+static size_t _impl_abstract_ret(expr_t *expr, symbols_t *symbols, dis86_instr_t *ins,
+                                 const char *_name)
+{
+  assert(ins->operand[0].type != OPERAND_TYPE_NONE);
+
+  expr->kind = EXPR_KIND_ABSTRACT;
+  expr_abstract_t *k = expr->k.abstract;
+  k->func_name = _name;
+  k->ret = value_from_operand(&ins->operand[0], symbols);
+  k->n_args = 0;
+
+  assert(ARRAY_SIZE(k->args) <= ARRAY_SIZE(ins->operand));
+  for (size_t i = 1; i < ARRAY_SIZE(ins->operand); i++) {
+    operand_t *o = &ins->operand[i];
+    if (o->type == OPERAND_TYPE_NONE) break;
+    k->args[k->n_args++] = value_from_operand(o, symbols);
+  }
+
+  return 1;
+}
+
+static size_t _impl_abstract_flags(expr_t *expr, symbols_t *symbols, dis86_instr_t *ins,
+                                   const char *_name)
+{
+  expr->kind = EXPR_KIND_ABSTRACT;
+  expr_abstract_t *k = expr->k.abstract;
+  k->func_name = _name;
+  k->ret = value_from_symref(symbols_find_reg(symbols, REG_FLAGS));
+  k->n_args = 0;
+
+  assert(ARRAY_SIZE(k->args) <= ARRAY_SIZE(ins->operand));
+  for (size_t i = 0; i < ARRAY_SIZE(ins->operand); i++) {
+    operand_t *o = &ins->operand[i];
+    if (o->type == OPERAND_TYPE_NONE) break;
+    k->args[k->n_args++] = value_from_operand(o, symbols);
+  }
+
+  return 1;
+}
+
+static size_t _impl_abstract_jump(expr_t *expr, symbols_t *symbols, dis86_instr_t *ins,
+                                  const char *_operation)
+{
+  assert(ins->operand[0].type == OPERAND_TYPE_REL);
+  assert(ins->operand[1].type == OPERAND_TYPE_NONE);
+
+  expr->kind = EXPR_KIND_BRANCH_FLAGS;
+  expr_branch_flags_t *k = expr->k.branch_flags;
+  k->op     = _operation;
+  k->flags  = value_from_symref(symbols_find_reg(symbols, REG_FLAGS));
+  k->target = ins->addr + ins->n_bytes + ins->operand[0].u.rel.val;
+
+  return 1;
+}
+
+#define OPERATOR1(_oper, _sign)  return _impl_operator1(expr, symbols, ins, _oper, _sign)
+#define OPERATOR2(_oper, _sign)  return _impl_operator2(expr, symbols, ins, _oper, _sign)
+#define OPERATOR3(_oper, _sign)  return _impl_operator3(expr, symbols, ins, _oper, _sign)
+#define ABSTRACT(_name)          return _impl_abstract(expr, symbols, ins, _name)
+#define ABSTRACT_RET(_name)      return _impl_abstract_ret(expr, symbols, ins, _name)
+#define ABSTRACT_FLAGS(_name)    return _impl_abstract_flags(expr, symbols, ins, _name)
+#define ABSTRACT_JUMP(_op)       return _impl_abstract_jump(expr, symbols, ins, _op)
 
 static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
                            dis86_instr_t *ins, size_t n_ins)
 {
   size_t consumed = extract_expr_special(expr, cfg, symbols, ins, n_ins);
   if (consumed) return consumed;
-
-#define OPERATOR1(_oper, _sign)  do {\
-    assert(ins->operand[0].type != OPERAND_TYPE_NONE);\
-    expr->kind = EXPR_KIND_OPERATOR1;\
-    expr_operator1_t *k = expr->k.operator1;\
-    k->operator.oper = _oper;\
-    k->operator.sign = _sign;\
-    k->dest     = value_from_operand(&ins->operand[0], symbols);\
-    return 1;\
- } while(0)
-
-#define OPERATOR2(_oper, _sign)  do {                          \
-    assert(ins->operand[0].type != OPERAND_TYPE_NONE);\
-    assert(ins->operand[1].type != OPERAND_TYPE_NONE);\
-    expr->kind = EXPR_KIND_OPERATOR2;\
-    expr_operator2_t *k = expr->k.operator2;\
-    k->operator.oper = _oper;\
-    k->operator.sign = _sign;\
-    k->dest     = value_from_operand(&ins->operand[0], symbols);\
-    k->src      = value_from_operand(&ins->operand[1], symbols);\
-    return 1;\
-  } while(0)
-
-#define OPERATOR3(_oper, _sign)  do {\
-    assert(ins->operand[0].type != OPERAND_TYPE_NONE);\
-    assert(ins->operand[1].type != OPERAND_TYPE_NONE);\
-    assert(ins->operand[2].type != OPERAND_TYPE_NONE);\
-    expr->kind = EXPR_KIND_OPERATOR3;\
-    expr_operator3_t *k = expr->k.operator3;\
-    k->operator.oper = _oper;\
-    k->operator.sign = _sign;\
-    k->dest     = value_from_operand(&ins->operand[0], symbols);\
-    k->left     = value_from_operand(&ins->operand[1], symbols);\
-    k->right    = value_from_operand(&ins->operand[2], symbols);\
-    return 1;\
-  } while(0)
-
-#define ABSTRACT(_name)       do {\
-    expr->kind = EXPR_KIND_ABSTRACT;\
-    expr_abstract_t *k = expr->k.abstract;\
-    k->func_name = _name;\
-    k->ret = VALUE_NONE;\
-    k->n_args = 0;\
-    assert(ARRAY_SIZE(k->args) <= ARRAY_SIZE(ins->operand));\
-    for (size_t i = 0; i < ARRAY_SIZE(ins->operand); i++) {\
-      operand_t *o = &ins->operand[i];\
-      if (o->type == OPERAND_TYPE_NONE) break;\
-      k->args[k->n_args++] = value_from_operand(o, symbols);\
-    }\
-    return 1;\
-  } while(0)
-
-#define ABSTRACT_RET(_name)   do {\
-    assert(ins->operand[0].type != OPERAND_TYPE_NONE);\
-    expr->kind = EXPR_KIND_ABSTRACT;\
-    expr_abstract_t *k = expr->k.abstract;\
-    k->func_name = _name;\
-    k->ret = value_from_operand(&ins->operand[0], symbols);\
-    k->n_args = 0;\
-    assert(ARRAY_SIZE(k->args) <= ARRAY_SIZE(ins->operand));\
-    for (size_t i = 1; i < ARRAY_SIZE(ins->operand); i++) {\
-      operand_t *o = &ins->operand[i];\
-      if (o->type == OPERAND_TYPE_NONE) break;\
-      k->args[k->n_args++] = value_from_operand(o, symbols);\
-    }\
-    return 1;\
-  } while(0)
-
-#define ABSTRACT_FLAGS(_name) do {\
-    expr->kind = EXPR_KIND_ABSTRACT;\
-    expr_abstract_t *k = expr->k.abstract;\
-    k->func_name = _name;\
-    k->ret = value_from_symref(symbols_find_reg(symbols, REG_FLAGS));\
-    k->n_args = 0;\
-    assert(ARRAY_SIZE(k->args) <= ARRAY_SIZE(ins->operand));\
-    for (size_t i = 0; i < ARRAY_SIZE(ins->operand); i++) {\
-      operand_t *o = &ins->operand[i];\
-      if (o->type == OPERAND_TYPE_NONE) break;\
-      k->args[k->n_args++] = value_from_operand(o, symbols);\
-    }\
-    return 1;\
-  } while(0)
-
-#define ABSTRACT_JUMP(_op) do {\
-    assert(ins->operand[0].type == OPERAND_TYPE_REL);\
-    assert(ins->operand[1].type == OPERAND_TYPE_NONE);\
-    u16 effective = ins->addr + ins->n_bytes + ins->operand[0].u.rel.val;\
-    \
-    expr->kind = EXPR_KIND_BRANCH_FLAGS;\
-    expr_branch_flags_t *k = expr->k.branch_flags;\
-    k->op = _op;\
-    k->flags = value_from_symref(symbols_find_reg(symbols, REG_FLAGS));\
-    k->target = effective;\
-    return 1;\
-  } while(0)
 
   switch (ins->opcode) {
     case OP_AAA:                                     break;
