@@ -27,6 +27,13 @@ struct addr
   } u;
 };
 
+typedef struct operator operator_t;
+struct operator
+{
+  const char * oper;
+  int          sign;
+};
+
 enum {
   EXPR_KIND_UNKNOWN,
   EXPR_KIND_OPERATOR1,
@@ -42,21 +49,20 @@ enum {
 
 struct expr_operator1
 {
-  const char * operator;
+  operator_t   operator;
   value_t      dest;
 };
 
 struct expr_operator2
 {
-  const char * operator;
+  operator_t   operator;
   value_t      dest;
   value_t      src;
 };
 
 struct expr_operator3
 {
-  const char * operator;
-  int          sign;
+  operator_t   operator;
   value_t      dest;
   value_t      left;
   value_t      right;
@@ -77,8 +83,7 @@ struct expr_literal
 
 struct expr_branch_cond
 {
-  const char * operator;
-  int          signed_cmp;
+  operator_t   operator;
   value_t      left;
   value_t      right;
   u32          target;

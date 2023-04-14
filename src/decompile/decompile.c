@@ -276,14 +276,17 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
     } break;
     case EXPR_KIND_OPERATOR1: {
       expr_operator1_t *k = expr->k.operator1;
+      assert(!k->operator.sign); // not sure what this would mean...
       value_str(&k->dest, s, true);
       str_fmt(s, " %s ", k->operator);
       str_fmt(s, ";");
     } break;
     case EXPR_KIND_OPERATOR2: {
       expr_operator2_t *k = expr->k.operator2;
+      if (k->operator.sign) str_fmt(s, "(i16)");
       value_str(&k->dest, s, true);
       str_fmt(s, " %s ", k->operator);
+      if (k->operator.sign) str_fmt(s, "(i16)");
       value_str(&k->src, s, false);
       str_fmt(s, ";");
     } break;
@@ -291,10 +294,10 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
       expr_operator3_t *k = expr->k.operator3;
       value_str(&k->dest, s, true);
       str_fmt(s, " = ");
-      if (k->sign) str_fmt(s, "(i16)");
+      if (k->operator.sign) str_fmt(s, "(i16)");
       value_str(&k->left, s, false);
       str_fmt(s, " %s ", k->operator);
-      if (k->sign) str_fmt(s, "(i16)");
+      if (k->operator.sign) str_fmt(s, "(i16)");
       value_str(&k->right, s, false);
       str_fmt(s, ";");
     } break;
@@ -318,10 +321,10 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
     case EXPR_KIND_BRANCH_COND: {
       expr_branch_cond_t *k = expr->k.branch_cond;
       str_fmt(s, "if (");
-      if (k->signed_cmp) str_fmt(s, "(i16)");
+      if (k->operator.sign) str_fmt(s, "(i16)");
       value_str(&k->left, s, false);
       str_fmt(s, " %s ", k->operator);
-      if (k->signed_cmp) str_fmt(s, "(i16)");
+      if (k->operator.sign) str_fmt(s, "(i16)");
       value_str(&k->right, s, false);
       str_fmt(s, ") goto label_%08x;", k->target);
     } break;
