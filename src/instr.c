@@ -43,7 +43,7 @@ int instr_fmt_lookup(int opcode1, int opcode2, instr_fmt_t **_fmt)
 const char *instr_op_mneumonic(int op)
 {
   static const char *arr[] = {
-#define ELT(_1, str, _3, _4) str,
+#define ELT(_1, str) str,
     INSTR_OP_ARRAY(ELT)
     #undef ELT
   };

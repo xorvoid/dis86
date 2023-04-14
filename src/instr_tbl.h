@@ -68,111 +68,103 @@ enum {
   OPER_REL16,  // Added to address after fetch
 };
 
-enum {
-  CODE_C_UNKNOWN,
-  CODE_C_OPERATOR,
-  CODE_C_FUNCTION,
-  CODE_C_RFUNCTION,
-  CODE_C_LITERAL,
-};
-
-#define INSTR_OP_ARRAY(_)     \
-  _(  OP_AAA,     "aaa",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_AAS,     "aas",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_ADC,     "adc",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_ADD,     "add",      CODE_C_OPERATOR,    "+="     )\
-  _(  OP_AND,     "and",      CODE_C_OPERATOR,    "&="     )\
-  _(  OP_CALL,    "call",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_CALLF,   "callf",    CODE_C_UNKNOWN,     ""       )\
-  _(  OP_CBW,     "cbw",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_CLC,     "clc",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_CLD,     "cld",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_CLI,     "cli",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_CMC,     "cmc",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_CMP,     "cmp",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_CMPS,    "cmps",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_CWD,     "cwd",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_DAA,     "daa",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_DAS,     "das",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_DEC,     "dec",      CODE_C_OPERATOR,    "-= 1"   )\
-  _(  OP_DIV,     "div",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_ENTER,   "enter",    CODE_C_UNKNOWN,     ""       )\
-  _(  OP_HLT,     "hlt",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_IMUL,    "imul",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_IN,      "in",       CODE_C_UNKNOWN,     ""       )\
-  _(  OP_INC,     "inc",      CODE_C_OPERATOR,    "+= 1"   )\
-  _(  OP_INS,     "ins",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_INT,     "int",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_INTO,    "into",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_INVAL,   "inval",    CODE_C_UNKNOWN,     ""       )\
-  _(  OP_IRET,    "iret",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JA,      "ja",       CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JAE,     "jae",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JB,      "jb",       CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JBE,     "jbe",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JCXZ,    "jcxz",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JE,      "je",       CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JG,      "jg",       CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JGE,     "jge",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JL,      "jl",       CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JLE,     "jle",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JMP,     "jmp",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JMPF,    "jmpf",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JNE,     "jne",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JNO,     "jno",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JNP,     "jnp",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JNS,     "jns",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JO,      "jo",       CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JP,      "jp",       CODE_C_UNKNOWN,     ""       )\
-  _(  OP_JS,      "js",       CODE_C_UNKNOWN,     ""       )\
-  _(  OP_LAHF,    "lahf",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_LDS,     "lds",      CODE_C_FUNCTION,    "LOAD_SEG_OFF" )  \
-  _(  OP_LEA,     "lea",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_LEAVE,   "leave",    CODE_C_LITERAL,     "SP = BP; BP = POP();" )\
-  _(  OP_LES,     "les",      CODE_C_FUNCTION,    "LOAD_SEG_OFF" )\
-  _(  OP_LODS,    "lods",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_LOOP,    "loop",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_LOOPE,   "loope",    CODE_C_UNKNOWN,     ""       )\
-  _(  OP_LOOPNE,  "loopne",   CODE_C_UNKNOWN,     ""       )\
-  _(  OP_MOV,     "mov",      CODE_C_OPERATOR,    "="      )\
-  _(  OP_MOVS,    "movs",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_MUL,     "mul",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_NEG,     "neg",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_NOP,     "nop",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_NOT,     "not",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_OR,      "or",       CODE_C_OPERATOR,    "|="     )\
-  _(  OP_OUT,     "out",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_OUTS,    "outs",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_POP,     "pop",      CODE_C_RFUNCTION,   "POP"    )\
-  _(  OP_POPA,    "popa",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_POPF,    "popf",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_PUSH,    "push",     CODE_C_FUNCTION,    "PUSH"   )\
-  _(  OP_PUSHA,   "pusha",    CODE_C_UNKNOWN,     ""       )\
-  _(  OP_PUSHF,   "pushf",    CODE_C_UNKNOWN,     ""       )\
-  _(  OP_RCL,     "rcl",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_RCR,     "rcr",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_RET,     "ret",      CODE_C_LITERAL,     "RETURN_NEAR();")\
-  _(  OP_RETF,    "retf",     CODE_C_LITERAL,     "RETURN_FAR();" ) \
-  _(  OP_ROL,     "rol",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_ROR,     "ror",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_SAHF,    "sahf",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_SAR,     "sar",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_SBB,     "sbb",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_SCAS,    "scas",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_SHL,     "shl",      CODE_C_OPERATOR,    "<<="    )\
-  _(  OP_SHR,     "shr",      CODE_C_OPERATOR,    ">>="    )\
-  _(  OP_STC,     "stc",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_STD,     "std",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_STI,     "sti",      CODE_C_UNKNOWN,     ""       )\
-  _(  OP_STOS,    "stos",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_SUB,     "sub",      CODE_C_OPERATOR,    "-="     )\
-  _(  OP_TEST,    "test",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_XCHG,    "xchg",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_XLAT,    "xlat",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_XOR,     "xor",      CODE_C_OPERATOR,    "^="     )\
+#define INSTR_OP_ARRAY(_) \
+  _(  OP_AAA,     "aaa"    )\
+  _(  OP_AAS,     "aas"    )\
+  _(  OP_ADC,     "adc"    )\
+  _(  OP_ADD,     "add"    )\
+  _(  OP_AND,     "and"    )\
+  _(  OP_CALL,    "call"   )\
+  _(  OP_CALLF,   "callf"  )\
+  _(  OP_CBW,     "cbw"    )\
+  _(  OP_CLC,     "clc"    )\
+  _(  OP_CLD,     "cld"    )\
+  _(  OP_CLI,     "cli"    )\
+  _(  OP_CMC,     "cmc"    )\
+  _(  OP_CMP,     "cmp"    )\
+  _(  OP_CMPS,    "cmps"   )\
+  _(  OP_CWD,     "cwd"    )\
+  _(  OP_DAA,     "daa"    )\
+  _(  OP_DAS,     "das"    )\
+  _(  OP_DEC,     "dec"    )\
+  _(  OP_DIV,     "div"    )\
+  _(  OP_ENTER,   "enter"  )\
+  _(  OP_HLT,     "hlt"    )\
+  _(  OP_IMUL,    "imul"   )\
+  _(  OP_IN,      "in"     )\
+  _(  OP_INC,     "inc"    )\
+  _(  OP_INS,     "ins"    )\
+  _(  OP_INT,     "int"    )\
+  _(  OP_INTO,    "into"   )\
+  _(  OP_INVAL,   "inval"  )\
+  _(  OP_IRET,    "iret"   )\
+  _(  OP_JA,      "ja"     )\
+  _(  OP_JAE,     "jae"    )\
+  _(  OP_JB,      "jb"     )\
+  _(  OP_JBE,     "jbe"    )\
+  _(  OP_JCXZ,    "jcxz"   )\
+  _(  OP_JE,      "je"     )\
+  _(  OP_JG,      "jg"     )\
+  _(  OP_JGE,     "jge"    )\
+  _(  OP_JL,      "jl"     )\
+  _(  OP_JLE,     "jle"    )\
+  _(  OP_JMP,     "jmp"    )\
+  _(  OP_JMPF,    "jmpf"   )\
+  _(  OP_JNE,     "jne"    )\
+  _(  OP_JNO,     "jno"    )\
+  _(  OP_JNP,     "jnp"    )\
+  _(  OP_JNS,     "jns"    )\
+  _(  OP_JO,      "jo"     )\
+  _(  OP_JP,      "jp"     )\
+  _(  OP_JS,      "js"     )\
+  _(  OP_LAHF,    "lahf"   )\
+  _(  OP_LDS,     "lds"    )\
+  _(  OP_LEA,     "lea"    )\
+  _(  OP_LEAVE,   "leave"  )\
+  _(  OP_LES,     "les"    )\
+  _(  OP_LODS,    "lods"   )\
+  _(  OP_LOOP,    "loop"   )\
+  _(  OP_LOOPE,   "loope"  )\
+  _(  OP_LOOPNE,  "loopne" )\
+  _(  OP_MOV,     "mov"    )\
+  _(  OP_MOVS,    "movs"   )\
+  _(  OP_MUL,     "mul"    )\
+  _(  OP_NEG,     "neg"    )\
+  _(  OP_NOP,     "nop"    )\
+  _(  OP_NOT,     "not"    )\
+  _(  OP_OR,      "or"     )\
+  _(  OP_OUT,     "out"    )\
+  _(  OP_OUTS,    "outs"   )\
+  _(  OP_POP,     "pop"    )\
+  _(  OP_POPA,    "popa"   )\
+  _(  OP_POPF,    "popf"   )\
+  _(  OP_PUSH,    "push"   )\
+  _(  OP_PUSHA,   "pusha"  )\
+  _(  OP_PUSHF,   "pushf"  )\
+  _(  OP_RCL,     "rcl"    )\
+  _(  OP_RCR,     "rcr"    )\
+  _(  OP_RET,     "ret"    )\
+  _(  OP_RETF,    "retf"   )\
+  _(  OP_ROL,     "rol"    )\
+  _(  OP_ROR,     "ror"    )\
+  _(  OP_SAHF,    "sahf"   )\
+  _(  OP_SAR,     "sar"    )\
+  _(  OP_SBB,     "sbb"    )\
+  _(  OP_SCAS,    "scas"   )\
+  _(  OP_SHL,     "shl"    )\
+  _(  OP_SHR,     "shr"    )\
+  _(  OP_STC,     "stc"    )\
+  _(  OP_STD,     "std"    )\
+  _(  OP_STI,     "sti"    )\
+  _(  OP_STOS,    "stos"   )\
+  _(  OP_SUB,     "sub"    )\
+  _(  OP_TEST,    "test"   )\
+  _(  OP_XCHG,    "xchg"   )\
+  _(  OP_XLAT,    "xlat"   )\
+  _(  OP_XOR,     "xor"    )\
 
 enum {
-#define ELT(enum_symbol, _2, _3, _4) enum_symbol,
+#define ELT(enum_symbol, _2) enum_symbol,
   INSTR_OP_ARRAY(ELT)
 #undef ELT
 };
