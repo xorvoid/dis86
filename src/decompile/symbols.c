@@ -44,6 +44,44 @@ bool sym_deduce(sym_t *s, operand_mem_t *m)
   return false;
 }
 
+bool sym_deduce_reg(sym_t *sym, int reg_id)
+{
+  u16 off, len;
+  const char *name;
+
+  switch (reg_id) {
+    case REG_AX:    off =  0; len = 2; name = "AX";    break;
+    case REG_CX:    off =  2; len = 2; name = "CX";    break;
+    case REG_DX:    off =  4; len = 2; name = "DX";    break;
+    case REG_BX:    off =  6; len = 2; name = "BX";    break;
+    case REG_SP:    off =  8; len = 2; name = "SP";    break;
+    case REG_BP:    off = 10; len = 2; name = "BP";    break;
+    case REG_SI:    off = 12; len = 2; name = "SI";    break;
+    case REG_DI:    off = 14; len = 2; name = "DI";    break;
+    case REG_AL:    off =  0; len = 1; name = "AL";    break;
+    case REG_CL:    off =  2; len = 1; name = "CL";    break;
+    case REG_DL:    off =  4; len = 1; name = "DL";    break;
+    case REG_BL:    off =  6; len = 1; name = "BL";    break;
+    case REG_AH:    off =  1; len = 1; name = "AH";    break;
+    case REG_CH:    off =  3; len = 1; name = "CH";    break;
+    case REG_DH:    off =  5; len = 1; name = "DH";    break;
+    case REG_BH:    off =  7; len = 1; name = "CH";    break;
+    case REG_ES:    off = 16; len = 2; name = "ES";    break;
+    case REG_CS:    off = 18; len = 2; name = "CS";    break;
+    case REG_SS:    off = 20; len = 2; name = "SS";    break;
+    case REG_DS:    off = 22; len = 2; name = "DS";    break;
+    case REG_IP:    off = 24; len = 2; name = "IP";    break;
+    case REG_FLAGS: off = 26; len = 2; name = "FLAGS"; break;
+    default: return false;
+  }
+
+  sym->kind = SYM_KIND_REGISTER;
+  sym->off  = (i16)off;
+  sym->len  = len;
+  sym->name = name;
+  return true;
+}
+
 size_t sym_size_bytes(sym_t *s)
 {
   return s->len;
@@ -151,14 +189,21 @@ static void symtab_add_merge(symtab_t *s, sym_t *sym)
   s->var[s->n_var++] = *sym;
 }
 
-static sym_t * symtab_find(symtab_t *s, sym_t *deduced_sym)
+static symref_t symtab_find(symtab_t *s, sym_t *deduced_sym)
 {
+  symref_t ref = {};
+
   for (size_t i = 0; i < s->n_var; i++) {
     sym_t *cand = &s->var[i];
-    if (sym_overlaps(deduced_sym, cand)) return cand;
+    if (sym_overlaps(deduced_sym, cand)) {
+      ref.symbol = cand;
+      ref.off    = 0;
+      ref.len    = deduced_sym->len;
+      break;
+    }
   }
 
-  return NULL;
+  return ref;
 }
 
 typedef struct iter_impl iter_impl_t;
@@ -195,7 +240,8 @@ bool symbols_insert_deduced(symbols_t *s, sym_t *deduced_sym)
       // Globals are special in that we don't merge them in. We require that globals
       // are set up via a config file. So, here, we simply verify that our deduced
       // symbol cooresponds to some pre-configured global
-      if (!symtab_find(s->globals, deduced_sym)) {
+      symref_t ref = symtab_find(s->globals, deduced_sym);
+      if (!ref.symbol) {
         //static char buf[128];
         //const char *name = sym_name(deduced_sym, buf, ARRAY_SIZE(buf));
         //FAIL("Failed to find global for '%s'", name);
@@ -208,17 +254,35 @@ bool symbols_insert_deduced(symbols_t *s, sym_t *deduced_sym)
   return true;
 }
 
-sym_t * symbols_find(symbols_t *s, operand_mem_t *mem)
+symref_t symbols_find_ref(symbols_t *s, sym_t *deduced_sym)
 {
-  sym_t deduced_sym[1];
-  if (!sym_deduce(deduced_sym, mem)) return NULL;
-
   switch (deduced_sym->kind) {
-    case SYM_KIND_PARAM:  return symtab_find(s->params,  deduced_sym);
-    case SYM_KIND_LOCAL:  return symtab_find(s->locals,  deduced_sym);
-    case SYM_KIND_GLOBAL: return symtab_find(s->globals, deduced_sym);
+    case SYM_KIND_REGISTER: return symtab_find(s->registers, deduced_sym);
+    case SYM_KIND_PARAM:    return symtab_find(s->params,    deduced_sym);
+    case SYM_KIND_LOCAL:    return symtab_find(s->locals,    deduced_sym);
+    case SYM_KIND_GLOBAL:   return symtab_find(s->globals,   deduced_sym);
     default: FAIL("Unknown symbol kind: %d", deduced_sym->kind);
   }
+}
+
+symref_t symbols_find_mem(symbols_t *s, operand_mem_t *mem)
+{
+  sym_t deduced_sym[1];
+  if (!sym_deduce(deduced_sym, mem)) {
+    symref_t ref = {};
+    return ref;
+  }
+  return symbols_find_ref(s, deduced_sym);
+}
+
+symref_t symbols_find_reg(symbols_t *s, int reg_id)
+{
+  sym_t deduced_sym[1];
+  if (!sym_deduce_reg(deduced_sym, reg_id)) {
+    symref_t ref = {};
+    return ref;
+  }
+  return symbols_find_ref(s, deduced_sym);
 }
 
 void symbols_add_global(symbols_t *s, const char *name, u16 offset, u16 len)

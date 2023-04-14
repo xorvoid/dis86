@@ -145,6 +145,12 @@ static info_t instr_info(dis86_instr_t *instr)
   o.u.imm.val = 0;\
   o; })
 
+#define VALUE_IMM_ZERO ({\
+  value_t v = {};\
+  v.type = VALUE_TYPE_IMM;\
+  v.u.imm->value = 0;     \
+  v; })
+
 /* static int code_c_type[] = { */
 /* #define ELT(_1, _2, ty, _4) ty, */
 /*   INSTR_OP_ARRAY(ELT) */
@@ -178,7 +184,8 @@ static const char *cmp_oper(int opcode, int *sign)
   return oper;
 }
 
-static size_t extract_expr(expr_t *expr, config_t *cfg, dis86_instr_t *ins, size_t n_ins)
+static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
+                           dis86_instr_t *ins, size_t n_ins)
 {
   dis86_instr_t * next_ins = n_ins > 1 ? ins+1 : NULL;
 
@@ -196,8 +203,8 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, dis86_instr_t *ins, size
       expr_branch_cond_t *k = expr->k.branch_cond;
       k->operator = oper;
       k->signed_cmp = sign;
-      k->oper1 = ins->operand[0];
-      k->oper2 = ins->operand[1];
+      k->left = value_from_operand(&ins->operand[0], symbols);
+      k->right = value_from_operand(&ins->operand[1], symbols);
       k->target = branch_destination(next_ins);
 
       expr->n_ins = 2;
@@ -223,8 +230,8 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, dis86_instr_t *ins, size
       expr_branch_cond_t *k = expr->k.branch_cond;
       k->operator = oper;
       k->signed_cmp = false;
-      k->oper1 = ins->operand[0];
-      k->oper2 = OPERAND_IMM_ZERO;
+      k->left = value_from_operand(&ins->operand[0], symbols);
+      k->right = VALUE_IMM_ZERO;
       k->target = branch_destination(next_ins);
 
       expr->n_ins = 2;
@@ -307,9 +314,9 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, dis86_instr_t *ins, size
     expr_operator3_t *k = expr->k.operator3;
     k->operator = "*";
     k->sign     = 1;
-    k->oper1    = ins->operand[0];
-    k->oper2    = ins->operand[1];
-    k->oper3    = ins->operand[2];
+    k->dest    = value_from_operand(&ins->operand[0], symbols);
+    k->left    = value_from_operand(&ins->operand[1], symbols);
+    k->right   = value_from_operand(&ins->operand[2], symbols);
 
     expr->n_ins = 1;
     expr->ins   = ins;
@@ -383,7 +390,7 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, dis86_instr_t *ins, size
   return expr->n_ins;
 }
 
-meh_t * meh_new(config_t *cfg, dis86_instr_t *ins, size_t n_ins)
+meh_t * meh_new(config_t *cfg, symbols_t *symbols, dis86_instr_t *ins, size_t n_ins)
 {
   meh_t *m = calloc(1, sizeof(meh_t));
 
@@ -391,7 +398,7 @@ meh_t * meh_new(config_t *cfg, dis86_instr_t *ins, size_t n_ins)
     assert(m->expr_len < ARRAY_SIZE(m->expr_arr));
 
     expr_t *expr = &m->expr_arr[m->expr_len];
-    size_t consumed = extract_expr(expr, cfg, ins, n_ins);
+    size_t consumed = extract_expr(expr, cfg, symbols, ins, n_ins);
     assert(consumed <= n_ins);
     m->expr_len++;
 

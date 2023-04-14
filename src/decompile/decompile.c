@@ -78,54 +78,17 @@ static void dump_symtab(symtab_t *symtab)
   }
 }
 
-static void sym_register(sym_t *sym, int reg)
-{
-  u16 off, len;
-  const char *name;
-
-  switch (reg) {
-    case REG_AX:    off =  0; len = 2; name = "AX";    break;
-    case REG_CX:    off =  2; len = 2; name = "CX";    break;
-    case REG_DX:    off =  4; len = 2; name = "DX";    break;
-    case REG_BX:    off =  6; len = 2; name = "BX";    break;
-    case REG_SP:    off =  8; len = 2; name = "SP";    break;
-    case REG_BP:    off = 10; len = 2; name = "BP";    break;
-    case REG_SI:    off = 12; len = 2; name = "SI";    break;
-    case REG_DI:    off = 14; len = 2; name = "DI";    break;
-    case REG_AL:    off =  0; len = 1; name = "AL";    break;
-    case REG_CL:    off =  2; len = 1; name = "CL";    break;
-    case REG_DL:    off =  4; len = 1; name = "DL";    break;
-    case REG_BL:    off =  6; len = 1; name = "BL";    break;
-    case REG_AH:    off =  1; len = 1; name = "AH";    break;
-    case REG_CH:    off =  3; len = 1; name = "CH";    break;
-    case REG_DH:    off =  5; len = 1; name = "DH";    break;
-    case REG_BH:    off =  7; len = 1; name = "CH";    break;
-    case REG_ES:    off = 16; len = 2; name = "ES";    break;
-    case REG_CS:    off = 18; len = 2; name = "CS";    break;
-    case REG_SS:    off = 20; len = 2; name = "SS";    break;
-    case REG_DS:    off = 22; len = 2; name = "DS";    break;
-    case REG_IP:    off = 24; len = 2; name = "IP";    break;
-    case REG_FLAGS: off = 26; len = 2; name = "FLAGS"; break;
-    default: FAIL("Unknown register: %d", reg);
-  }
-
-  sym->kind = SYM_KIND_REGISTER;
-  sym->off  = (i16)off;
-  sym->len  = len;
-  sym->name = name;
-}
-
 static void decompiler_initial_analysis(decompiler_t *d)
 {
   // Pass to find all labels
   find_labels(d->labels, d->ins, d->n_ins);
 
   // Populate registers
-  for (int reg = 1; reg < _REG_LAST; reg++) {
-    sym_t sym[1];
-    sym_register(sym, reg);
-    if (sym->len != 2) continue; // skip the small overlap regs
-    symbols_insert_deduced(d->symbols, sym);
+  for (int reg_id = 1; reg_id < _REG_LAST; reg_id++) {
+    sym_t deduced_sym[1];
+    sym_deduce_reg(deduced_sym, reg_id);
+    if (deduced_sym->len != 2) continue; // skip the small overlap regs
+    symbols_insert_deduced(d->symbols, deduced_sym);
   }
 
   // Load all global symbols from config into the symtab
@@ -165,7 +128,7 @@ static void decompiler_initial_analysis(decompiler_t *d)
   }
 
   // Pass to convert to expression structures
-  d->meh = meh_new(d->cfg, d->ins, d->n_ins);
+  d->meh = meh_new(d->cfg, d->symbols, d->ins, d->n_ins);
 
   // Report the symbols
   if (DEBUG_REPORT_SYMBOLS) {
@@ -294,10 +257,10 @@ static void operand_str(decompiler_t *d, str_t *s, dis86_instr_t *ins, operand_t
     case OPERAND_TYPE_REG: str_fmt(s, "%s", as_upper(reg_name(o->u.reg.id))); break;
     case OPERAND_TYPE_MEM: {
       operand_mem_t *m = &o->u.mem;
-      sym_t *sym = symbols_find(d->symbols, m);
-      if (sym) {
-        if (lvalue) sym_lvalue(s, sym, m);
-        else sym_rvalue(s, sym, m);
+      symref_t symref = symbols_find_mem(d->symbols, m);
+      if (symref.symbol) {
+        if (lvalue) sym_lvalue(s, symref.symbol, m);
+        else sym_rvalue(s, symref.symbol, m);
         break; // all done
       }
       switch (m->sz) {
@@ -330,6 +293,44 @@ static void operand_str(decompiler_t *d, str_t *s, dis86_instr_t *ins, operand_t
   }
 }
 
+static void value_str(value_t *v, str_t *s, bool as_lvalue)
+{
+  static char buf[128];
+
+  switch (v->type) {
+    case VALUE_TYPE_SYM: {
+      const char *name = sym_name(v->u.sym->ref.symbol, buf, ARRAY_SIZE(buf));
+      str_fmt(s, "%s", name);
+    } break;
+    case VALUE_TYPE_MEM: {
+      value_mem_t *m = v->u.mem;
+      switch (m->sz) {
+        case SIZE_8:  str_fmt(s, "*PTR_8("); break;
+        case SIZE_16: str_fmt(s, "*PTR_16("); break;
+        case SIZE_32: str_fmt(s, "*PTR_32("); break;
+      }
+      str_fmt(s, "%s, ", sym_name(m->sreg.symbol, buf, ARRAY_SIZE(buf)));
+      // FIXME: THIS IS ALL BROKEN BECAUSE IT ASSUMES THE SYMREF ARE NEVER PARTIAL REFS
+      if (!m->reg1.symbol && !m->reg2.symbol) {
+        if (m->off) str_fmt(s, "0x%x", m->off);
+      } else {
+        if (m->reg1.symbol) str_fmt(s, "%s", sym_name(m->reg1.symbol, buf, ARRAY_SIZE(buf)));
+        if (m->reg2.symbol) str_fmt(s, "+%s", sym_name(m->reg2.symbol, buf, ARRAY_SIZE(buf)));
+        if (m->off) {
+          i16 disp = (i16)m->off;
+          if (disp >= 0) str_fmt(s, "+0x%x", (u16)disp);
+          else           str_fmt(s, "-0x%x", (u16)-disp);
+        }
+      }
+      str_fmt(s, ")");
+    } break;
+    case VALUE_TYPE_IMM: {
+      str_fmt(s, "0x%x", v->u.imm->value);
+    } break;
+    default: FAIL("Unknown value type: %d\n", v->type);
+  }
+}
+
 static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
 {
   str_t s[1];
@@ -350,13 +351,13 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
     } break;
     case EXPR_KIND_OPERATOR3: {
       expr_operator3_t *k = expr->k.operator3;
-      operand_str(d, s, NULL, &k->oper1, true);
+      value_str(&k->dest, s, true);
       str_fmt(s, " = ");
       if (k->sign) str_fmt(s, "(i16)");
-      operand_str(d, s, NULL, &k->oper2, true);
+      value_str(&k->left, s, false);
       str_fmt(s, " %s ", k->operator);
       if (k->sign) str_fmt(s, "(i16)");
-      operand_str(d, s, NULL, &k->oper3, true);
+      value_str(&k->right, s, false);
       str_fmt(s, ";");
     } break;
     case EXPR_KIND_FUNCTION: {
@@ -382,10 +383,10 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
       expr_branch_cond_t *k = expr->k.branch_cond;
       str_fmt(s, "if (");
       if (k->signed_cmp) str_fmt(s, "(i16)");
-      operand_str(d, s, NULL, &k->oper1, false);
+      value_str(&k->left, s, false);
       str_fmt(s, " %s ", k->operator);
       if (k->signed_cmp) str_fmt(s, "(i16)");
-      operand_str(d, s, NULL, &k->oper2, false);
+      value_str(&k->right, s, false);
       str_fmt(s, ") goto label_%08x;", k->target);
     } break;
     case EXPR_KIND_BRANCH: {

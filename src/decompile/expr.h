@@ -48,12 +48,11 @@ struct expr_operator
 
 struct expr_operator3
 {
-  // TODO: REMOVE dis86 instr operands
   const char * operator;
   int          sign;
-  operand_t    oper1;           // required
-  operand_t    oper2;           // required
-  operand_t    oper3;           // required
+  value_t      dest;
+  value_t      left;
+  value_t      right;
 };
 
 struct expr_function
@@ -71,11 +70,10 @@ struct expr_literal
 
 struct expr_branch_cond
 {
-  // TODO: REMOVE dis86 instr operands
   const char * operator;
   int          signed_cmp;
-  operand_t    oper1;           // required
-  operand_t    oper2;           // required
+  value_t      left;
+  value_t      right;
   u32          target;
 };
 
@@ -124,5 +122,5 @@ struct meh
   expr_t expr_arr[EXPR_MAX];
 };
 
-meh_t * meh_new(config_t *cfg, dis86_instr_t *ins, size_t n_ins);
+meh_t * meh_new(config_t *cfg, symbols_t *symbols, dis86_instr_t *ins, size_t n_ins);
 void    meh_delete(meh_t *m);

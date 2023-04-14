@@ -3,6 +3,7 @@
 #define NAME_MAX 128
 
 typedef struct sym         sym_t;
+typedef struct symref      symref_t;
 typedef struct symbols     symbols_t;
 typedef struct symtab      symtab_t;
 typedef struct symtab_iter symtab_iter_t;
@@ -25,6 +26,7 @@ struct sym
 };
 
 bool         sym_deduce(sym_t *v, operand_mem_t *mem);
+bool         sym_deduce_reg(sym_t *sym, int reg_id);
 const char * sym_name(sym_t *v, char *buf, size_t buf_sz);
 size_t       sym_size_bytes(sym_t *v);
 
@@ -36,10 +38,19 @@ struct symbols
   symtab_t * locals;
 };
 
+struct symref
+{
+  sym_t * symbol;  // NULL if the ref doesn't point anywhere
+  u16     off;     // offset into this symbol
+  u16     len;     // length from the offset
+};
+
 symbols_t * symbols_new(void);
 void        symbols_delete(symbols_t *s);
 bool        symbols_insert_deduced(symbols_t *s, sym_t *deduced_sym);
-sym_t *     symbols_find(symbols_t *s, operand_mem_t *mem);
+symref_t    symbols_find_ref(symbols_t *s, sym_t *deduced_sym);
+symref_t    symbols_find_mem(symbols_t *s, operand_mem_t *mem);
+symref_t    symbols_find_reg(symbols_t *s, int reg_id);
 void        symbols_add_global(symbols_t *s, const char *name, u16 offset, u16 len);
 
 symtab_t * symtab_new(void);

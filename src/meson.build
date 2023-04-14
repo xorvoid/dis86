@@ -10,6 +10,7 @@ SRC = [
   'decompile/config.c',
   'decompile/type.c',
   'decompile/symbols.c',
+  'decompile/value.c',
   'decompile/expr.c',
 ]
 
