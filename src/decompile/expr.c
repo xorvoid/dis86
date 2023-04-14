@@ -354,8 +354,8 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
       k->right    = value_from_operand(&ins->operand[2], symbols);
     } break;
     case INFO_TYPE_ABSTRACT: {
-      expr->kind = EXPR_KIND_FUNCTION;
-      expr_function_t *k = expr->k.function;
+      expr->kind = EXPR_KIND_ABSTRACT;
+      expr_abstract_t *k = expr->k.abstract;
       k->func_name = info.u.abstract;
       k->ret = VALUE_NONE;
       k->n_args = 0;
@@ -368,8 +368,8 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
     } break;
     case INFO_TYPE_ABSTRACT_RET: {
       assert(ins->operand[0].type != OPERAND_TYPE_NONE);
-      expr->kind = EXPR_KIND_FUNCTION;
-      expr_function_t *k = expr->k.function;
+      expr->kind = EXPR_KIND_ABSTRACT;
+      expr_abstract_t *k = expr->k.abstract;
       k->func_name = info.u.abstract_ret;
       k->ret = value_from_operand(&ins->operand[0], symbols);
       k->n_args = 0;

@@ -5,7 +5,7 @@ typedef struct expr             expr_t;
 typedef struct expr_operator1   expr_operator1_t;
 typedef struct expr_operator2   expr_operator2_t;
 typedef struct expr_operator3   expr_operator3_t;
-typedef struct expr_function    expr_function_t;
+typedef struct expr_abstract    expr_abstract_t;
 typedef struct expr_branch_cond expr_branch_cond_t;
 typedef struct expr_branch      expr_branch_t;
 typedef struct expr_call        expr_call_t;
@@ -37,7 +37,7 @@ enum {
   EXPR_KIND_OPERATOR1,
   EXPR_KIND_OPERATOR2,
   EXPR_KIND_OPERATOR3,
-  EXPR_KIND_FUNCTION,
+  EXPR_KIND_ABSTRACT,
   EXPR_KIND_BRANCH_COND,
   EXPR_KIND_BRANCH,
   EXPR_KIND_CALL,
@@ -64,7 +64,7 @@ struct expr_operator3
   value_t      right;
 };
 
-struct expr_function
+struct expr_abstract
 {
   const char * func_name;
   value_t      ret;
@@ -99,7 +99,7 @@ struct expr
     expr_operator1_t   operator1[1];
     expr_operator2_t   operator2[1];
     expr_operator3_t   operator3[1];
-    expr_function_t    function[1];
+    expr_abstract_t    abstract[1];
     expr_branch_cond_t branch_cond[1];
     expr_branch_t      branch[1];
     expr_call_t        call[1];

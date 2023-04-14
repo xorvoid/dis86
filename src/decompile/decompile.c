@@ -306,8 +306,8 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
       value_str(&k->right, s, false);
       str_fmt(s, ";");
     } break;
-    case EXPR_KIND_FUNCTION: {
-      expr_function_t *k = expr->k.function;
+    case EXPR_KIND_ABSTRACT: {
+      expr_abstract_t *k = expr->k.abstract;
       if (!VALUE_IS_NONE(k->ret)) {
         value_str(&k->ret, s, true);
         str_fmt(s, " = ");
