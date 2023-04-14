@@ -133,7 +133,7 @@ static void decompiler_initial_analysis(decompiler_t *d)
   }
 
   // Pass to convert to expression structures
-  d->meh = meh_new(d->ins, d->n_ins);
+  d->meh = meh_new(d->cfg, d->ins, d->n_ins);
 
   // Report the symbols
   if (DEBUG_REPORT_SYMBOLS) {
@@ -603,6 +603,17 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
       }
       str_fmt(s, ";");
     } break;
+    case EXPR_KIND_OPERATOR3: {
+      expr_operator3_t *k = expr->k.operator3;
+      operand_str(d, s, NULL, &k->oper1, true);
+      str_fmt(s, " = ");
+      if (k->sign) str_fmt(s, "(i16)");
+      operand_str(d, s, NULL, &k->oper2, true);
+      str_fmt(s, " %s ", k->operator);
+      if (k->sign) str_fmt(s, "(i16)");
+      operand_str(d, s, NULL, &k->oper3, true);
+      str_fmt(s, ";");
+    } break;
     case EXPR_KIND_FUNCTION: {
       expr_function_t *k = expr->k.function;
       if (k->ret.type != OPERAND_TYPE_NONE) {
@@ -618,8 +629,12 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
       }
       str_fmt(s, ");");
     } break;
-    case EXPR_KIND_BRANCH: {
-      expr_branch_t *k = expr->k.branch;
+    case EXPR_KIND_LITERAL: {
+      expr_literal_t *k = expr->k.literal;
+      str_fmt(s, "%s", k->text);
+    } break;
+    case EXPR_KIND_BRANCH_COND: {
+      expr_branch_cond_t *k = expr->k.branch_cond;
       str_fmt(s, "if (");
       if (k->signed_cmp) str_fmt(s, "(i16)");
       operand_str(d, s, NULL, &k->oper1, false);
@@ -627,6 +642,34 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
       if (k->signed_cmp) str_fmt(s, "(i16)");
       operand_str(d, s, NULL, &k->oper2, false);
       str_fmt(s, ") goto label_%08x;", k->target);
+    } break;
+    case EXPR_KIND_BRANCH: {
+      expr_branch_t *k = expr->k.branch;
+      str_fmt(s, "goto label_%08x;", k->target);
+    } break;
+    case EXPR_KIND_CALL: {
+      expr_call_t *k = expr->k.call;
+      if (k->name) {
+        str_fmt(s, "CALL_FUNC(%s);", k->name);
+      } else {
+        switch (k->addr.type) {
+          case ADDR_TYPE_FAR: {
+            str_fmt(s, "CALL_FAR(0x%04x, 0x%04x);", k->addr.u.far.seg, k->addr.u.far.off);
+          } break;
+          case ADDR_TYPE_NEAR: {
+            str_fmt(s, "CALL_NEAR(0x%04x);", k->addr.u.near);
+          } break;
+          default: {
+            FAIL("Unknonw address type: %d", k->addr.type);
+          } break;
+        }
+      }
+      if (k->remapped) str_fmt(s, " /* remapped */");
+    } break;
+    case EXPR_KIND_LEA: {
+      expr_lea_t *k = expr->k.lea;
+      operand_str(d, s, NULL, &k->dest, false);
+      str_fmt(s, " = %s - 0x%x;", as_upper(reg_name(k->addr_base_reg)), -(i16)k->addr_offset);
     } break;
     default: {
       str_fmt(s, "UNIMPL();");

@@ -40,7 +40,7 @@ static const char *cmp_oper(int opcode, int *sign)
   return oper;
 }
 
-static size_t extract_expr(expr_t *expr, dis86_instr_t *ins, size_t n_ins)
+static size_t extract_expr(expr_t *expr, config_t *cfg, dis86_instr_t *ins, size_t n_ins)
 {
   dis86_instr_t * next_ins = n_ins > 1 ? ins+1 : NULL;
 
@@ -55,8 +55,8 @@ static size_t extract_expr(expr_t *expr, dis86_instr_t *ins, size_t n_ins)
       assert(ins->operand[0].type != OPERAND_TYPE_NONE);
       assert(ins->operand[1].type != OPERAND_TYPE_NONE);
 
-      expr->kind = EXPR_KIND_BRANCH;
-      expr_branch_t *k = expr->k.branch;
+      expr->kind = EXPR_KIND_BRANCH_COND;
+      expr_branch_cond_t *k = expr->k.branch_cond;
       k->operator = oper;
       k->signed_cmp = sign;
       k->oper1 = ins->operand[0];
@@ -82,8 +82,8 @@ static size_t extract_expr(expr_t *expr, dis86_instr_t *ins, size_t n_ins)
       case OP_JNE: oper = "!="; break;
     }
     if (oper) {
-      expr->kind = EXPR_KIND_BRANCH;
-      expr_branch_t *k = expr->k.branch;
+      expr->kind = EXPR_KIND_BRANCH_COND;
+      expr_branch_cond_t *k = expr->k.branch_cond;
       k->operator = oper;
       k->signed_cmp = false;
       k->oper1 = ins->operand[0];
@@ -107,6 +107,95 @@ static size_t extract_expr(expr_t *expr, dis86_instr_t *ins, size_t n_ins)
     k->operator = "=";
     k->oper1 = ins->operand[0];
     k->oper2 = OPERAND_IMM_ZERO;
+
+    expr->n_ins = 1;
+    expr->ins   = ins;
+    return expr->n_ins;
+  }
+
+  // Special handling for uncond jmp
+  if (ins->opcode == OP_JMP) {
+    expr->kind = EXPR_KIND_BRANCH;
+    expr_branch_t *k = expr->k.branch;
+    k->target = branch_destination(ins);
+
+    expr->n_ins = 1;
+    expr->ins   = ins;
+    return expr->n_ins;
+  }
+
+  // Special handling for callf
+  if (ins->opcode == OP_CALLF && ins->operand[0].type == OPERAND_TYPE_FAR) {
+    operand_far_t *far = &ins->operand[0].u.far;
+    segoff_t addr = {far->seg, far->off};
+    bool remapped = config_seg_remap(cfg, &addr.seg);
+    const char *name = config_func_lookup(cfg, addr);
+
+    expr->kind = EXPR_KIND_CALL;
+    expr_call_t *k = expr->k.call;
+    k->addr.type  = ADDR_TYPE_FAR;
+    k->addr.u.far = addr;
+    k->remapped   = remapped;
+    k->name       = name;
+
+    expr->n_ins = 1;
+    expr->ins   = ins;
+    return expr->n_ins;
+  }
+
+  // Special handling for call
+  if (ins->opcode == OP_CALL) {
+    assert(ins->operand[0].type == OPERAND_TYPE_REL);
+    u16 effective = ins->addr + ins->n_bytes + ins->operand[0].u.rel.val;
+
+    expr->kind = EXPR_KIND_CALL;
+    expr_call_t *k = expr->k.call;
+    k->addr.type   = ADDR_TYPE_NEAR;
+    k->addr.u.near = effective;
+    k->remapped    = false;
+    k->name        = NULL;
+
+    expr->n_ins = 1;
+    expr->ins   = ins;
+    return expr->n_ins;
+  }
+
+  // Special handling for imul
+  if (ins->opcode == OP_IMUL) {
+    assert(ins->operand[0].type != OPERAND_TYPE_NONE);
+    assert(ins->operand[1].type != OPERAND_TYPE_NONE);
+    assert(ins->operand[2].type != OPERAND_TYPE_NONE);
+
+    expr->kind = EXPR_KIND_OPERATOR3;
+    expr_operator3_t *k = expr->k.operator3;
+    k->operator = "*";
+    k->sign     = 1;
+    k->oper1    = ins->operand[0];
+    k->oper2    = ins->operand[1];
+    k->oper3    = ins->operand[2];
+
+    expr->n_ins = 1;
+    expr->ins   = ins;
+    return expr->n_ins;
+  }
+
+  // Special handling for lea
+    if (ins->opcode == OP_LEA) {
+    assert(ins->operand[0].type != OPERAND_TYPE_NONE);
+
+    assert(ins->operand[1].type == OPERAND_TYPE_MEM);
+    operand_mem_t *mem = &ins->operand[1].u.mem;
+    assert(mem->sz == SIZE_16);
+    assert(mem->reg1);
+    assert(!mem->reg2);
+    assert(mem->off);
+
+
+    expr->kind = EXPR_KIND_LEA;
+    expr_lea_t *k = expr->k.lea;
+    k->dest          = ins->operand[0];
+    k->addr_base_reg = mem->reg1;
+    k->addr_offset   = mem->off;
 
     expr->n_ins = 1;
     expr->ins   = ins;
@@ -157,7 +246,7 @@ static size_t extract_expr(expr_t *expr, dis86_instr_t *ins, size_t n_ins)
   return expr->n_ins;
 }
 
-meh_t * meh_new(dis86_instr_t *ins, size_t n_ins)
+meh_t * meh_new(config_t *cfg, dis86_instr_t *ins, size_t n_ins)
 {
   meh_t *m = calloc(1, sizeof(meh_t));
 
@@ -165,7 +254,7 @@ meh_t * meh_new(dis86_instr_t *ins, size_t n_ins)
     assert(m->expr_len < ARRAY_SIZE(m->expr_arr));
 
     expr_t *expr = &m->expr_arr[m->expr_len];
-    size_t consumed = extract_expr(expr, ins, n_ins);
+    size_t consumed = extract_expr(expr, cfg, ins, n_ins);
     assert(consumed <= n_ins);
     m->expr_len++;
 

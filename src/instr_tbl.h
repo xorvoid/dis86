@@ -126,10 +126,10 @@ enum {
   _(  OP_JP,      "jp",       CODE_C_UNKNOWN,     ""       )\
   _(  OP_JS,      "js",       CODE_C_UNKNOWN,     ""       )\
   _(  OP_LAHF,    "lahf",     CODE_C_UNKNOWN,     ""       )\
-  _(  OP_LDS,     "lds",      CODE_C_UNKNOWN,     ""       )\
+  _(  OP_LDS,     "lds",      CODE_C_FUNCTION,    "LOAD_SEG_OFF" )  \
   _(  OP_LEA,     "lea",      CODE_C_UNKNOWN,     ""       )\
   _(  OP_LEAVE,   "leave",    CODE_C_LITERAL,     "SP = BP; BP = POP();" )\
-  _(  OP_LES,     "les",      CODE_C_UNKNOWN,     ""       )\
+  _(  OP_LES,     "les",      CODE_C_FUNCTION,    "LOAD_SEG_OFF" )\
   _(  OP_LODS,    "lods",     CODE_C_UNKNOWN,     ""       )\
   _(  OP_LOOP,    "loop",     CODE_C_UNKNOWN,     ""       )\
   _(  OP_LOOPE,   "loope",    CODE_C_UNKNOWN,     ""       )\

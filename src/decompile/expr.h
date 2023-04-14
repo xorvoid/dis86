@@ -1,18 +1,41 @@
 #pragma once
 
-typedef struct meh           meh_t;
-typedef struct expr          expr_t;
-typedef struct expr_operator expr_operator_t;
-typedef struct expr_function expr_function_t;
-typedef struct expr_literal  expr_literal_t;
-typedef struct expr_branch   expr_branch_t;
+typedef struct meh              meh_t;
+typedef struct expr             expr_t;
+typedef struct expr_operator    expr_operator_t;
+typedef struct expr_operator3   expr_operator3_t;
+typedef struct expr_function    expr_function_t;
+typedef struct expr_literal     expr_literal_t;
+typedef struct expr_branch_cond expr_branch_cond_t;
+typedef struct expr_branch      expr_branch_t;
+typedef struct expr_call        expr_call_t;
+typedef struct expr_lea         expr_lea_t;
+
+enum {
+  ADDR_TYPE_FAR,
+  ADDR_TYPE_NEAR,
+};
+
+typedef struct addr addr_t;
+struct addr
+{
+  int type;
+  union {
+    segoff_t far;
+    u16      near;
+  } u;
+};
 
 enum {
   EXPR_KIND_UNKNOWN,
   EXPR_KIND_OPERATOR,
+  EXPR_KIND_OPERATOR3,
   EXPR_KIND_FUNCTION,
   EXPR_KIND_LITERAL,
+  EXPR_KIND_BRANCH_COND,
   EXPR_KIND_BRANCH,
+  EXPR_KIND_CALL,
+  EXPR_KIND_LEA,
 };
 
 struct expr_operator
@@ -21,6 +44,16 @@ struct expr_operator
   const char * operator;
   operand_t    oper1;           // required
   operand_t    oper2;           // optional
+};
+
+struct expr_operator3
+{
+  // TODO: REMOVE dis86 instr operands
+  const char * operator;
+  int          sign;
+  operand_t    oper1;           // required
+  operand_t    oper2;           // required
+  operand_t    oper3;           // required
 };
 
 struct expr_function
@@ -36,7 +69,7 @@ struct expr_literal
   const char *text;
 };
 
-struct expr_branch
+struct expr_branch_cond
 {
   // TODO: REMOVE dis86 instr operands
   const char * operator;
@@ -46,14 +79,38 @@ struct expr_branch
   u32          target;
 };
 
+struct expr_branch
+{
+  u32 target;
+};
+
+struct expr_call
+{
+  addr_t       addr;
+  bool         remapped;
+  const char * name; // optional
+};
+
+struct expr_lea
+{
+  // TODO: REMOVE dis86 instr operands
+  operand_t dest;               // required
+  int       addr_base_reg;      // required
+  u16       addr_offset;        // required
+};
+
 struct expr
 {
   int kind;
   union {
-    expr_operator_t operator[1];
-    expr_function_t function[1];
-    expr_literal_t  literal[1];
-    expr_branch_t   branch[1];
+    expr_operator_t    operator[1];
+    expr_operator3_t   operator3[1];
+    expr_function_t    function[1];
+    expr_literal_t     literal[1];
+    expr_branch_cond_t branch_cond[1];
+    expr_branch_t      branch[1];
+    expr_call_t        call[1];
+    expr_lea_t         lea[1];
   } k;
 
   size_t          n_ins;
@@ -67,5 +124,5 @@ struct meh
   expr_t expr_arr[EXPR_MAX];
 };
 
-meh_t * meh_new(dis86_instr_t *ins, size_t n_ins);
+meh_t * meh_new(config_t *cfg, dis86_instr_t *ins, size_t n_ins);
 void    meh_delete(meh_t *m);
