@@ -115,8 +115,8 @@ static info_t instr_info(dis86_instr_t *instr)
     case OP_PUSHF:                                   break;
     case OP_RCL:                                     break;
     case OP_RCR:                                     break;
-    case OP_RET:    LITERAL("RETURN_NEAR()");        break;
-    case OP_RETF:   LITERAL("RETURN_FAR()");         break;
+    case OP_RET:    ABSTRACT("RETURN_NEAR");         break;
+    case OP_RETF:   ABSTRACT("RETURN_FAR");          break;
     case OP_ROL:                                     break;
     case OP_ROR:                                     break;
     case OP_SAHF:                                    break;
