@@ -41,6 +41,8 @@ config_t * config_read_new(const char *path)
     const char *args_str = bsl_get_str(f, "args");
     if (!args_str) FAIL("No function args property for '%s'", key);
 
+    bool pop_args_after_call = !bsl_get_str(f, "dont_pop_args");
+
     i16 args;
     if (!parse_bytes_i16(args_str, strlen(args_str), &args)) FAIL("Expected u16 for '%s.args', got '%s'", key, args_str);
 
@@ -50,6 +52,7 @@ config_t * config_read_new(const char *path)
     cf->addr = parse_segoff(addr_str);
     cf->ret  = strdup(ret_str);
     cf->args = args;
+    cf->pop_args_after_call = pop_args_after_call;
   }
 
   bsl_t *glob = bsl_get_node(root, "dis86.globals");

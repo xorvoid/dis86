@@ -17,6 +17,7 @@ struct config_func
   segoff_t addr;
   char *   ret;
   i16      args;  // -1 means "unknown"
+  bool     pop_args_after_call;
 };
 
 struct config_global
