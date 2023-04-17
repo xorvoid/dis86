@@ -106,3 +106,74 @@ void transform_pass_cmp_jmp(meh_t *m)
 /*     m->expr_arr[i] = EXPR_NONE; */
 /*   } */
 /* } */
+
+void _synthesize_calls_one(meh_t *m, size_t i)
+{
+  expr_t *expr = &m->expr_arr[i];
+  if (expr->kind != EXPR_KIND_CALL) return;
+
+  expr_call_t *   k        = expr->k.call;
+  addr_t          addr     = k->addr;
+  bool            remapped = k->remapped;
+  config_func_t * func     = k->func;
+
+  if (!func || func->args < 0) return;
+  if (i < (size_t)func->args) return;
+  if (i+1 >= m->expr_len) return;
+
+  // Check and extract arguments
+  value_t args[MAX_ARGS];
+  for (size_t j = 0; j < (size_t)func->args; j++) {
+    size_t idx = i-1 - j;
+    expr_t *arg_expr = &m->expr_arr[idx];
+    if (arg_expr->kind != EXPR_KIND_ABSTRACT) return;
+    expr_abstract_t *a = arg_expr->k.abstract;
+    if (0 != memcmp(a->func_name, "PUSH", 4)) return;
+    args[j] = a->args[0];
+  }
+
+  // Check for stack cleanup
+  expr_t *cleanup_expr = &m->expr_arr[i+1];
+  if (cleanup_expr->kind != EXPR_KIND_OPERATOR2) return;
+  expr_operator2_t *c = cleanup_expr->k.operator2;
+  if (0 != memcmp(c->operator.oper, "+=", 2)) return;
+  if (c->dest.type != VALUE_TYPE_SYM) return;
+  // FIXME!
+  //if (!symref_matches(c->dest.u.sym->ref, symbols_find_reg(symbols, REG_SP))) return;
+  if (c->src.type != VALUE_TYPE_IMM) return;
+  u16 val = c->src.u.imm->value;
+  if (val != 2*(size_t)func->args) return;
+
+  // Rewrite
+  expr->kind = EXPR_KIND_CALL_WITH_ARGS;
+  expr_call_with_args_t * a = expr->k.call_with_args;
+  a->addr     = addr;
+  a->remapped = remapped;
+  a->func     = func;
+  assert(ARRAY_SIZE(args) == ARRAY_SIZE(a->args));
+  memcpy(a->args, args, sizeof(args));
+
+  // Remove the old exprs
+  dis86_instr_t *first_ins = NULL;
+  size_t ins_count = 0;
+  for (size_t j = 0; j < (size_t)func->args + 2; j++) {
+    size_t idx = i - (size_t)func->args + j;
+    if (!first_ins) {
+      first_ins = m->expr_arr[idx].ins;
+    }
+    ins_count += m->expr_arr[idx].n_ins;
+    if (i == idx) continue;
+    m->expr_arr[idx] = EXPR_NONE;
+  }
+
+  // Update the ins array tracking
+  expr->ins = first_ins;
+  expr->n_ins = ins_count;
+}
+
+void transform_pass_synthesize_calls(meh_t *m)
+{
+  for (size_t i = 0; i < m->expr_len; i++) {
+    _synthesize_calls_one(m, i);
+  }
+}

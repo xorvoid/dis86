@@ -1,15 +1,16 @@
 #pragma once
 
-typedef struct meh              meh_t;
-typedef struct expr             expr_t;
-typedef struct expr_operator1   expr_operator1_t;
-typedef struct expr_operator2   expr_operator2_t;
-typedef struct expr_operator3   expr_operator3_t;
-typedef struct expr_abstract    expr_abstract_t;
-typedef struct expr_branch_cond expr_branch_cond_t;
-typedef struct expr_branch_flags expr_branch_flags_t;
-typedef struct expr_branch      expr_branch_t;
-typedef struct expr_call        expr_call_t;
+typedef struct meh                 meh_t;
+typedef struct expr                expr_t;
+typedef struct expr_operator1      expr_operator1_t;
+typedef struct expr_operator2      expr_operator2_t;
+typedef struct expr_operator3      expr_operator3_t;
+typedef struct expr_abstract       expr_abstract_t;
+typedef struct expr_branch_cond    expr_branch_cond_t;
+typedef struct expr_branch_flags   expr_branch_flags_t;
+typedef struct expr_branch         expr_branch_t;
+typedef struct expr_call           expr_call_t;
+typedef struct expr_call_with_args expr_call_with_args_t;
 
 enum {
   ADDR_TYPE_FAR,
@@ -44,6 +45,7 @@ enum {
   EXPR_KIND_BRANCH_FLAGS,
   EXPR_KIND_BRANCH,
   EXPR_KIND_CALL,
+  EXPR_KIND_CALL_WITH_ARGS,
 };
 
 struct expr_operator1
@@ -102,18 +104,28 @@ struct expr_call
   config_func_t * func; // optional
 };
 
+#define MAX_ARGS 16
+struct expr_call_with_args
+{
+  addr_t          addr;
+  bool            remapped;
+  config_func_t * func; // required
+  value_t         args[MAX_ARGS];
+};
+
 struct expr
 {
   int kind;
   union {
-    expr_operator1_t    operator1[1];
-    expr_operator2_t    operator2[1];
-    expr_operator3_t    operator3[1];
-    expr_abstract_t     abstract[1];
-    expr_branch_cond_t  branch_cond[1];
-    expr_branch_flags_t branch_flags[1];
-    expr_branch_t       branch[1];
-    expr_call_t         call[1];
+    expr_operator1_t      operator1[1];
+    expr_operator2_t      operator2[1];
+    expr_operator3_t      operator3[1];
+    expr_abstract_t       abstract[1];
+    expr_branch_cond_t    branch_cond[1];
+    expr_branch_flags_t   branch_flags[1];
+    expr_branch_t         branch[1];
+    expr_call_t           call[1];
+    expr_call_with_args_t call_with_args[1];
   } k;
 
   size_t          n_ins;

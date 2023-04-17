@@ -416,6 +416,7 @@ meh_t * meh_new(config_t *cfg, symbols_t *symbols, dis86_instr_t *ins, size_t n_
 
   transform_pass_xor_rr(m);
   transform_pass_cmp_jmp(m);
+  transform_pass_synthesize_calls(m);
 
   return m;
 }
