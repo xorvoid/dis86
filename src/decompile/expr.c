@@ -1,11 +1,5 @@
 #include "decompile_private.h"
 
-#define VALUE_IMM(_val) ({\
-  value_t v = {};\
-  v.type = VALUE_TYPE_IMM;\
-  v.u.imm->value = _val;     \
-  v; })
-
 static bool cmp_oper(int opcode, operator_t *out)
 {
   const char *oper = NULL;
@@ -75,22 +69,6 @@ static size_t extract_expr_special(expr_t *expr, config_t *cfg, symbols_t *symbo
 
       return 2;
     }
-  }
-
-  // Special handling for xor r,r shorthand for zeroing
-  if (ins->opcode == OP_XOR &&
-      ins->operand[0].type == OPERAND_TYPE_REG &&
-      ins->operand[1].type == OPERAND_TYPE_REG &&
-      ins->operand[0].u.reg.id == ins->operand[1].u.reg.id) {
-
-    expr->kind = EXPR_KIND_OPERATOR2;
-    expr_operator2_t *k = expr->k.operator2;
-    k->operator.oper = "=";
-    k->operator.sign = 0;
-    k->dest = value_from_operand(&ins->operand[0], symbols);
-    k->src = VALUE_IMM(0);
-
-    return 1;
   }
 
   return 0;
@@ -417,6 +395,8 @@ meh_t * meh_new(config_t *cfg, symbols_t *symbols, dis86_instr_t *ins, size_t n_
     ins += consumed;
     n_ins -= consumed;
   }
+
+  transform_pass_xor_rr(m);
 
   return m;
 }

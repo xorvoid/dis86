@@ -1,4 +1,5 @@
 #pragma once
+#include "header.h"
 #include "dis86_private.h"
 #include "instr_tbl.h"
 #include "util.h"
@@ -8,6 +9,7 @@
 #include "type.h"
 #include "value.h"
 #include "expr.h"
+#include "transform.h"
 #include "str.h"
 
 #define LOG_INFO(fmt, ...) do { \

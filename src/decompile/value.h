@@ -47,10 +47,18 @@ struct value
 value_t value_from_operand(operand_t *o, symbols_t *symbols);
 value_t value_from_symref(symref_t ref);
 value_t value_from_imm(u16 imm);
+bool    value_matches(value_t *a, value_t *b);
 
 #define VALUE_NONE ({ \
   value_t v = {}; \
   v.type = VALUE_TYPE_NONE; \
+  v; })
+
+#define VALUE_IMM(_val) ({\
+  value_t v = {};\
+  v.type = VALUE_TYPE_IMM;\
+  v.u.imm->sz = SIZE_16; \
+  v.u.imm->value = _val;     \
   v; })
 
 #define VALUE_IS_NONE(v) ((v).type == VALUE_TYPE_NONE)

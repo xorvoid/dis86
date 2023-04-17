@@ -63,3 +63,35 @@ value_t value_from_imm(u16 imm)
   val->u.imm->value = imm;
   return *val;
 }
+
+bool value_matches(value_t *a, value_t *b)
+{
+  if (a->type != b->type) return false;
+
+  switch (a->type) {
+    case VALUE_TYPE_NONE: return true;
+    case VALUE_TYPE_SYM: {
+      return symref_matches(&a->u.sym->ref, &b->u.sym->ref);
+    } break;
+    case VALUE_TYPE_MEM: {
+      value_mem_t *ak = a->u.mem;
+      value_mem_t *bk = b->u.mem;
+      return
+        ak->sz == bk->sz &&
+        symref_matches(&ak->sreg, &bk->sreg) &&
+        symref_matches(&ak->reg1, &bk->reg1) &&
+        symref_matches(&ak->reg2, &bk->reg2) &&
+        ak->off == bk->off;
+    } break;
+    case VALUE_TYPE_IMM: {
+      value_imm_t *ak = a->u.imm;
+      value_imm_t *bk = b->u.imm;
+      return
+        ak->sz == bk->sz &&
+        ak->value == bk->value;
+    } break;
+    default: {
+      FAIL("Unknown value type: %d", a->type);
+    }
+  }
+}

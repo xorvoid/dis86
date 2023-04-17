@@ -298,3 +298,11 @@ void symbols_add_global(symbols_t *s, const char *name, u16 offset, u16 len)
   assert(symtab->n_var < ARRAY_SIZE(symtab->var));
   symtab->var[symtab->n_var++] = *sym;
 }
+
+bool symref_matches(symref_t *a, symref_t *b)
+{
+  return
+    a->symbol == b->symbol &&
+    a->off == b->off &&
+    a->len == b->len;
+}

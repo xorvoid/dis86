@@ -12,6 +12,7 @@ SRC = [
   'decompile/symbols.c',
   'decompile/value.c',
   'decompile/expr.c',
+  'decompile/transform.c',
 ]
 
 libdis86 = static_library(
