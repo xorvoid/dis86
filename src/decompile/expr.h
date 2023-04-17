@@ -35,6 +35,7 @@ struct operator
 
 enum {
   EXPR_KIND_UNKNOWN,
+  EXPR_KIND_NONE,
   EXPR_KIND_OPERATOR1,
   EXPR_KIND_OPERATOR2,
   EXPR_KIND_OPERATOR3,
@@ -118,6 +119,13 @@ struct expr
   size_t          n_ins;
   dis86_instr_t * ins;
 };
+
+value_t expr_destination(expr_t *expr);
+
+#define EXPR_NONE ({ \
+  expr_t expr = {}; \
+  expr.kind = EXPR_KIND_NONE; \
+  expr; })
 
 #define EXPR_MAX 4096
 struct meh

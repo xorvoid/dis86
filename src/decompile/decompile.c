@@ -276,6 +276,9 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
   str_init(s);
 
   switch (expr->kind) {
+    case EXPR_KIND_NONE: {
+      return;
+    } break;
     case EXPR_KIND_UNKNOWN: {
       str_fmt(s, "UNKNOWN();");
     } break;
@@ -363,6 +366,7 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
     } break;
   }
 
+
   const char *code_str = str_to_cstr(s);
   for (size_t i = 0; i < expr->n_ins; i++) {
     const char *as = dis86_print_intel_syntax(d->dis, &expr->ins[i], false);
@@ -388,7 +392,7 @@ char *dis86_decompile( dis86_t *                  dis,
 
   for (size_t i = 0; i < d->meh->expr_len; i++) {
     expr_t *expr = &d->meh->expr_arr[i];
-    if (is_label(d->labels, (u32)expr->ins->addr)) {
+    if (expr->n_ins > 0 && is_label(d->labels, (u32)expr->ins->addr)) {
       str_fmt(ret_s, "\n label_%08x:\n", (u32)expr->ins->addr);
     }
     decompiler_emit_expr(d, expr, ret_s);

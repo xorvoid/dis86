@@ -27,51 +27,53 @@ static bool cmp_oper(int opcode, operator_t *out)
 static size_t extract_expr_special(expr_t *expr, config_t *cfg, symbols_t *symbols,
                                    dis86_instr_t *ins, size_t n_ins)
 {
-  dis86_instr_t * next_ins = n_ins > 1 ? ins+1 : NULL;
-
-  // Special handling for cmp+jmp
-  if (ins->opcode == OP_CMP && next_ins) {
-    operator_t oper[1];
-    if (cmp_oper(next_ins->opcode, oper)) {
-      assert(ins->operand[0].type != OPERAND_TYPE_NONE);
-      assert(ins->operand[1].type != OPERAND_TYPE_NONE);
-
-      expr->kind = EXPR_KIND_BRANCH_COND;
-      expr_branch_cond_t *k = expr->k.branch_cond;
-      k->operator = *oper;
-      k->left = value_from_operand(&ins->operand[0], symbols);
-      k->right = value_from_operand(&ins->operand[1], symbols);
-      k->target = branch_destination(next_ins);
-
-      return 2;
-    }
-  }
-
-  // Special handling for or reg,reg + je / jne
-  if (ins->opcode == OP_OR &&
-      ins->operand[0].type == OPERAND_TYPE_REG &&
-      ins->operand[1].type == OPERAND_TYPE_REG &&
-      ins->operand[0].u.reg.id == ins->operand[1].u.reg.id &&
-      next_ins) {
-
-    operator_t oper[1] = {{}};
-    switch (next_ins->opcode) {
-      case OP_JE:  oper->oper = "=="; break;
-      case OP_JNE: oper->oper = "!="; break;
-    }
-    if (oper->oper) {
-      expr->kind = EXPR_KIND_BRANCH_COND;
-      expr_branch_cond_t *k = expr->k.branch_cond;
-      k->operator = *oper;
-      k->left = value_from_operand(&ins->operand[0], symbols);
-      k->right = VALUE_IMM(0);
-      k->target = branch_destination(next_ins);
-
-      return 2;
-    }
-  }
-
   return 0;
+
+  //dis86_instr_t * next_ins = n_ins > 1 ? ins+1 : NULL;
+
+  /* // Special handling for cmp+jmp */
+  /* if (ins->opcode == OP_CMP && next_ins) { */
+  /*   operator_t oper[1]; */
+  /*   if (cmp_oper(next_ins->opcode, oper)) { */
+  /*     assert(ins->operand[0].type != OPERAND_TYPE_NONE); */
+  /*     assert(ins->operand[1].type != OPERAND_TYPE_NONE); */
+
+  /*     expr->kind = EXPR_KIND_BRANCH_COND; */
+  /*     expr_branch_cond_t *k = expr->k.branch_cond; */
+  /*     k->operator = *oper; */
+  /*     k->left = value_from_operand(&ins->operand[0], symbols); */
+  /*     k->right = value_from_operand(&ins->operand[1], symbols); */
+  /*     k->target = branch_destination(next_ins); */
+
+  /*     return 2; */
+  /*   } */
+  /* } */
+
+  /* // Special handling for or reg,reg + je / jne */
+  /* if (ins->opcode == OP_OR && */
+  /*     ins->operand[0].type == OPERAND_TYPE_REG && */
+  /*     ins->operand[1].type == OPERAND_TYPE_REG && */
+  /*     ins->operand[0].u.reg.id == ins->operand[1].u.reg.id && */
+  /*     next_ins) { */
+
+  /*   operator_t oper[1] = {{}}; */
+  /*   switch (next_ins->opcode) { */
+  /*     case OP_JE:  oper->oper = "=="; break; */
+  /*     case OP_JNE: oper->oper = "!="; break; */
+  /*   } */
+  /*   if (oper->oper) { */
+  /*     expr->kind = EXPR_KIND_BRANCH_COND; */
+  /*     expr_branch_cond_t *k = expr->k.branch_cond; */
+  /*     k->operator = *oper; */
+  /*     k->left = value_from_operand(&ins->operand[0], symbols); */
+  /*     k->right = VALUE_IMM(0); */
+  /*     k->target = branch_destination(next_ins); */
+
+  /*     return 2; */
+  /*   } */
+  /* } */
+
+  //return 0;
 }
 
 static size_t _impl_operator1(expr_t *expr, symbols_t *symbols, dis86_instr_t *ins,
@@ -191,7 +193,7 @@ static size_t _impl_abstract_jump(expr_t *expr, symbols_t *symbols, dis86_instr_
   expr_branch_flags_t *k = expr->k.branch_flags;
   k->op     = _operation;
   k->flags  = value_from_symref(symbols_find_reg(symbols, REG_FLAGS));
-  k->target = ins->addr + ins->n_bytes + ins->operand[0].u.rel.val;
+  k->target = ins->addr + ins->n_bytes + (i16)ins->operand[0].u.rel.val;
 
   return 1;
 }
@@ -378,6 +380,22 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
   return 1;
 }
 
+value_t expr_destination(expr_t *expr)
+{
+  switch (expr->kind) {
+    case EXPR_KIND_UNKNOWN:       FAIL("EXPR_KIND_UNKNOWN UNSUPPORTED");
+    case EXPR_KIND_OPERATOR1:     return expr->k.operator1->dest;
+    case EXPR_KIND_OPERATOR2:     return expr->k.operator2->dest;
+    case EXPR_KIND_OPERATOR3:     return expr->k.operator3->dest;
+    case EXPR_KIND_ABSTRACT:      return expr->k.abstract->ret;
+    case EXPR_KIND_BRANCH_COND:   return VALUE_NONE;
+    case EXPR_KIND_BRANCH_FLAGS:  return expr->k.branch_flags->flags;
+    case EXPR_KIND_BRANCH:        return VALUE_NONE;
+    case EXPR_KIND_CALL:          return VALUE_NONE;  // ??? is this true ?? Should this be AX:DX ??
+    default: FAIL("Unkown expression kind: %d", expr->kind);
+  }
+}
+
 meh_t * meh_new(config_t *cfg, symbols_t *symbols, dis86_instr_t *ins, size_t n_ins)
 {
   meh_t *m = calloc(1, sizeof(meh_t));
@@ -397,6 +415,7 @@ meh_t * meh_new(config_t *cfg, symbols_t *symbols, dis86_instr_t *ins, size_t n_
   }
 
   transform_pass_xor_rr(m);
+  transform_pass_cmp_jmp(m);
 
   return m;
 }
