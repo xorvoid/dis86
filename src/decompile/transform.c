@@ -133,16 +133,23 @@ void _synthesize_calls_one(meh_t *m, size_t i)
   }
 
   // Check for stack cleanup
-  expr_t *cleanup_expr = &m->expr_arr[i+1];
-  if (cleanup_expr->kind != EXPR_KIND_OPERATOR2) return;
-  expr_operator2_t *c = cleanup_expr->k.operator2;
-  if (0 != memcmp(c->operator.oper, "+=", 2)) return;
-  if (c->dest.type != VALUE_TYPE_SYM) return;
-  // FIXME!
-  //if (!symref_matches(c->dest.u.sym->ref, symbols_find_reg(symbols, REG_SP))) return;
-  if (c->src.type != VALUE_TYPE_IMM) return;
-  u16 val = c->src.u.imm->value;
-  if (val != 2*(size_t)func->args) return;
+  if (func->args > 1) {
+    expr_t *cleanup_expr = &m->expr_arr[i+1];
+    if (cleanup_expr->kind != EXPR_KIND_OPERATOR2) return;
+    expr_operator2_t *c = cleanup_expr->k.operator2;
+    if (0 != memcmp(c->operator.oper, "+=", 2)) return;
+    if (c->dest.type != VALUE_TYPE_SYM) return;
+    // FIXME!
+    //if (!symref_matches(c->dest.u.sym->ref, symbols_find_reg(symbols, REG_SP))) return;
+    if (c->src.type != VALUE_TYPE_IMM) return;
+    u16 val = c->src.u.imm->value;
+    if (val != 2*(size_t)func->args) return;
+  } else if (func->args == 1) {
+    expr_t *cleanup_expr = &m->expr_arr[i+1];
+    if (cleanup_expr->kind != EXPR_KIND_ABSTRACT) return;
+    expr_abstract_t *a = cleanup_expr->k.abstract;
+    if (0 != memcmp(a->func_name, "POP", 3)) return;
+  }
 
   // Rewrite
   expr->kind = EXPR_KIND_CALL_WITH_ARGS;

@@ -369,6 +369,7 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
         value_str(&k->args[i], s, false);
       }
       str_fmt(s, ");");
+      if (k->remapped) str_fmt(s, " /* remapped */");
     } break;
     default: {
       str_fmt(s, "UNIMPL();");
