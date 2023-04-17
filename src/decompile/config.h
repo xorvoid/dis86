@@ -15,6 +15,8 @@ struct config_func
 {
   char *   name;
   segoff_t addr;
+  char *   ret;
+  i16      args;  // -1 means "unknown"
 };
 
 struct config_global
@@ -43,10 +45,10 @@ struct dis86_decompile_config
   config_segmap_t segmap_arr[MAX_CONFIG_SEGMAPS];
 };
 
-config_t *   config_read_new(const char *path);
-config_t *   config_default_new(void);
-void         config_delete(config_t *cfg);
+config_t *      config_read_new(const char *path);
+config_t *      config_default_new(void);
+void            config_delete(config_t *cfg);
 
-void         config_print(config_t *cfg);
-const char * config_func_lookup(config_t *cfg, segoff_t s);
-bool         config_seg_remap(config_t *cfg, u16 *inout_seg);
+void            config_print(config_t *cfg);
+config_func_t * config_func_lookup(config_t *cfg, segoff_t s);
+bool            config_seg_remap(config_t *cfg, u16 *inout_seg);

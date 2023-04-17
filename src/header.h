@@ -111,3 +111,84 @@ static inline bool parse_bytes_u64(const char *buf, size_t len, uint64_t *_num)
   *_num = num;
   return true;
 }
+
+static inline bool parse_bytes_u32(const char *buf, size_t len, uint32_t *_num)
+{
+  u64 num;
+  if (!parse_bytes_u64(buf, len, &num)) return false;
+  if ((u64)(u32)num != num) return false;
+  *_num = (u32)num;
+  return true;
+}
+
+static inline bool parse_bytes_u16(const char *buf, size_t len, uint16_t *_num)
+{
+  u64 num;
+  if (!parse_bytes_u64(buf, len, &num)) return false;
+  if ((u64)(u16)num != num) return false;
+  *_num = (u16)num;
+  return true;
+}
+
+static inline bool parse_bytes_u8(const char *buf, size_t len, uint8_t *_num)
+{
+  u64 num;
+  if (!parse_bytes_u64(buf, len, &num)) return false;
+  if ((u64)(u8)num != num) return false;
+  *_num = (u8)num;
+  return true;
+}
+
+static inline bool parse_bytes_i64(const char *buf, size_t len, int64_t *_num)
+{
+  if (len == 0) return false;
+
+  bool neg = false;
+  if (buf[0] == '-') {
+    neg = true;
+    buf++;
+    len--;
+  }
+
+  uint64_t unum = 0;
+  if (!parse_bytes_u64(buf, len, &unum)) return false;
+
+  int64_t num;
+  if (neg) {
+    if (unum > (1ull<<63)) return false; // overflow
+    num = -(int64_t)unum;
+  } else {
+    if (unum >= (1ull<<63)) return false; // overflow
+    num = (int64_t)unum;
+  }
+
+  *_num = num;
+  return true;
+}
+
+static inline bool parse_bytes_i32(const char *buf, size_t len, int32_t *_num)
+{
+  i64 num;
+  if (!parse_bytes_i64(buf, len, &num)) return false;
+  if ((i64)(i32)num != num) return false;
+  *_num = (i32)num;
+  return true;
+}
+
+static inline bool parse_bytes_i16(const char *buf, size_t len, int16_t *_num)
+{
+  i64 num;
+  if (!parse_bytes_i64(buf, len, &num)) return false;
+  if ((i64)(i16)num != num) return false;
+  *_num = (i16)num;
+  return true;
+}
+
+static inline bool parse_bytes_i8(const char *buf, size_t len, int8_t *_num)
+{
+  i64 num;
+  if (!parse_bytes_i64(buf, len, &num)) return false;
+  if ((i64)(i8)num != num) return false;
+  *_num = (i8)num;
+  return true;
+}

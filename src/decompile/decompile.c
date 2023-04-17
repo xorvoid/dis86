@@ -344,8 +344,8 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
     } break;
     case EXPR_KIND_CALL: {
       expr_call_t *k = expr->k.call;
-      if (k->name) {
-        str_fmt(s, "CALL_FUNC(%s);", k->name);
+      if (k->func) {
+        str_fmt(s, "CALL_FUNC(%s);", k->func->name);
       } else {
         switch (k->addr.type) {
           case ADDR_TYPE_FAR: {

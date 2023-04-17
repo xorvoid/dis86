@@ -206,14 +206,14 @@ static size_t _impl_call_far(expr_t *expr, config_t *cfg, symbols_t *symbols, di
   operand_far_t *far = &ins->operand[0].u.far;
   segoff_t addr = {far->seg, far->off};
   bool remapped = config_seg_remap(cfg, &addr.seg);
-  const char *name = config_func_lookup(cfg, addr);
+  config_func_t *func = config_func_lookup(cfg, addr);
 
   expr->kind = EXPR_KIND_CALL;
   expr_call_t *k = expr->k.call;
   k->addr.type  = ADDR_TYPE_FAR;
   k->addr.u.far = addr;
   k->remapped   = remapped;
-  k->name       = name;
+  k->func       = func;
 
   return 1;
 }
@@ -228,7 +228,7 @@ static size_t _impl_call_near(expr_t *expr, symbols_t *symbols, dis86_instr_t *i
   k->addr.type   = ADDR_TYPE_NEAR;
   k->addr.u.near = effective;
   k->remapped    = false;
-  k->name        = NULL;
+  k->func        = NULL;
 
   return 1;
 }

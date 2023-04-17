@@ -97,9 +97,9 @@ struct expr_branch
 
 struct expr_call
 {
-  addr_t       addr;
-  bool         remapped;
-  const char * name; // optional
+  addr_t          addr;
+  bool            remapped;
+  config_func_t * func; // optional
 };
 
 struct expr

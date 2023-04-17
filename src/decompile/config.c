@@ -35,10 +35,21 @@ config_t * config_read_new(const char *path)
     const char *addr_str = bsl_get_str(f, "addr");
     if (!addr_str) FAIL("No function addr property for '%s'", key);
 
+    const char *ret_str = bsl_get_str(f, "ret");
+    if (!ret_str) FAIL("No function ret property for '%s'", key);
+
+    const char *args_str = bsl_get_str(f, "args");
+    if (!args_str) FAIL("No function args property for '%s'", key);
+
+    i16 args;
+    if (!parse_bytes_i16(args_str, strlen(args_str), &args)) FAIL("Expected u16 for '%s.args', got '%s'", key, args_str);
+
     assert(cfg->func_len < ARRAY_SIZE(cfg->func_arr));
     config_func_t *cf = &cfg->func_arr[cfg->func_len++];
     cf->name = strdup(key);
     cf->addr = parse_segoff(addr_str);
+    cf->ret  = strdup(ret_str);
+    cf->args = args;
   }
 
   bsl_t *glob = bsl_get_node(root, "dis86.globals");
@@ -113,7 +124,7 @@ void config_print(config_t *cfg)
   printf("functions:\n");
   for (size_t i = 0; i < cfg->func_len; i++) {
     config_func_t *f = &cfg->func_arr[i];
-    printf("  %-30s  %04x:%04x\n", f->name, f->addr.seg, f->addr.off);
+    printf("  %-30s  %04x:%04x  %-8s  %d\n", f->name, f->addr.seg, f->addr.off, f->ret, f->args);
   }
   printf("\n");
   printf("globals:\n");
@@ -129,12 +140,12 @@ void config_print(config_t *cfg)
   }
 }
 
-const char * config_func_lookup(config_t *cfg, segoff_t s)
+config_func_t * config_func_lookup(config_t *cfg, segoff_t s)
 {
   for (size_t i = 0; i < cfg->func_len; i++) {
     config_func_t *f = &cfg->func_arr[i];
     if (f->addr.seg == s.seg && f->addr.off == s.off) {
-      return f->name;
+      return f;
     }
   }
   return NULL;
