@@ -133,6 +133,7 @@ void _synthesize_calls_one(meh_t *m, size_t i)
   }
 
   // Check for stack cleanup
+  size_t num_cleanup_ins = 0;
   if (func->pop_args_after_call) {
     if (func->args > 1) {
       expr_t *cleanup_expr = &m->expr_arr[i+1];
@@ -145,11 +146,13 @@ void _synthesize_calls_one(meh_t *m, size_t i)
       if (c->src.type != VALUE_TYPE_IMM) return;
       u16 val = c->src.u.imm->value;
       if (val != 2*(size_t)func->args) return;
+      num_cleanup_ins = 1;
     } else if (func->args == 1) {
       expr_t *cleanup_expr = &m->expr_arr[i+1];
       if (cleanup_expr->kind != EXPR_KIND_ABSTRACT) return;
       expr_abstract_t *a = cleanup_expr->k.abstract;
       if (0 != memcmp(a->func_name, "POP", 3)) return;
+      num_cleanup_ins = 1;
     }
   }
 
@@ -165,7 +168,8 @@ void _synthesize_calls_one(meh_t *m, size_t i)
   // Remove the old exprs
   dis86_instr_t *first_ins = NULL;
   size_t ins_count = 0;
-  for (size_t j = 0; j < (size_t)func->args + 2; j++) {
+  size_t n = (size_t)func->args + 1 + num_cleanup_ins;
+  for (size_t j = 0; j < n; j++) {
     size_t idx = i - (size_t)func->args + j;
     if (!first_ins) {
       first_ins = m->expr_arr[idx].ins;

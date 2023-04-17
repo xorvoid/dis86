@@ -363,9 +363,9 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
     } break;
     case EXPR_KIND_CALL_WITH_ARGS: {
       expr_call_with_args_t *k = expr->k.call_with_args;
-      str_fmt(s, "%s(", k->func->name);
+      str_fmt(s, "%s(m", k->func->name);
       for (size_t i = 0; i < (size_t)k->func->args; i++) {
-        if (i != 0) str_fmt(s, ", ");
+        str_fmt(s, ", ");
         value_str(&k->args[i], s, false);
       }
       str_fmt(s, ");");
