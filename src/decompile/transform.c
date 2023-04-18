@@ -71,41 +71,43 @@ void transform_pass_cmp_jmp(meh_t *m)
   }
 }
 
-/* void transform_pass_or_jmp(meh_t *m) */
-/* { */
-/*   for (size_t i = 1; i < m->expr_len; i++) { */
-/*     expr_t *expr = &m->expr_arr[i]; */
-/*     if (expr->kind != EXPR_KIND_BRANCH_FLAGS) continue; */
+void transform_pass_or_jmp(meh_t *m)
+{
+  for (size_t i = 1; i < m->expr_len; i++) {
+    expr_t *expr = &m->expr_arr[i];
+    if (expr->kind != EXPR_KIND_BRANCH_FLAGS) continue;
+    expr_branch_flags_t *k = expr->k.branch_flags;
 
-/*     expr_branch_flags_t *k = expr->k.branch_flags; */
-/*     size_t prev_idx = i-1; */
-/*     expr_t *prev_expr = &m->expr_arr[i-1]; */
-/*     value_t prev_dest = expr_destination(prev_expr); */
-/*     if (!value_matches(&k->flags, &prev_dest)) continue; */
+    const char *cmp;
+    if (0 == memcmp(k->op, "JE", 2)) cmp = "==";
+    else if (0 == memcmp(k->op, "JNE", 3)) cmp = "!=";
+    else continue;
 
-/*     if (prev_expr->kind != EXPR_KIND_ABSTRACT) continue; */
-/*     expr_abstract_t *p = prev_expr->k.abstract; */
-/*     if (p->n_args != 2) continue; */
+    size_t prev_idx = i-1;
+    expr_t *prev_expr = &m->expr_arr[i-1];
+    if (prev_expr->kind != EXPR_KIND_OPERATOR2) continue;
+    expr_operator2_t *p = prev_expr->k.operator2;
+    if (0 != memcmp(p->operator.oper, "|=", 2)) continue;
+    if (!value_matches(&p->dest, &p->src)) continue;
 
-/*     // Unpack values */
-/*     const char * name   = k->op; */
-/*     value_t      left   = p->args[0]; */
-/*     value_t      right  = p->args[1]; */
-/*     u32          target = k->target; */
+    // Save
+    value_t src    = p->src;
+    u32     target = k->target;
 
-/*     // Rewrite */
-/*     prev_expr->kind = EXPR_KIND_BRANCH_COND; */
-/*     prev_expr->n_ins++; */
-/*     expr_branch_cond_t *b = prev_expr->k.branch_cond; */
-/*     b->operator = jump_operation(name); */
-/*     b->left     = left; */
-/*     b->right    = right; */
-/*     b->target   = target; */
+    // Rewrite
+    prev_expr->kind = EXPR_KIND_BRANCH_COND;
+    prev_expr->n_ins++;
+    expr_branch_cond_t *b = prev_expr->k.branch_cond;
+    b->operator.oper = cmp;
+    b->operator.sign = 0;
+    b->left     = src;
+    b->right    = VALUE_IMM(0);
+    b->target   = target;
 
-/*     // Ignore the extra instruction */
-/*     m->expr_arr[i] = EXPR_NONE; */
-/*   } */
-/* } */
+    // Ignore the extra instruction
+    m->expr_arr[i] = EXPR_NONE;
+  }
+}
 
 void _synthesize_calls_one(meh_t *m, size_t i)
 {

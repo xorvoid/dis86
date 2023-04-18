@@ -1,81 +1,5 @@
 #include "decompile_private.h"
 
-static bool cmp_oper(int opcode, operator_t *out)
-{
-  const char *oper = NULL;
-  int sign = 0;
-
-  switch (opcode) {
-    case OP_JB:  oper = "<";  break;
-    case OP_JBE: oper = "<="; break;
-    case OP_JA:  oper = ">";  break;
-    case OP_JAE: oper = ">="; break;
-    case OP_JE:  oper = "=="; break;
-    case OP_JNE: oper = "!="; break;
-    case OP_JL:  oper = "<";  sign = 1; break;
-    case OP_JLE: oper = "<="; sign = 1; break;
-    case OP_JG:  oper = ">";  sign = 1; break;
-    case OP_JGE: oper = ">="; sign = 1; break;
-    default: return false;
-  }
-
-  out->oper = oper;
-  out->sign = sign;
-  return true;
-}
-
-static size_t extract_expr_special(expr_t *expr, config_t *cfg, symbols_t *symbols,
-                                   dis86_instr_t *ins, size_t n_ins)
-{
-  return 0;
-
-  //dis86_instr_t * next_ins = n_ins > 1 ? ins+1 : NULL;
-
-  /* // Special handling for cmp+jmp */
-  /* if (ins->opcode == OP_CMP && next_ins) { */
-  /*   operator_t oper[1]; */
-  /*   if (cmp_oper(next_ins->opcode, oper)) { */
-  /*     assert(ins->operand[0].type != OPERAND_TYPE_NONE); */
-  /*     assert(ins->operand[1].type != OPERAND_TYPE_NONE); */
-
-  /*     expr->kind = EXPR_KIND_BRANCH_COND; */
-  /*     expr_branch_cond_t *k = expr->k.branch_cond; */
-  /*     k->operator = *oper; */
-  /*     k->left = value_from_operand(&ins->operand[0], symbols); */
-  /*     k->right = value_from_operand(&ins->operand[1], symbols); */
-  /*     k->target = branch_destination(next_ins); */
-
-  /*     return 2; */
-  /*   } */
-  /* } */
-
-  /* // Special handling for or reg,reg + je / jne */
-  /* if (ins->opcode == OP_OR && */
-  /*     ins->operand[0].type == OPERAND_TYPE_REG && */
-  /*     ins->operand[1].type == OPERAND_TYPE_REG && */
-  /*     ins->operand[0].u.reg.id == ins->operand[1].u.reg.id && */
-  /*     next_ins) { */
-
-  /*   operator_t oper[1] = {{}}; */
-  /*   switch (next_ins->opcode) { */
-  /*     case OP_JE:  oper->oper = "=="; break; */
-  /*     case OP_JNE: oper->oper = "!="; break; */
-  /*   } */
-  /*   if (oper->oper) { */
-  /*     expr->kind = EXPR_KIND_BRANCH_COND; */
-  /*     expr_branch_cond_t *k = expr->k.branch_cond; */
-  /*     k->operator = *oper; */
-  /*     k->left = value_from_operand(&ins->operand[0], symbols); */
-  /*     k->right = VALUE_IMM(0); */
-  /*     k->target = branch_destination(next_ins); */
-
-  /*     return 2; */
-  /*   } */
-  /* } */
-
-  //return 0;
-}
-
 static size_t _impl_operator1(expr_t *expr, symbols_t *symbols, dis86_instr_t *ins,
                               const char *_oper, int _sign)
 {
@@ -269,9 +193,6 @@ static size_t _impl_load_effective_addr(expr_t *expr, symbols_t *symbols, dis86_
 static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
                            dis86_instr_t *ins, size_t n_ins)
 {
-  size_t consumed = extract_expr_special(expr, cfg, symbols, ins, n_ins);
-  if (consumed) return consumed;
-
   switch (ins->opcode) {
     case OP_AAA:    break;
     case OP_AAS:    break;
@@ -416,6 +337,7 @@ meh_t * meh_new(config_t *cfg, symbols_t *symbols, dis86_instr_t *ins, size_t n_
 
   transform_pass_xor_rr(m);
   transform_pass_cmp_jmp(m);
+  transform_pass_or_jmp(m);
   transform_pass_synthesize_calls(m);
 
   return m;
