@@ -38,6 +38,7 @@ static u32 branch_destination(dis86_instr_t *ins)
     case OP_JLE: rel = (i16)ins->operand[0].u.rel.val; break;
     case OP_JG:  rel = (i16)ins->operand[0].u.rel.val; break;
     case OP_JMP: rel = (i16)ins->operand[0].u.rel.val; break;
+    case OP_LOOP:rel = (i16)ins->operand[1].u.rel.val; break;
     default: return 0;
   }
 
