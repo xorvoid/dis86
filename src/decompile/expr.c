@@ -122,10 +122,10 @@ static size_t _impl_abstract_jump(expr_t *expr, symbols_t *symbols, dis86_instr_
   return 1;
 }
 
-static size_t _impl_abstract_loop(expr_t *expr, symbols_t *symbols, dis86_instr_t *ins)
-{
-  STOPPED_HERE;
-}
+/* static size_t _impl_abstract_loop(expr_t *expr, symbols_t *symbols, dis86_instr_t *ins) */
+/* { */
+/*   STOPPED_HERE; */
+/* } */
 
 static size_t _impl_call_far(expr_t *expr, config_t *cfg, symbols_t *symbols, dis86_instr_t *ins)
 {
@@ -194,7 +194,7 @@ static size_t _impl_load_effective_addr(expr_t *expr, symbols_t *symbols, dis86_
 #define ABSTRACT_RET(_name)      _impl_abstract_ret(expr, symbols, ins, _name)
 #define ABSTRACT_FLAGS(_name)    _impl_abstract_flags(expr, symbols, ins, _name)
 #define ABSTRACT_JUMP(_op)       _impl_abstract_jump(expr, symbols, ins, _op)
-#define ABSTRACT_LOOP()          _impl_abstract_loop(expr, symbols, ins)
+//#define ABSTRACT_LOOP()          _impl_abstract_loop(expr, symbols, ins)
 #define CALL_FAR()               _impl_call_far(expr, cfg, symbols, ins)
 #define CALL_NEAR()              _impl_call_near(expr, symbols, ins)
 #define LOAD_EFFECTIVE_ADDR()    _impl_load_effective_addr(expr, symbols, ins)
@@ -263,7 +263,7 @@ static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
       //case OP_LEAVE:  LITERAL("SP = BP; BP = POP();
     case OP_LES:    return ABSTRACT("LOAD_SEG_OFF");
     case OP_LODS:   break;
-    case OP_LOOP:   return ABSTRACT_LOOP();
+    case OP_LOOP:   break; //return ABSTRACT_LOOP();
     case OP_LOOPE:  break;
     case OP_LOOPNE: break;
     case OP_MOV:    return OPERATOR2("=", 0);
