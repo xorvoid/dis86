@@ -148,7 +148,7 @@ fn operand_m32(bin: &mut Binary, modrm: u8, sreg: Option<Reg>) -> Operand {
   oper
 }
 
-pub fn decode(bin: &mut Binary) -> Option<Instr> {
+pub fn decode_one<'a>(bin: &mut Binary<'a>) -> Option<(Instr, &'a [u8])> {
   let addr = bin.addr();
   if addr == bin.end_addr() {
     return None;
@@ -271,14 +271,38 @@ pub fn decode(bin: &mut Binary) -> Option<Instr> {
     operands.push(operand);
   }
 
-  Some(Instr {
+  let n_bytes = bin.addr() - addr;
+
+  let instr = Instr {
     rep,
     opcode: fmt.op,
     operands,
     addr: addr,
-    n_bytes: bin.addr() - addr,
+    n_bytes,
     intel_hidden_operand_bitmask: fmt.hidden,
-  })
+  };
+
+  let raw = bin.slice(addr, n_bytes);
+
+  Some((instr, raw))
+}
+
+
+pub struct Decoder<'a> {
+  bin: Binary<'a>,
+}
+
+impl<'a> Decoder<'a> {
+  pub fn new(mem: &'a [u8], base_addr: usize) -> Self {
+    Self { bin: Binary::new(mem, base_addr) }
+  }
+}
+
+impl<'a> Iterator for Decoder<'a> {
+  type Item = (Instr, &'a [u8]);
+  fn next(&mut self) -> Option<(Instr, &'a [u8])> {
+    decode_one(&mut self.bin)
+  }
 }
 
 #[cfg(test)]
@@ -541,7 +565,7 @@ mod tests {
     for (n, test) in TESTS.iter().enumerate() {
       let mut bin = Binary::new(test.dat, test.addr);
       let ins = decode(&mut bin).unwrap();
-      let asm = crate::intel_syntax::format(&ins).unwrap();
+      let asm = crate::intel_syntax::format(&ins, false).unwrap();
       if asm != test.asm {
         panic!("Failed ({}/{}) | Expected: '{}' | Got: '{}'\n\nRAW:\n{:?}", n, TESTS.len(), test.asm, asm, ins);
       }

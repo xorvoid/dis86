@@ -42,7 +42,16 @@ fn format_operand(s: &mut String, ins: &Instr, oper: &Operand) -> Result<()> {
   Ok(())
 }
 
-fn format_instr(s: &mut String, ins: &Instr) -> Result<()> {
+fn format_instr(s: &mut String, ins: &Instr, bytes: &[u8], with_detail: bool) -> Result<()> {
+  if with_detail {
+    write!(s, "{:>8x}:\t", ins.addr);
+    for b in bytes {
+      write!(s, "{:02x} ", b);
+    }
+    let used = ins.n_bytes * 3;
+    let remain = if used <= 21 { 21 - used } else { 0 };
+    write!(s, "{:1$}\t", "", remain);
+  }
 
   match ins.rep {
     None => (),
@@ -65,8 +74,8 @@ fn format_instr(s: &mut String, ins: &Instr) -> Result<()> {
   Ok(())
 }
 
-pub fn format(ins: &Instr) -> Result<String> {
+pub fn format(ins: &Instr, bytes: &[u8], with_detail: bool) -> Result<String> {
   let mut s = String::new();
-  format_instr(&mut s, ins)?;
-  Ok(s.trim().to_string())
+  format_instr(&mut s, ins, bytes, with_detail)?;
+  Ok(s.trim_end().to_string())
 }

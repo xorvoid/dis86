@@ -17,6 +17,12 @@ impl<'a> Binary<'a> {
     self.mem[addr - self.base_addr]
   }
 
+  pub fn slice(&self, addr: usize, len: usize) -> &'a [u8] {
+    if addr < self.base_addr { panic!("Binary access below start of region"); }
+    if addr+len > self.base_addr + self.mem.len() { panic!("Binary access beyond end of region"); }
+    &self.mem[addr - self.base_addr .. addr - self.base_addr + len]
+  }
+
   pub fn peek(&self) -> u8 {
     self.get(self.addr)
   }
