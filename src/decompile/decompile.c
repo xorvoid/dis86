@@ -252,8 +252,9 @@ static void value_str(value_t *v, str_t *s, bool as_lvalue)
         if (m->reg2.symbol) str_fmt(s, "+%s", sym_name(m->reg2.symbol, buf, ARRAY_SIZE(buf)));
         if (m->off) {
           i16 disp = (i16)m->off;
-          if (disp >= 0) str_fmt(s, "+0x%x", (u16)disp);
-          else           str_fmt(s, "-0x%x", (u16)-disp);
+          /* if (disp >= 0) str_fmt(s, "+0x%x", (u16)disp); */
+          /* else           str_fmt(s, "-0x%x", (u16)-disp); */
+          str_fmt(s, "+0x%x", (u16)disp);
         }
       }
       str_fmt(s, ")");
