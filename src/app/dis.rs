@@ -62,7 +62,7 @@ pub fn run(appname: &str) {
     Err(err) => panic!("Failed to read file: '{}': {:?}", args.binary, err),
   };
 
-  let mut decoder = Decoder::new(&dat[start_idx..end_idx], start_idx);
+  let decoder = Decoder::new(&dat[start_idx..end_idx], start_idx);
   for (instr, raw) in decoder {
     println!("{}", intel_syntax::format(&instr, raw, true).unwrap());
   }

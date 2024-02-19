@@ -44,13 +44,13 @@ fn format_operand(s: &mut String, ins: &Instr, oper: &Operand) -> Result<()> {
 
 fn format_instr(s: &mut String, ins: &Instr, bytes: &[u8], with_detail: bool) -> Result<()> {
   if with_detail {
-    write!(s, "{:>8x}:\t", ins.addr);
+    write!(s, "{:>8x}:\t", ins.addr)?;
     for b in bytes {
-      write!(s, "{:02x} ", b);
+      write!(s, "{:02x} ", b)?;
     }
     let used = ins.n_bytes * 3;
     let remain = if used <= 21 { 21 - used } else { 0 };
-    write!(s, "{:1$}\t", "", remain);
+    write!(s, "{:1$}\t", "", remain)?;
   }
 
   match ins.rep {
