@@ -10,6 +10,16 @@ mod ir_display;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Address(usize);
 
+const FLAGS_BIT_CF: u32 = 1<<0;
+const FLAGS_BIT_PF: u32 = 1<<2;
+const FLAGS_BIT_AF: u32 = 1<<4;
+const FLAGS_BIT_ZF: u32 = 1<<6;
+const FLAGS_BIT_SF: u32 = 1<<7;
+const FLAGS_BIT_TF: u32 = 1<<8;
+const FLAGS_BIT_IF: u32 = 1<<9;
+const FLAGS_BIT_DF: u32 = 1<<10;
+const FLAGS_BIT_OF: u32 = 1<<11;
+
 fn supported_instruction(ins: &instr::Instr) -> bool {
   // NOT TRUE - FIXME
   true
@@ -183,6 +193,18 @@ impl IRBuilder {
     std::mem::forget(r);
   }
 
+  fn phi_create(&mut self, name: &str, blk: BlockRef) -> PhiRef {
+    // create phi node (without operands) to terminate recursion
+    let phi = PhiRef(self.ir.blocks[blk.0].phis.len());
+    self.ir.blocks[blk.0].phis.push(Instr {
+      opcode: Opcode::Phi,
+      operands: vec![],
+    });
+    let val = ValueRef::Phi(blk, phi);
+    self.set_var(name, blk, val);
+    phi
+  }
+
   fn get_var(&mut self, name: &str, blk: BlockRef) -> ValueRef {
     let b = &mut self.blkmeta[blk.0];
 
@@ -200,7 +222,10 @@ impl IRBuilder {
       let parent = preds[0];
       self.get_var(name, parent)
     } else {
-      panic!("unimpl");
+      // add an empty phi node and mark it for later population
+      let phi = self.phi_create(name, blk);
+      self.blkmeta[blk.0].incomplete_phis.push((name.to_string(), phi));
+      ValueRef::Phi(blk, phi)
     }
 
     // // Otherwise, search predecessors
@@ -257,6 +282,22 @@ impl IRBuilder {
 
     self.cur = next;
   }
+
+  fn append_jne(&mut self, cond: ValueRef, true_blk: BlockRef, false_blk: BlockRef) {
+    self.ir.blocks[true_blk.0].preds.push(self.cur);
+    self.ir.blocks[false_blk.0].preds.push(self.cur);
+
+    self.append_instr(Instr {
+      opcode: Opcode::Jne,
+      operands: vec![
+        cond,
+        ValueRef::Instr(true_blk, InstrRef(0)),
+        ValueRef::Instr(false_blk, InstrRef(0))],
+    });
+
+    self.cur = false_blk;
+  }
+
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
@@ -270,19 +311,35 @@ impl IRBuilder {
     self.set_var(reg_name(reg.0), self.cur, vref);
   }
 
-  fn append_asm_src_mem(&mut self, mem: &instr::OperandMem) -> ValueRef {
-    assert!(mem.reg1.is_some());
+  fn compute_mem_address(&mut self, mem: &instr::OperandMem) -> ValueRef {
     assert!(mem.reg2.is_none());
-    assert!(mem.off.is_some());
 
-    let reg = self.get_var(reg_name(mem.reg1.unwrap()), self.cur);
-    let off = self.ir.append_const((mem.off.unwrap() as i16).into());
+    let addr = match (&mem.reg1, &mem.off) {
+      (Some(reg1), Some(off)) => {
+        let reg = self.get_var(reg_name(mem.reg1.unwrap()), self.cur);
+        let off = self.ir.append_const((mem.off.unwrap() as i16).into());
 
-    let addr = self.append_instr(Instr {
-      opcode: Opcode::Add,
-      operands: vec![reg, off],
-    });
+        self.append_instr(Instr {
+          opcode: Opcode::Add,
+          operands: vec![reg, off],
+        })
+      }
+      (Some(reg1), None) => {
+        self.get_var(reg_name(mem.reg1.unwrap()), self.cur)
+      }
+      (None, Some(off)) => {
+        self.ir.append_const((mem.off.unwrap() as i16).into())
+      }
+      (None, None) => {
+        panic!("Invalid addressing mode");
+      }
+    };
 
+    addr
+  }
+
+  fn append_asm_src_mem(&mut self, mem: &instr::OperandMem) -> ValueRef {
+    let addr = self.compute_mem_address(mem);
     let seg = self.get_var(reg_name(mem.sreg), self.cur);
 
     let opcode = match mem.sz {
@@ -298,20 +355,15 @@ impl IRBuilder {
   }
 
   fn append_asm_dst_mem(&mut self, mem: &instr::OperandMem, vref: ValueRef) {
-    assert!(mem.reg1.is_some());
-    assert!(mem.reg2.is_none());
-    assert!(mem.off.is_some());
-    assert!(mem.sz == instr::Size::Size16);
-
-    let reg = self.get_var(reg_name(mem.reg1.unwrap()), self.cur);
-    let off = self.ir.append_const((mem.off.unwrap() as i16).into());
-
-    let addr = self.append_instr(Instr {
-      opcode: Opcode::Add,
-      operands: vec![reg, off],
-    });
-
+    let addr = self.compute_mem_address(mem);
     let seg = self.get_var(reg_name(mem.sreg), self.cur);
+
+    let opcode = match mem.sz {
+      instr::Size::Size8 => Opcode::Load8,
+      instr::Size::Size16 => Opcode::Load16,
+      _ => panic!("32-bit stores not supported"),
+    };
+
     self.append_instr(Instr {
       opcode: Opcode::Store16,
       operands: vec![seg, addr, vref],
@@ -392,6 +444,47 @@ impl IRBuilder {
         let blkref = self.get_block(effective);
         self.append_jmp(blkref);
       }
+      instr::Opcode::OP_JE => {
+        let instr::Operand::Rel(rel) = &ins.operands[0] else { panic!("Expected relative offset operand for JMP") };
+        let end_addr = (ins.addr + ins.n_bytes) as u16;
+        let effective = Address(end_addr.wrapping_add(rel.val).into());
+
+        let false_blk = self.get_block(Address(ins.addr + ins.n_bytes));
+        let true_blk = self.get_block(effective);
+
+        let f = self.get_flags();
+        let k = self.ir.append_const(FLAGS_BIT_ZF as i32);
+        let z = self.ir.append_const(0);
+
+        let vref = self.append_instr(Instr {
+          opcode: Opcode::And,
+          operands: vec![f, k],
+        });
+
+        let vref = self.append_instr(Instr {
+          opcode: Opcode::Eq,
+          operands: vec![vref, z],
+        });
+
+        self.append_jne(vref, true_blk, false_blk); // FIXME
+      }
+      instr::Opcode::OP_JNE => {
+        let instr::Operand::Rel(rel) = &ins.operands[0] else { panic!("Expected relative offset operand for JMP") };
+        let end_addr = (ins.addr + ins.n_bytes) as u16;
+        let effective = Address(end_addr.wrapping_add(rel.val).into());
+
+        let false_blk = self.get_block(Address(ins.addr + ins.n_bytes));
+        let true_blk = self.get_block(effective);
+
+        let f = self.get_flags();
+        let k = self.ir.append_const(FLAGS_BIT_ZF as i32);
+
+        let vref = self.append_instr(Instr {
+          opcode: Opcode::And,
+          operands: vec![f, k],
+        });
+        self.append_jne(vref, true_blk, false_blk); // FIXME
+      }
       instr::Opcode::OP_LES => {
         let vref = self.append_asm_src_operand(&ins.operands[2]);
         let upper = self.append_instr(Instr {
@@ -405,6 +498,15 @@ impl IRBuilder {
         });
         self.append_asm_dst_operand(&ins.operands[1], lower);
       }
+      instr::Opcode::OP_TEST => {
+        let a = self.append_asm_src_operand(&ins.operands[0]);
+        let b = self.append_asm_src_operand(&ins.operands[1]);
+        let vref = self.append_instr(Instr {
+          opcode: Opcode::And,
+          operands: vec![a, b],
+        });
+        self.append_update_flags(vref);
+      }
       _ => panic!("Unimpl opcode: {:?}", ins.opcode),
     }
     // for oper in &ins.operands {
@@ -413,6 +515,22 @@ impl IRBuilder {
     // panic!("STOP");
   }
 
+  fn get_flags(&mut self) -> ValueRef {
+    self.get_var("FLAGS", self.cur)
+  }
+
+  fn set_flags(&mut self, vref: ValueRef) {
+    self.set_var("FLAGS", self.cur, vref);
+  }
+
+  fn append_update_flags(&mut self, vref: ValueRef) {
+    let old_flags = self.get_flags();
+    let new_flags = self.append_instr(Instr {
+      opcode: Opcode::UpdateFlags,
+      operands: vec![old_flags, vref],
+    });
+    self.set_flags(new_flags);
+  }
 }
 
 pub fn build_ir(instrs: &[instr::Instr]) -> IR {
@@ -449,13 +567,15 @@ pub fn build_ir(instrs: &[instr::Instr]) -> IR {
   for (i, ins) in instrs.iter().enumerate() {
     if block_start.get(&ins.addr).is_some() {
       if bld.ir.blocks[bld.cur.0].instrs.len() != 0 {
-        panic!("New block starts here");
+        let new_blk = bld.get_block(Address(ins.addr));
+        bld.append_jmp(new_blk);
+        assert!(bld.ir.blocks[bld.cur.0].instrs.len() == 0);
       }
     }
     bld.append_asm_instr(ins);
 
     N += 1;
-    if N >= 15 { break; }
+    if N >= 25 { break; }
   }
 
 
