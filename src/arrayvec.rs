@@ -1,4 +1,5 @@
 use std::mem::MaybeUninit;
+use std::ops::Index;
 
 #[derive(Clone, Copy)]
 pub struct ArrayVec<T: Copy, const N: usize> {
@@ -53,5 +54,26 @@ impl<T: Copy + std::fmt::Debug, const N: usize> std::fmt::Debug for ArrayVec<T, 
       write!(f, "{:?}", val)?;
     }
     write!(f, "]")
+  }
+}
+
+impl<T: Copy, const N: usize> Index<usize> for ArrayVec<T, N> {
+  type Output = T;
+  fn index(&self, idx: usize) -> &Self::Output {
+    &self.as_slice()[idx]
+  }
+}
+
+impl<T: Copy, const N: usize> AsRef<[T]> for ArrayVec<T, N> {
+  fn as_ref(&self) -> &[T] {
+    self.as_slice()
+  }
+}
+
+impl<'a, T: Copy, const N: usize> IntoIterator for &'a ArrayVec<T, N> {
+  type Item = &'a T;
+  type IntoIter = std::slice::Iter<'a, T>;
+  fn into_iter(self) -> <&'a ArrayVec<T, N> as IntoIterator>::IntoIter {
+    self.as_slice().into_iter()
   }
 }
