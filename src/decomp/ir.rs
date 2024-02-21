@@ -25,6 +25,7 @@ pub enum Opcode {
   Nop,
   Phi,
   Push,
+  Pop,
   Mov,
   Add,
   Sub,
@@ -41,6 +42,14 @@ pub enum Opcode {
   Lower16,     // |n: u32| => n as u16
   Upper16,     // |n: u32| => (n >> 16) as u16
   UpdateFlags,
+  EqFlags,
+  NeqFlags,
+  GtFlags,
+  GeqFlags,
+  LtFlags,
+  LeqFlags,
+  Call,
+  Ret,
   Jmp,
   Jne,
 }
@@ -49,27 +58,36 @@ pub enum Opcode {
 impl Opcode {
   pub fn as_str(&self) -> &'static str {
     match self {
-      Opcode::Nop   => "nop",
-      Opcode::Phi   => "phi",
-      Opcode::Push  => "push",
-      Opcode::Mov   => "mov",
-      Opcode::Sub   => "sub",
-      Opcode::Add   => "add",
-      Opcode::Shl   => "shl",
-      Opcode::And   => "and",
-      Opcode::Or    => "or",
-      Opcode::Xor   => "xor",
-      Opcode::Eq     => "eq",
-      Opcode::Neq    => "neq",
-      Opcode::Load8  => "load8",
-      Opcode::Load16  => "load16",
-      Opcode::Load32  => "load32",
-      Opcode::Store16 => "store16",
-      Opcode::Lower16 => "lower16",
-      Opcode::Upper16 => "upper16",
+      Opcode::Nop         => "nop",
+      Opcode::Phi         => "phi",
+      Opcode::Push        => "push",
+      Opcode::Pop         => "pop",
+      Opcode::Mov         => "mov",
+      Opcode::Sub         => "sub",
+      Opcode::Add         => "add",
+      Opcode::Shl         => "shl",
+      Opcode::And         => "and",
+      Opcode::Or          => "or",
+      Opcode::Xor         => "xor",
+      Opcode::Eq          => "eq",
+      Opcode::Neq         => "neq",
+      Opcode::Load8       => "load8",
+      Opcode::Load16      => "load16",
+      Opcode::Load32      => "load32",
+      Opcode::Store16     => "store16",
+      Opcode::Lower16     => "lower16",
+      Opcode::Upper16     => "upper16",
       Opcode::UpdateFlags => "updf",
-      Opcode::Jmp   => "jmp",
-      Opcode::Jne   => "jne",
+      Opcode::EqFlags     => "eqf",
+      Opcode::NeqFlags    => "neqf",
+      Opcode::GtFlags     => "gtf",
+      Opcode::GeqFlags    => "geqf",
+      Opcode::LtFlags     => "gtf",
+      Opcode::LeqFlags    => "geqf",
+      Opcode::Call        => "call",
+      Opcode::Ret         => "ret",
+      Opcode::Jmp         => "jmp",
+      Opcode::Jne         => "jne",
     }
   }
 }
@@ -94,10 +112,10 @@ pub struct Jne {
 
 #[derive(Debug)]
 pub struct Block {
+  pub name: String,
   pub preds: Vec<BlockRef>,
   pub phis: Vec<Instr>,
   pub instrs: Vec<Instr>,
-  pub jump: Option<Jump>, // Only none during construction
 }
 
 #[derive(Debug)]

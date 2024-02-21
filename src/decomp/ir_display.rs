@@ -46,11 +46,11 @@ impl RefMapper {
       return Ok(());
     }
     let s = self.fmt(ir, iref);
-    write!(f, "  {:<2} = ", s)?;
-    write!(f, "{:5}", instr.opcode)?;
+    write!(f, "  {:<3} = ", s)?;
+    write!(f, "{:<8}", instr.opcode.to_string())?;
     for oper in &instr.operands {
       let s = self.fmt(ir, *oper);
-      write!(f, " {:<2}", s)?;
+      write!(f, " {:<12}", s)?;
     }
     writeln!(f, "")?;
     Ok(())
@@ -78,7 +78,7 @@ impl fmt::Display for IR {
         }
         write!(f, "b{}", p.0)?;
       }
-      writeln!(f, ")")?;
+      writeln!(f, ") {}", blk.name)?;
 
       for (j, phi) in blk.phis.iter().enumerate() {
         r.write_instr(f, self, phi, ValueRef::Phi(BlockRef(i), PhiRef(j)))?;
@@ -87,12 +87,6 @@ impl fmt::Display for IR {
       for (j, instr) in blk.instrs.iter().enumerate() {
         r.write_instr(f, self, instr, ValueRef::Instr(BlockRef(i), InstrRef(j)))?;
         //writeln!(f, "{:?}", instr)?;
-      }
-
-      match &blk.jump {
-        Some(Jump::Jmp(jmp)) => writeln!(f, "  jmp b{}", jmp.blk.0)?,
-        Some(Jump::Jne(jne)) => writeln!(f, "  jne {} b{} b{}", r.fmt(self, jne.cond), jne.true_blk.0, jne.false_blk.0)?,
-        None => (),
       }
     }
     Ok(())

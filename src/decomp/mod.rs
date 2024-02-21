@@ -123,12 +123,12 @@ struct BlockMeta {
 }
 
 impl Block {
-  fn new() -> Self {
+  fn new(name: &str) -> Self {
     Self {
+      name: name.to_string(),
       preds: vec![],
       phis: vec![],
       instrs: vec![],
-      jump: None,
     }
   }
 }
@@ -146,7 +146,7 @@ impl IRBuilder {
     };
 
     // Create and seal the entry block
-    let entry = this.new_block();
+    let entry = this.new_block("entry");
     this.seal_block(entry);
 
     // Set initial register values
@@ -171,9 +171,9 @@ impl IRBuilder {
     this
   }
 
-  fn new_block(&mut self) -> BlockRef {
+  fn new_block(&mut self, name: &str) -> BlockRef {
     let idx = self.ir.blocks.len();
-    self.ir.blocks.push(Block::new());
+    self.ir.blocks.push(Block::new(name));
     self.blkmeta.push(BlockMeta {
       sealed: false,
       defs: HashMap::new(),
@@ -256,13 +256,7 @@ impl IRBuilder {
   }
 
   fn get_block(&mut self, effective: Address) -> BlockRef {
-    if let Some(bref) = self.addrmap.get(&effective) {
-      *bref
-    } else {
-      let bref = self.new_block();
-      self.addrmap.insert(effective, bref);
-      bref
-    }
+    *self.addrmap.get(&effective).unwrap()
   }
 
   fn append_instr(&mut self, instr: Instr) -> ValueRef {
@@ -279,8 +273,6 @@ impl IRBuilder {
       opcode: Opcode::Jmp,
       operands: vec![ValueRef::Instr(next, InstrRef(0))],
     });
-
-    self.cur = next;
   }
 
   fn append_jne(&mut self, cond: ValueRef, true_blk: BlockRef, false_blk: BlockRef) {
@@ -294,10 +286,34 @@ impl IRBuilder {
         ValueRef::Instr(true_blk, InstrRef(0)),
         ValueRef::Instr(false_blk, InstrRef(0))],
     });
-
-    self.cur = false_blk;
   }
 
+  fn switch_blk(&mut self, bref: BlockRef) {
+    self.cur = bref;
+  }
+
+  fn start_next_blk(&mut self, next: Address) {
+    let next_bref = self.get_block(next);
+
+    // Make sure the last instruction is a jump
+    let blk = &self.ir.blocks[self.cur.0];
+    assert!(blk.instrs.len() > 0);
+    match blk.instrs[blk.instrs.len()-1].opcode {
+      Opcode::Jmp => (),
+      Opcode::Jne => (),
+      _ => { // no trailing jump, insert one
+        self.append_instr(Instr{
+          opcode: Opcode::Jmp,
+          operands: vec![ValueRef::Instr(next_bref, InstrRef(0))],
+        });
+      }
+    }
+
+    // Switch to the next block
+    self.switch_blk(next_bref);
+    let blk = &self.ir.blocks[self.cur.0];
+    assert!(blk.instrs.len() == 0);
+  }
 }
 
 /////////////////////////////////////////////////////////////////////////////////////
@@ -433,8 +449,42 @@ impl IRBuilder {
           operands: vec![a],
         });
       }
+      instr::Opcode::OP_POP => {
+        let vref = self.append_instr(Instr {
+          opcode: Opcode::Pop,
+          operands: vec![],
+        });
+        self.append_asm_dst_operand(&ins.operands[0], vref);
+      }
+      instr::Opcode::OP_LEAVE => {
+        // mov sp, bp
+        let vref = self.get_var(reg_name(instr::Reg::BP), self.cur);
+        self.set_var(reg_name(instr::Reg::SP), self.cur, vref);
+        // pop bp
+        let vref = self.append_instr(Instr {
+          opcode: Opcode::Pop,
+          operands: vec![],
+        });
+        self.set_var(reg_name(instr::Reg::BP), self.cur, vref);
+      }
+      instr::Opcode::OP_RETF => {
+        let vref = self.get_var(reg_name(instr::Reg::AX), self.cur);
+        self.append_instr(Instr {
+          opcode: Opcode::Ret,
+          operands: vec![vref],
+        });
+      }
       instr::Opcode::OP_MOV => {
         let vref = self.append_asm_src_operand(&ins.operands[1]);
+        self.append_asm_dst_operand(&ins.operands[0], vref);
+      }
+      instr::Opcode::OP_INC => {
+        let one = self.ir.append_const(1);
+        let vref = self.append_asm_src_operand(&ins.operands[0]);
+        let vref = self.append_instr(Instr {
+          opcode: Opcode::Add,
+          operands: vec![vref, one],
+        });
         self.append_asm_dst_operand(&ins.operands[0], vref);
       }
       instr::Opcode::OP_JMP => {
@@ -452,21 +502,13 @@ impl IRBuilder {
         let false_blk = self.get_block(Address(ins.addr + ins.n_bytes));
         let true_blk = self.get_block(effective);
 
-        let f = self.get_flags();
-        let k = self.ir.append_const(FLAGS_BIT_ZF as i32);
-        let z = self.ir.append_const(0);
-
-        let vref = self.append_instr(Instr {
-          opcode: Opcode::And,
-          operands: vec![f, k],
+        let flags = self.get_flags();
+        let cond = self.append_instr(Instr {
+          opcode: Opcode::EqFlags,
+          operands: vec![flags],
         });
 
-        let vref = self.append_instr(Instr {
-          opcode: Opcode::Eq,
-          operands: vec![vref, z],
-        });
-
-        self.append_jne(vref, true_blk, false_blk); // FIXME
+        self.append_jne(cond, true_blk, false_blk);
       }
       instr::Opcode::OP_JNE => {
         let instr::Operand::Rel(rel) = &ins.operands[0] else { panic!("Expected relative offset operand for JMP") };
@@ -476,14 +518,87 @@ impl IRBuilder {
         let false_blk = self.get_block(Address(ins.addr + ins.n_bytes));
         let true_blk = self.get_block(effective);
 
-        let f = self.get_flags();
-        let k = self.ir.append_const(FLAGS_BIT_ZF as i32);
-
-        let vref = self.append_instr(Instr {
-          opcode: Opcode::And,
-          operands: vec![f, k],
+        let flags = self.get_flags();
+        let cond = self.append_instr(Instr {
+          opcode: Opcode::NeqFlags,
+          operands: vec![flags],
         });
-        self.append_jne(vref, true_blk, false_blk); // FIXME
+
+        self.append_jne(cond, true_blk, false_blk);
+      }
+      instr::Opcode::OP_JG => {
+        let instr::Operand::Rel(rel) = &ins.operands[0] else { panic!("Expected relative offset operand for JMP") };
+        let end_addr = (ins.addr + ins.n_bytes) as u16;
+        let effective = Address(end_addr.wrapping_add(rel.val).into());
+
+        let false_blk = self.get_block(Address(ins.addr + ins.n_bytes));
+        let true_blk = self.get_block(effective);
+
+        let flags = self.get_flags();
+        let cond = self.append_instr(Instr {
+          opcode: Opcode::GtFlags,
+          operands: vec![flags],
+        });
+
+        self.append_jne(cond, true_blk, false_blk);
+      }
+      instr::Opcode::OP_JGE => {
+        let instr::Operand::Rel(rel) = &ins.operands[0] else { panic!("Expected relative offset operand for JMP") };
+        let end_addr = (ins.addr + ins.n_bytes) as u16;
+        let effective = Address(end_addr.wrapping_add(rel.val).into());
+
+        let false_blk = self.get_block(Address(ins.addr + ins.n_bytes));
+        let true_blk = self.get_block(effective);
+
+        let flags = self.get_flags();
+        let cond = self.append_instr(Instr {
+          opcode: Opcode::GeqFlags,
+          operands: vec![flags],
+        });
+
+        self.append_jne(cond, true_blk, false_blk);
+      }
+      instr::Opcode::OP_JL => {
+        let instr::Operand::Rel(rel) = &ins.operands[0] else { panic!("Expected relative offset operand for JMP") };
+        let end_addr = (ins.addr + ins.n_bytes) as u16;
+        let effective = Address(end_addr.wrapping_add(rel.val).into());
+
+        let false_blk = self.get_block(Address(ins.addr + ins.n_bytes));
+        let true_blk = self.get_block(effective);
+
+        let flags = self.get_flags();
+        let cond = self.append_instr(Instr {
+          opcode: Opcode::LtFlags,
+          operands: vec![flags],
+        });
+
+        self.append_jne(cond, true_blk, false_blk);
+      }
+      instr::Opcode::OP_JLE => {
+        let instr::Operand::Rel(rel) = &ins.operands[0] else { panic!("Expected relative offset operand for JMP") };
+        let end_addr = (ins.addr + ins.n_bytes) as u16;
+        let effective = Address(end_addr.wrapping_add(rel.val).into());
+
+        let false_blk = self.get_block(Address(ins.addr + ins.n_bytes));
+        let true_blk = self.get_block(effective);
+
+        let flags = self.get_flags();
+        let cond = self.append_instr(Instr {
+          opcode: Opcode::LeqFlags,
+          operands: vec![flags],
+        });
+
+        self.append_jne(cond, true_blk, false_blk);
+      }
+      instr::Opcode::OP_CALLF => {
+        let instr::Operand::Far(far) = &ins.operands[0] else { panic!("Unsupported OP_CALLF operand") };
+        let seg = self.ir.append_const(far.seg.into());
+        let off = self.ir.append_const(far.off.into());
+        let ret = self.append_instr(Instr {
+          opcode: Opcode::Call,
+          operands: vec![seg, off],
+        });
+        self.set_var(reg_name(instr::Reg::AX), self.cur, ret);
       }
       instr::Opcode::OP_LES => {
         let vref = self.append_asm_src_operand(&ins.operands[2]);
@@ -507,12 +622,17 @@ impl IRBuilder {
         });
         self.append_update_flags(vref);
       }
+      instr::Opcode::OP_CMP => {
+        let a = self.append_asm_src_operand(&ins.operands[0]);
+        let b = self.append_asm_src_operand(&ins.operands[1]);
+        let vref = self.append_instr(Instr {
+          opcode: Opcode::Sub,
+          operands: vec![a, b],
+        });
+        self.append_update_flags(vref);
+      }
       _ => panic!("Unimpl opcode: {:?}", ins.opcode),
     }
-    // for oper in &ins.operands {
-    //   self.append_asm_operand(oper);
-    // }
-    // panic!("STOP");
   }
 
   fn get_flags(&mut self) -> ValueRef {
@@ -534,6 +654,8 @@ impl IRBuilder {
 }
 
 pub fn build_ir(instrs: &[instr::Instr]) -> IR {
+  let mut bld = IRBuilder::new();
+
   // Step 0: Sanity
   for ins in instrs {
     if !supported_instruction(ins) {
@@ -549,33 +671,34 @@ pub fn build_ir(instrs: &[instr::Instr]) -> IR {
     block_start.insert(ins.addr + ins.n_bytes);
   }
 
-  // for ins in instrs {
-  //   if block_start.get(&ins.addr).is_some() {
-  //     break;
-  //     println!("");
-  //     println!("##################################################");
-  //     println!("# Block 0x{:x}", ins.addr);
-  //     println!("##################################################");
-  //   }
-  //   println!("{}", intel_syntax::format(ins, &[], false).unwrap());
-  // }
+  // Step 2: Create all the blocks we should encounter
+  let mut addr_ordered: Vec<_> = block_start.iter().collect();
+  addr_ordered.sort();
+  for addr in addr_ordered {
+    let bref = bld.new_block(&format!("addr_{:x}", addr));
+    bld.addrmap.insert(Address(*addr), bref);
+  }
 
-  let mut bld = IRBuilder::new();
+  for ins in instrs {
+    if block_start.get(&ins.addr).is_some() {
+      println!("");
+      println!("##################################################");
+      println!("# Block 0x{:x}", ins.addr);
+      println!("##################################################");
+    }
+    println!("{}", intel_syntax::format(ins, &[], false).unwrap());
+  }
 
   // Step 2: iterate each instruction, building each block
   let mut N = 0;
   for (i, ins) in instrs.iter().enumerate() {
     if block_start.get(&ins.addr).is_some() {
-      if bld.ir.blocks[bld.cur.0].instrs.len() != 0 {
-        let new_blk = bld.get_block(Address(ins.addr));
-        bld.append_jmp(new_blk);
-        assert!(bld.ir.blocks[bld.cur.0].instrs.len() == 0);
-      }
+      bld.start_next_blk(Address(ins.addr));
     }
     bld.append_asm_instr(ins);
 
     N += 1;
-    if N >= 25 { break; }
+    if N >= 80 { break; }
   }
 
 
