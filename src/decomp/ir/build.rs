@@ -6,21 +6,6 @@ use crate::decomp::ir::*;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Address(usize);
 
-// const FLAGS_BIT_CF: u32 = 1<<0;
-// const FLAGS_BIT_PF: u32 = 1<<2;
-// const FLAGS_BIT_AF: u32 = 1<<4;
-// const FLAGS_BIT_ZF: u32 = 1<<6;
-// const FLAGS_BIT_SF: u32 = 1<<7;
-// const FLAGS_BIT_TF: u32 = 1<<8;
-// const FLAGS_BIT_IF: u32 = 1<<9;
-// const FLAGS_BIT_DF: u32 = 1<<10;
-// const FLAGS_BIT_OF: u32 = 1<<11;
-
-// fn supported_instruction(ins: &instr::Instr) -> bool {
-//   // NOT TRUE - FIXME
-//   true
-// }
-
 fn simple_binary_operation(opcode: instr::Opcode) -> Option<Opcode> {
   match opcode {
     instr::Opcode::OP_ADD => Some(Opcode::Add),
@@ -555,13 +540,6 @@ impl IRBuilder {
   }
 
   fn build_from_instrs(&mut self, instrs: &[instr::Instr]) {
-    // // Step 0: Sanity
-    // for ins in instrs {
-    //   if !supported_instruction(ins) {
-    //     panic!("Unsupported instruction: '{}'", intel_syntax::format(ins, &[], false).unwrap());
-    //   }
-    // }
-
     // Step 1: Infer basic-block boundaries
     let mut block_start = HashSet::new();
     for ins in instrs {
@@ -577,16 +555,6 @@ impl IRBuilder {
       let bref = self.new_block(&format!("addr_{:x}", addr));
       self.addrmap.insert(Address(*addr), bref);
     }
-
-    // for ins in instrs {
-    //   if block_start.get(&ins.addr).is_some() {
-    //     println!("");
-    //     println!("##################################################");
-    //     println!("# Block 0x{:x}", ins.addr);
-    //     println!("##################################################");
-    //   }
-    //   println!("{}", intel_syntax::format(ins, &[], false).unwrap());
-    // }
 
     // Step 3: iterate each instruction, building each block
     for ins in instrs {

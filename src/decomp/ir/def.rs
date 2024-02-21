@@ -139,32 +139,6 @@ pub struct IR {
   pub blocks: Vec<Block>,
 }
 
-// #[derive(Debug)]
-// pub struct InstrVecIter {
-//   blk: BlockRef,
-//   n_phis: usize,
-//   n_instrs: usize,
-//   idx_phis: usize,
-//   idx_instrs: usize,
-// }
-
-// impl Iterator for InstrVecIter {
-//   type Item = Ref;
-//   fn next(&mut self) -> Option<Self::Item> {
-//     if self.idx_phis < self.n_phis {
-//       let p = self.idx_phis;
-//       self.idx_phis += 1;
-//       Some(Ref::Phi2(self.blk, PhiRef(p)))
-//     } else if self.idx_instrs < self.n_instrs {
-//       let i = self.idx_instrs;
-//       self.idx_instrs += 1;
-//       Some(Ref::Instr2(self.blk, InstrRef(i)))
-//     } else {
-//       None
-//     }
-//   }
-// }
-
 impl IR {
   pub fn instr(&self, r: Ref) -> Option<&Instr> {
     if let Ref::Instr(b, i) = r {
@@ -173,17 +147,6 @@ impl IR {
       None
     }
   }
-
-  // pub fn iter_instr(&self, blk: BlockRef) -> InstrVecIter {
-  //   let b = &self.blocks[blk.0];
-  //   InstrVecIter {
-  //     blk,
-  //     n_phis: b.phis2.len(),
-  //     n_instrs: b.instrs2.len(),
-  //     idx_phis: 0,
-  //     idx_instrs: 0,
-  //   }
-  // }
 }
 
 impl IR {

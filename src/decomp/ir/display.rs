@@ -44,21 +44,6 @@ struct RefMapper {
 impl RefMapper {
   fn new(ir: &IR) -> Self {
     let _ = ir;
-
-    // // Build some helper tables from the "defs"
-    // let mut symbol_num: HashMap<Symbol, usize> = HashMap::new();
-    // let mut ref_to_symbol: HashMap<Ref, (Symbol, usize)> = HashMap::new();
-    // for blk in &ir.blocks {
-    //   for (sym, r) in blk.defs.iter() {
-    //     if !matches!(r, Ref::Instr(_, _)) && !matches!(r, Ref::Phi(_, _)) { continue; }
-    //     assert!(ref_to_symbol.get(r).is_none());
-    //     let num_ptr = symbol_num.entry(*sym).or_insert(1);
-    //     let num = *num_ptr;
-    //     *num_ptr = num+1;
-    //     ref_to_symbol.insert(*r, (*sym, num));
-    //   }
-    // }
-
     Self {
       map: HashMap::new(),
       next: 0,
@@ -78,10 +63,6 @@ impl RefMapper {
   }
 
   fn fmt(&mut self, ir: &IR, r: Ref) -> String {
-    // if let Some((sym, num)) = self.ref_to_symbol.get(&r) {
-    //   return format!("{}.{}", reg_name(sym.0), num);
-    // }
-
     match r {
       Ref::Const(ConstRef(num)) => {
         let k = ir.consts[num] as i16;
@@ -93,20 +74,6 @@ impl RefMapper {
       }
       Ref::Init(sym) => format!("{}.0", sym),
       Ref::Block(blk) => format!("b{}", blk.0),
-      // Ref::Instr2(b, i) => {
-      //   if let Some((sym, num)) = &ir.blocks[b.0].instrs2[i.0].debug {
-      //     format!("{}.{}", reg_name(sym.0), num)
-      //   } else {
-      //     format!("t{}", self.map(r))
-      //   }
-      // }
-      // Ref::Phi2(b, p) => {
-      //   if let Some((sym, num)) = &ir.blocks[b.0].phis2[p.0].debug {
-      //     format!("{}.{}", reg_name(sym.0), num)
-      //   } else {
-      //     format!("t{}", self.map(r))
-      //   }
-      // }
       Ref::Instr(_, _) => {
         if let Some((sym, num)) = ir.instr(r).unwrap().debug {
           format!("{}.{}", reg_name(sym.0), num)
@@ -121,11 +88,6 @@ impl RefMapper {
 impl fmt::Display for IR {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     let mut r = RefMapper::new(self);
-
-    // writeln!(f, "Consts:")?;
-    // for (i, val) in self.consts.iter().enumerate() {
-    //   writeln!(f, "  c{:<2} = {}", i, val)?;
-    // }
 
     for (i, blk) in self.blocks.iter().enumerate() {
       // if self.is_block_dead(BlockRef(i)) {
