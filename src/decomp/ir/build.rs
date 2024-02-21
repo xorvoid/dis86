@@ -383,23 +383,26 @@ impl IRBuilder {
   }
 
   fn pin_registers(&mut self) {
-    self.pin_register(instr::Reg::AX);
-    self.pin_register(instr::Reg::CX);
-    self.pin_register(instr::Reg::DX);
-    self.pin_register(instr::Reg::BX);
+    // Caller-saved: so don't bother..
+    //self.pin_register(instr::Reg::AX);
+    //self.pin_register(instr::Reg::CX);
+    //self.pin_register(instr::Reg::DX);
+    //self.pin_register(instr::Reg::BX);
+    //self.pin_register(instr::Reg::ES);
 
     self.pin_register(instr::Reg::SP);
     self.pin_register(instr::Reg::BP);
     self.pin_register(instr::Reg::SI);
     self.pin_register(instr::Reg::DI);
 
-    self.pin_register(instr::Reg::ES);
-    //self.pin_register(instr::Reg::CS);
     self.pin_register(instr::Reg::SS);
     self.pin_register(instr::Reg::DS);
 
-    //self.pin_register(instr::Reg::IP);
     self.pin_register(instr::Reg::FLAGS);
+
+    // What would this even mean??
+    //self.pin_register(instr::Reg::CS);
+    //self.pin_register(instr::Reg::IP);
   }
 
   fn append_asm_instr(&mut self, ins: &instr::Instr) {

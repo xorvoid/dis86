@@ -25,7 +25,7 @@ pub fn reduce_phi(ir: &mut IR) {
         if operands[j] == r { continue; }
         match &single_ref {
           None => single_ref = Some(operands[j]),
-          Some(s) => if *s != r {
+          Some(s) => if *s != operands[j] {
             trivial = false;
           }
         }
@@ -120,7 +120,7 @@ pub fn deadcode_elimination(ir: &mut IR) {
 pub fn optimize(ir: &mut IR) {
   // constant_fold(ir);
   // reduce_jne(ir);
-  reduce_phi_old(ir);
+  reduce_phi(ir);
   value_propagation(ir);
   deadcode_elimination(ir);
   // jump_propagation(ir);

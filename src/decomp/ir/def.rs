@@ -118,6 +118,7 @@ impl Opcode {
   pub fn has_no_result(&self) -> bool {
     match self {
       Opcode::Nop => true,
+      Opcode::Pin => true,
       Opcode::Push => true,
       Opcode::Store8 => true,
       Opcode::Store16 => true,
