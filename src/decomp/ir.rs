@@ -7,7 +7,7 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ValueRef {
-  None,
+  //None,
   Const(ConstRef),
   Instr(BlockRef, InstrRef),
   Phi(BlockRef, PhiRef),
@@ -26,18 +26,19 @@ pub enum Opcode {
   Phi,
   Push,
   Pop,
-  Mov,
+  //Mov,
   Add,
   Sub,
   Shl,
   And,
-  Or,
+  //Or,
   Xor,
-  Eq,
-  Neq,
+  //Eq,
+  //Neq,
   Load8,
   Load16,
   Load32,
+  Store8,
   Store16,
   Lower16,     // |n: u32| => n as u16
   Upper16,     // |n: u32| => (n >> 16) as u16
@@ -62,18 +63,19 @@ impl Opcode {
       Opcode::Phi         => "phi",
       Opcode::Push        => "push",
       Opcode::Pop         => "pop",
-      Opcode::Mov         => "mov",
+      //Opcode::Mov         => "mov",
       Opcode::Sub         => "sub",
       Opcode::Add         => "add",
       Opcode::Shl         => "shl",
       Opcode::And         => "and",
-      Opcode::Or          => "or",
+      //Opcode::Or          => "or",
       Opcode::Xor         => "xor",
-      Opcode::Eq          => "eq",
-      Opcode::Neq         => "neq",
+      //Opcode::Eq          => "eq",
+      //Opcode::Neq         => "neq",
       Opcode::Load8       => "load8",
       Opcode::Load16      => "load16",
       Opcode::Load32      => "load32",
+      Opcode::Store8      => "store8",
       Opcode::Store16     => "store16",
       Opcode::Lower16     => "lower16",
       Opcode::Upper16     => "upper16",
@@ -92,23 +94,23 @@ impl Opcode {
   }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum Jump {
-  Jmp(Jmp),
-  Jne(Jne),
-}
+// #[derive(Debug, Clone, Copy)]
+// pub enum Jump {
+//   Jmp(Jmp),
+//   Jne(Jne),
+// }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Jmp {
-  pub blk: BlockRef,
-}
+// #[derive(Debug, Clone, Copy)]
+// pub struct Jmp {
+//   pub blk: BlockRef,
+// }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Jne {
-  pub cond: ValueRef,
-  pub true_blk: BlockRef,
-  pub false_blk: BlockRef,
-}
+// #[derive(Debug, Clone, Copy)]
+// pub struct Jne {
+//   pub cond: ValueRef,
+//   pub true_blk: BlockRef,
+//   pub false_blk: BlockRef,
+// }
 
 #[derive(Debug)]
 pub struct Block {

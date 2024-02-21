@@ -1,5 +1,4 @@
 use crate::instr;
-use crate::intel_syntax;
 use std::collections::{HashSet, HashMap};
 
 mod ir;
@@ -10,20 +9,20 @@ mod ir_display;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Address(usize);
 
-const FLAGS_BIT_CF: u32 = 1<<0;
-const FLAGS_BIT_PF: u32 = 1<<2;
-const FLAGS_BIT_AF: u32 = 1<<4;
-const FLAGS_BIT_ZF: u32 = 1<<6;
-const FLAGS_BIT_SF: u32 = 1<<7;
-const FLAGS_BIT_TF: u32 = 1<<8;
-const FLAGS_BIT_IF: u32 = 1<<9;
-const FLAGS_BIT_DF: u32 = 1<<10;
-const FLAGS_BIT_OF: u32 = 1<<11;
+// const FLAGS_BIT_CF: u32 = 1<<0;
+// const FLAGS_BIT_PF: u32 = 1<<2;
+// const FLAGS_BIT_AF: u32 = 1<<4;
+// const FLAGS_BIT_ZF: u32 = 1<<6;
+// const FLAGS_BIT_SF: u32 = 1<<7;
+// const FLAGS_BIT_TF: u32 = 1<<8;
+// const FLAGS_BIT_IF: u32 = 1<<9;
+// const FLAGS_BIT_DF: u32 = 1<<10;
+// const FLAGS_BIT_OF: u32 = 1<<11;
 
-fn supported_instruction(ins: &instr::Instr) -> bool {
-  // NOT TRUE - FIXME
-  true
-}
+// fn supported_instruction(ins: &instr::Instr) -> bool {
+//   // NOT TRUE - FIXME
+//   true
+// }
 
 fn simple_binary_operation(opcode: instr::Opcode) -> Option<Opcode> {
   match opcode {
@@ -63,35 +62,30 @@ fn reg_name(reg: instr::Reg) -> &'static str {
   }
 }
 
-struct JumpMetadata {
-  unconditional: bool,
-  tgt: Address,
-}
-
-fn detect_jump(ins: &instr::Instr) -> Option<JumpMetadata> {
+fn jump_target(ins: &instr::Instr) -> Option<Address> {
   // Filter for branch instructions
-  let unconditional = match &ins.opcode {
-    instr::Opcode::OP_JA => false,
-    instr::Opcode::OP_JAE => false,
-    instr::Opcode::OP_JB => false,
-    instr::Opcode::OP_JBE => false,
-    instr::Opcode::OP_JCXZ => false,
-    instr::Opcode::OP_JE => false,
-    instr::Opcode::OP_JG => false,
-    instr::Opcode::OP_JGE => false,
-    instr::Opcode::OP_JL => false,
-    instr::Opcode::OP_JLE => false,
-    instr::Opcode::OP_JMP => true,
-    instr::Opcode::OP_JMPF => true,
-    instr::Opcode::OP_JNE => false,
-    instr::Opcode::OP_JNO => false,
-    instr::Opcode::OP_JNP => false,
-    instr::Opcode::OP_JNS => false,
-    instr::Opcode::OP_JO => false,
-    instr::Opcode::OP_JP => false,
-    instr::Opcode::OP_JS => false,
+  match &ins.opcode {
+    instr::Opcode::OP_JA => (),
+    instr::Opcode::OP_JAE => (),
+    instr::Opcode::OP_JB => (),
+    instr::Opcode::OP_JBE => (),
+    instr::Opcode::OP_JCXZ => (),
+    instr::Opcode::OP_JE => (),
+    instr::Opcode::OP_JG => (),
+    instr::Opcode::OP_JGE => (),
+    instr::Opcode::OP_JL => (),
+    instr::Opcode::OP_JLE => (),
+    instr::Opcode::OP_JMP => (),
+    instr::Opcode::OP_JMPF => (),
+    instr::Opcode::OP_JNE => (),
+    instr::Opcode::OP_JNO => (),
+    instr::Opcode::OP_JNP => (),
+    instr::Opcode::OP_JNS => (),
+    instr::Opcode::OP_JO => (),
+    instr::Opcode::OP_JP => (),
+    instr::Opcode::OP_JS => (),
     _ => return None,
-  };
+  }
 
   // target should be first operand
   let tgt = match &ins.operands[0] {
@@ -103,7 +97,7 @@ fn detect_jump(ins: &instr::Instr) -> Option<JumpMetadata> {
     _ => panic!("Unsupported branch operand"),
   };
 
-  Some(JumpMetadata { unconditional, tgt })
+  Some(tgt)
 }
 
 struct IRBuilder {
@@ -332,8 +326,8 @@ impl IRBuilder {
 
     let addr = match (&mem.reg1, &mem.off) {
       (Some(reg1), Some(off)) => {
-        let reg = self.get_var(reg_name(mem.reg1.unwrap()), self.cur);
-        let off = self.ir.append_const((mem.off.unwrap() as i16).into());
+        let reg = self.get_var(reg_name(*reg1), self.cur);
+        let off = self.ir.append_const((*off as i16).into());
 
         self.append_instr(Instr {
           opcode: Opcode::Add,
@@ -341,10 +335,10 @@ impl IRBuilder {
         })
       }
       (Some(reg1), None) => {
-        self.get_var(reg_name(mem.reg1.unwrap()), self.cur)
+        self.get_var(reg_name(*reg1), self.cur)
       }
       (None, Some(off)) => {
-        self.ir.append_const((mem.off.unwrap() as i16).into())
+        self.ir.append_const((*off as i16).into())
       }
       (None, None) => {
         panic!("Invalid addressing mode");
@@ -375,13 +369,13 @@ impl IRBuilder {
     let seg = self.get_var(reg_name(mem.sreg), self.cur);
 
     let opcode = match mem.sz {
-      instr::Size::Size8 => Opcode::Load8,
-      instr::Size::Size16 => Opcode::Load16,
+      instr::Size::Size8 => Opcode::Store8,
+      instr::Size::Size16 => Opcode::Store16,
       _ => panic!("32-bit stores not supported"),
     };
 
     self.append_instr(Instr {
-      opcode: Opcode::Store16,
+      opcode,
       operands: vec![seg, addr, vref],
     });
   }
@@ -396,11 +390,11 @@ impl IRBuilder {
     self.ir.append_const(k)
   }
 
-  fn append_asm_src_rel(&mut self, rel: &instr::OperandRel) -> ValueRef {
+  fn append_asm_src_rel(&mut self, _rel: &instr::OperandRel) -> ValueRef {
     panic!("unimpl");
   }
 
-  fn append_asm_src_far(&mut self, far: &instr::OperandFar) -> ValueRef {
+  fn append_asm_src_far(&mut self, _far: &instr::OperandFar) -> ValueRef {
     panic!("unimpl");
   }
 
@@ -418,15 +412,32 @@ impl IRBuilder {
     match oper {
       instr::Operand::Reg(reg) => self.append_asm_dst_reg(reg, vref),
       instr::Operand::Mem(mem) => self.append_asm_dst_mem(mem, vref),
-      instr::Operand::Imm(imm) => panic!("Should never have a destination imm"),
-      instr::Operand::Rel(rel) => panic!("Should never have a destination rel"),
-      instr::Operand::Far(far) => panic!("Should never have a destination far"),
+      instr::Operand::Imm(_)   => panic!("Should never have a destination imm"),
+      instr::Operand::Rel(_)   => panic!("Should never have a destination rel"),
+      instr::Operand::Far(_)   => panic!("Should never have a destination far"),
     };
   }
 
+  fn get_flags(&mut self) -> ValueRef {
+    self.get_var("FLAGS", self.cur)
+  }
+
+  fn set_flags(&mut self, vref: ValueRef) {
+    self.set_var("FLAGS", self.cur, vref);
+  }
+
+  fn append_update_flags(&mut self, vref: ValueRef) {
+    let old_flags = self.get_flags();
+    let new_flags = self.append_instr(Instr {
+      opcode: Opcode::UpdateFlags,
+      operands: vec![old_flags, vref],
+    });
+    self.set_flags(new_flags);
+  }
+
   fn append_asm_instr(&mut self, ins: &instr::Instr) {
+    //println!("## {}", intel_syntax::format(ins, &[], false).unwrap());
     assert!(ins.rep.is_none());
-    println!("## {}", intel_syntax::format(ins, &[], false).unwrap());
 
     // process simple binary operations
     if let Some(opcode) = simple_binary_operation(ins.opcode) {
@@ -635,78 +646,58 @@ impl IRBuilder {
     }
   }
 
-  fn get_flags(&mut self) -> ValueRef {
-    self.get_var("FLAGS", self.cur)
-  }
+  fn build_from_instrs(&mut self, instrs: &[instr::Instr]) {
+    // // Step 0: Sanity
+    // for ins in instrs {
+    //   if !supported_instruction(ins) {
+    //     panic!("Unsupported instruction: '{}'", intel_syntax::format(ins, &[], false).unwrap());
+    //   }
+    // }
 
-  fn set_flags(&mut self, vref: ValueRef) {
-    self.set_var("FLAGS", self.cur, vref);
-  }
+    // Step 1: Infer basic-block boundaries
+    let mut block_start = HashSet::new();
+    for ins in instrs {
+      let Some(target) = jump_target(ins) else { continue };
+      block_start.insert(target.0);
+      block_start.insert(ins.addr + ins.n_bytes);
+    }
 
-  fn append_update_flags(&mut self, vref: ValueRef) {
-    let old_flags = self.get_flags();
-    let new_flags = self.append_instr(Instr {
-      opcode: Opcode::UpdateFlags,
-      operands: vec![old_flags, vref],
-    });
-    self.set_flags(new_flags);
+    // Step 2: Create all the blocks we should encounter
+    let mut addr_ordered: Vec<_> = block_start.iter().collect();
+    addr_ordered.sort();
+    for addr in addr_ordered {
+      let bref = self.new_block(&format!("addr_{:x}", addr));
+      self.addrmap.insert(Address(*addr), bref);
+    }
+
+    // for ins in instrs {
+    //   if block_start.get(&ins.addr).is_some() {
+    //     println!("");
+    //     println!("##################################################");
+    //     println!("# Block 0x{:x}", ins.addr);
+    //     println!("##################################################");
+    //   }
+    //   println!("{}", intel_syntax::format(ins, &[], false).unwrap());
+    // }
+
+    // Step 3: iterate each instruction, building each block
+    for ins in instrs {
+      if block_start.get(&ins.addr).is_some() {
+        self.start_next_blk(Address(ins.addr));
+      }
+      self.append_asm_instr(ins);
+    }
   }
 }
 
 pub fn build_ir(instrs: &[instr::Instr]) -> IR {
   let mut bld = IRBuilder::new();
-
-  // Step 0: Sanity
-  for ins in instrs {
-    if !supported_instruction(ins) {
-      panic!("Unsupported instruction: '{}'", intel_syntax::format(ins, &[], false).unwrap());
-    }
-  }
-
-  // Step 1: Infer basic-block boundaries
-  let mut block_start = HashSet::new();
-  for ins in instrs {
-    let Some(jmp) = detect_jump(ins) else { continue };
-    block_start.insert(jmp.tgt.0);
-    block_start.insert(ins.addr + ins.n_bytes);
-  }
-
-  // Step 2: Create all the blocks we should encounter
-  let mut addr_ordered: Vec<_> = block_start.iter().collect();
-  addr_ordered.sort();
-  for addr in addr_ordered {
-    let bref = bld.new_block(&format!("addr_{:x}", addr));
-    bld.addrmap.insert(Address(*addr), bref);
-  }
-
-  for ins in instrs {
-    if block_start.get(&ins.addr).is_some() {
-      println!("");
-      println!("##################################################");
-      println!("# Block 0x{:x}", ins.addr);
-      println!("##################################################");
-    }
-    println!("{}", intel_syntax::format(ins, &[], false).unwrap());
-  }
-
-  // Step 2: iterate each instruction, building each block
-  let mut N = 0;
-  for (i, ins) in instrs.iter().enumerate() {
-    if block_start.get(&ins.addr).is_some() {
-      bld.start_next_blk(Address(ins.addr));
-    }
-    bld.append_asm_instr(ins);
-
-    N += 1;
-    if N >= 80 { break; }
-  }
-
-
+  bld.build_from_instrs(instrs);
   bld.ir
 }
 
 pub fn blah(instrs: &[instr::Instr]) {
   let ir = build_ir(instrs);
-  println!("{}", ir);
+  //println!("{}", ir);
   _ = ir;
 }
