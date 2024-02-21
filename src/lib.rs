@@ -1,4 +1,4 @@
-mod arrayvec;
+mod util;
 mod binary;
 mod instr;
 mod instr_fmt;

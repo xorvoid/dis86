@@ -1,4 +1,4 @@
-use crate::arrayvec::ArrayVec;
+use crate::util::arrayvec::ArrayVec;
 pub use crate::instr_fmt::Opcode;
 
 #[derive(Debug, Clone, Copy)]

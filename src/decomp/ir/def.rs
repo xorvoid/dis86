@@ -1,4 +1,5 @@
 use crate::instr;
+use crate::util::dvec::DVec;
 use std::collections::HashMap;
 
 // SSA IR Definitions
@@ -12,8 +13,9 @@ use std::collections::HashMap;
 pub enum Ref {
   //None,
   Const(ConstRef),
-  Instr(BlockRef, InstrRef),
-  Phi(BlockRef, PhiRef),
+  // Instr2(BlockRef, InstrRef),
+  // Phi2(BlockRef, PhiRef),
+  Instr(BlockRef, i64),
   Init(&'static str),  // FIXME: Don't use a String
   Block(BlockRef),
 }
@@ -35,6 +37,7 @@ impl From<&instr::Reg> for Symbol {
 
 #[derive(Debug)]
 pub struct Instr {
+  pub debug: Option<(Symbol, usize)>,
   pub opcode: Opcode,
   pub operands: Vec<Ref>,
 }
@@ -111,6 +114,19 @@ impl Opcode {
       Opcode::Jne         => "jne",
     }
   }
+
+  pub fn has_no_result(&self) -> bool {
+    match self {
+      Opcode::Nop => true,
+      Opcode::Push => true,
+      Opcode::Store8 => true,
+      Opcode::Store16 => true,
+      Opcode::Ret => true,
+      Opcode::Jmp => true,
+      Opcode::Jne => true,
+      _ => false,
+    }
+  }
 }
 
 #[derive(Debug)]
@@ -118,8 +134,7 @@ pub struct Block {
   pub name: String,
   pub defs: HashMap<Symbol, Ref>,
   pub preds: Vec<BlockRef>,
-  pub phis: Vec<Instr>,
-  pub instrs: Vec<Instr>,
+  pub instrs: DVec<Instr>,
 }
 
 #[derive(Debug)]
@@ -128,11 +143,52 @@ pub struct IR {
   pub blocks: Vec<Block>,
 }
 
-// impl Block {
-//   pub fn iter(&self) -> impl Iterator + '_ {
-//     self.phis.iter().chain(self.instrs.iter())
+// #[derive(Debug)]
+// pub struct InstrVecIter {
+//   blk: BlockRef,
+//   n_phis: usize,
+//   n_instrs: usize,
+//   idx_phis: usize,
+//   idx_instrs: usize,
+// }
+
+// impl Iterator for InstrVecIter {
+//   type Item = Ref;
+//   fn next(&mut self) -> Option<Self::Item> {
+//     if self.idx_phis < self.n_phis {
+//       let p = self.idx_phis;
+//       self.idx_phis += 1;
+//       Some(Ref::Phi2(self.blk, PhiRef(p)))
+//     } else if self.idx_instrs < self.n_instrs {
+//       let i = self.idx_instrs;
+//       self.idx_instrs += 1;
+//       Some(Ref::Instr2(self.blk, InstrRef(i)))
+//     } else {
+//       None
+//     }
 //   }
 // }
+
+impl IR {
+  pub fn instr(&self, r: Ref) -> Option<&Instr> {
+    if let Ref::Instr(b, i) = r {
+      Some(&self.blocks[b.0].instrs[i])
+    } else {
+      None
+    }
+  }
+
+  // pub fn iter_instr(&self, blk: BlockRef) -> InstrVecIter {
+  //   let b = &self.blocks[blk.0];
+  //   InstrVecIter {
+  //     blk,
+  //     n_phis: b.phis2.len(),
+  //     n_instrs: b.instrs2.len(),
+  //     idx_phis: 0,
+  //     idx_instrs: 0,
+  //   }
+  // }
+}
 
 impl IR {
   pub fn append_const(&mut self, val: i32) -> Ref {

@@ -1,4 +1,4 @@
-use crate::arrayvec::ArrayVec;
+use crate::util::arrayvec::ArrayVec;
 use crate::binary::Binary;
 use crate::instr::*;
 use crate::instr_fmt;
@@ -564,8 +564,8 @@ mod tests {
   fn test() {
     for (n, test) in TESTS.iter().enumerate() {
       let mut bin = Binary::new(test.dat, test.addr);
-      let ins = decode(&mut bin).unwrap();
-      let asm = crate::intel_syntax::format(&ins, false).unwrap();
+      let (ins, bytes) = decode_one(&mut bin).unwrap();
+      let asm = crate::intel_syntax::format(&ins, &bytes, false).unwrap();
       if asm != test.asm {
         panic!("Failed ({}/{}) | Expected: '{}' | Got: '{}'\n\nRAW:\n{:?}", n, TESTS.len(), test.asm, asm, ins);
       }
