@@ -128,6 +128,12 @@ pub struct IR {
   pub blocks: Vec<Block>,
 }
 
+// impl Block {
+//   pub fn iter(&self) -> impl Iterator + '_ {
+//     self.phis.iter().chain(self.instrs.iter())
+//   }
+// }
+
 impl IR {
   pub fn append_const(&mut self, val: i32) -> Ref {
     // Search existing constants for a duplicate (TODO: Make this into a hash-tbl if it gets slow)

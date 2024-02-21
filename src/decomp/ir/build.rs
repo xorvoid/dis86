@@ -144,11 +144,25 @@ impl IRBuilder {
     let b = &mut self.blkmeta[r.0];
     if b.sealed { panic!("block is already sealed!"); }
     b.sealed = true;
-    // TODO
-    // for (name, phi) in std::mem::replace(&mut b.incomplete_phis, vec![]) {
-    //   self.phi_populate(&name, BlockRef(r.0), phi);
-    // }
-    std::mem::forget(r);
+    for (sym, phi) in std::mem::replace(&mut b.incomplete_phis, vec![]) {
+      self.phi_populate(sym, BlockRef(r.0), phi);
+    }
+  }
+
+  fn phi_populate<S: Into<Symbol>>(&mut self, sym: S, blk: BlockRef, phi: PhiRef) {
+    let sym: Symbol = sym.into();
+    let preds = self.ir.blocks[blk.0].preds.clone(); // ARGH: Need to break borrow on 'self' so we can recurse
+
+    // recurse each pred
+    let mut refs = vec![];
+    for b in preds {
+      refs.push(self.get_var(sym, b));
+    }
+
+    // update the phi with operands
+    self.ir.blocks[blk.0].phis[phi.0].operands = refs;
+
+    // TODO: Remove trivial phis
   }
 
   fn phi_create(&mut self, sym: Symbol, blk: BlockRef) -> PhiRef {
@@ -172,41 +186,25 @@ impl IRBuilder {
       None => (),
     }
 
-    // FIXME: BROKEN!!
-    //assert!(b.sealed);
-
-    let preds = &self.ir.blocks[blk.0].preds;
-    if preds.len() == 1 {
-      let parent = preds[0];
-      self.get_var(sym, parent)
-    } else {
+    // Otherwise, search predecessors
+    let b = &self.blkmeta[blk.0];
+    if !b.sealed {
       // add an empty phi node and mark it for later population
       let phi = self.phi_create(sym, blk);
       self.blkmeta[blk.0].incomplete_phis.push((sym, phi));
       Ref::Phi(blk, phi)
+    } else {
+      let preds = &self.ir.blocks[blk.0].preds;
+      if preds.len() == 1 {
+        let parent = preds[0];
+        self.get_var(sym, parent)
+      } else {
+        // create a phi and immediately populate it
+        let phi = self.phi_create(sym, blk);
+        self.phi_populate(sym, blk, phi);
+        Ref::Phi(blk, phi)
+      }
     }
-
-    // // Otherwise, search predecessors
-    // if !b.sealed {
-    //   // add an empty phi node and mark it for later population
-    //   let phi = self.phi_create(sym, blk);
-    //   self.blkmeta[blk.0].incomplete_phis.push((sym, phi));
-    //   Ref::Phi(blk, phi)
-    // } else {
-    //   let preds = &self.ir.blocks[blk.0].preds;
-    //   if preds.len() == 1 {
-    //     let parent = preds[0];
-    //     self.get_var(sym, parent)
-    //   } else {
-    //     // create a phi and immediately populate it
-    //     let phi = self.phi_create(sym, blk);
-    //     self.phi_populate(sym, blk, phi);
-    //     Ref::Phi(blk, phi)
-    //   }
-    // }
-
-    // // Otherwise, search predecessors
-    // panic!("UNIMPL");
   }
 
   fn set_var<S: Into<Symbol>>(&mut self, sym: S, blk: BlockRef, r: Ref) {
@@ -650,6 +648,13 @@ impl IRBuilder {
         self.start_next_blk(Address(ins.addr));
       }
       self.append_asm_instr(ins);
+    }
+
+    // Step 4: walk blocks and seal them
+    for i in 0..self.ir.blocks.len() {
+      if !self.blkmeta[i].sealed {
+        self.seal_block(BlockRef(i));
+      }
     }
   }
 }
