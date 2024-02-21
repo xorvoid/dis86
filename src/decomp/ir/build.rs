@@ -30,34 +30,6 @@ fn simple_binary_operation(opcode: instr::Opcode) -> Option<Opcode> {
   }
 }
 
-fn reg_name(reg: instr::Reg) -> &'static str {
-  // INEFFICIENT AND COMPLICATED
-  match reg {
-    instr::Reg::AX => "AX",
-    instr::Reg::CX => "CX",
-    instr::Reg::DX => "DX",
-    instr::Reg::BX => "BX",
-    instr::Reg::AL => "AX",  // use the full register
-    instr::Reg::CL => "CX",  // use the full register
-    instr::Reg::DL => "DX",  // use the full register
-    instr::Reg::BL => "BX",  // use the full register
-    instr::Reg::AH => "AX",  // use the full register
-    instr::Reg::CH => "CX",  // use the full register
-    instr::Reg::DH => "DX",  // use the full register
-    instr::Reg::BH => "BX",  // use the full register
-    instr::Reg::SP => "SP",
-    instr::Reg::BP => "BP",
-    instr::Reg::SI => "SI",
-    instr::Reg::DI => "DI",
-    instr::Reg::ES => "ES",
-    instr::Reg::CS => "CS",
-    instr::Reg::SS => "SS",
-    instr::Reg::DS => "DS",
-    instr::Reg::IP => "IP",
-    instr::Reg::FLAGS => "FLAGS",
-  }
-}
-
 fn jump_target(ins: &instr::Instr) -> Option<Address> {
   // Filter for branch instructions
   match &ins.opcode {
@@ -102,20 +74,17 @@ struct IRBuilder {
   addrmap: HashMap<Address, BlockRef>,
   cur: BlockRef,
 }
-//let mut block_map = HashMap::new();
-
-
 
 struct BlockMeta {
   sealed: bool, // has all predecessors?
-  defs: HashMap<String, ValueRef>,
-  incomplete_phis: Vec<(String, PhiRef)>,
+  incomplete_phis: Vec<(Symbol, PhiRef)>,
 }
 
 impl Block {
   fn new(name: &str) -> Self {
     Self {
       name: name.to_string(),
+      defs: HashMap::new(),
       preds: vec![],
       phis: vec![],
       instrs: vec![],
@@ -140,23 +109,23 @@ impl IRBuilder {
     this.seal_block(entry);
 
     // Set initial register values
-    this.set_var("AX", this.cur, ValueRef::Init("AX"));
-    this.set_var("CX", this.cur, ValueRef::Init("CX"));
-    this.set_var("DX", this.cur, ValueRef::Init("DX"));
-    this.set_var("BX", this.cur, ValueRef::Init("BX"));
+    this.set_var(instr::Reg::AX, this.cur, Ref::Init("ax"));
+    this.set_var(instr::Reg::CX, this.cur, Ref::Init("cx"));
+    this.set_var(instr::Reg::DX, this.cur, Ref::Init("dx"));
+    this.set_var(instr::Reg::BX, this.cur, Ref::Init("bx"));
 
-    this.set_var("SP", this.cur, ValueRef::Init("SP"));
-    this.set_var("BP", this.cur, ValueRef::Init("BP"));
-    this.set_var("SI", this.cur, ValueRef::Init("SI"));
-    this.set_var("DI", this.cur, ValueRef::Init("DI"));
+    this.set_var(instr::Reg::SP, this.cur, Ref::Init("sp"));
+    this.set_var(instr::Reg::BP, this.cur, Ref::Init("bp"));
+    this.set_var(instr::Reg::SI, this.cur, Ref::Init("si"));
+    this.set_var(instr::Reg::DI, this.cur, Ref::Init("di"));
 
-    this.set_var("ES", this.cur, ValueRef::Init("ES"));
-    this.set_var("CS", this.cur, ValueRef::Init("CS"));
-    this.set_var("SS", this.cur, ValueRef::Init("SS"));
-    this.set_var("DS", this.cur, ValueRef::Init("DS"));
+    this.set_var(instr::Reg::ES, this.cur, Ref::Init("es"));
+    this.set_var(instr::Reg::CS, this.cur, Ref::Init("cs"));
+    this.set_var(instr::Reg::SS, this.cur, Ref::Init("ss"));
+    this.set_var(instr::Reg::DS, this.cur, Ref::Init("ds"));
 
-    this.set_var("IP", this.cur, ValueRef::Init("IP"));
-    this.set_var("FLAGS", this.cur, ValueRef::Init("FLAGS"));
+    this.set_var(instr::Reg::IP, this.cur, Ref::Init("ip"));
+    this.set_var(instr::Reg::FLAGS, this.cur, Ref::Init("flags"));
 
     this
   }
@@ -166,7 +135,6 @@ impl IRBuilder {
     self.ir.blocks.push(Block::new(name));
     self.blkmeta.push(BlockMeta {
       sealed: false,
-      defs: HashMap::new(),
       incomplete_phis: vec![],
     });
     BlockRef(idx)
@@ -183,23 +151,23 @@ impl IRBuilder {
     std::mem::forget(r);
   }
 
-  fn phi_create(&mut self, name: &str, blk: BlockRef) -> PhiRef {
+  fn phi_create(&mut self, sym: Symbol, blk: BlockRef) -> PhiRef {
     // create phi node (without operands) to terminate recursion
     let phi = PhiRef(self.ir.blocks[blk.0].phis.len());
     self.ir.blocks[blk.0].phis.push(Instr {
       opcode: Opcode::Phi,
       operands: vec![],
     });
-    let val = ValueRef::Phi(blk, phi);
-    self.set_var(name, blk, val);
+    let val = Ref::Phi(blk, phi);
+    self.set_var(sym, blk, val);
     phi
   }
 
-  fn get_var(&mut self, name: &str, blk: BlockRef) -> ValueRef {
-    let b = &mut self.blkmeta[blk.0];
+  fn get_var<S: Into<Symbol>>(&mut self, sym: S, blk: BlockRef) -> Ref {
+    let sym: Symbol = sym.into();
 
     // Defined locally in this block? Easy.
-    match b.defs.get(name) {
+    match self.ir.blocks[blk.0].defs.get(&sym) {
       Some(val) => return *val,
       None => (),
     }
@@ -210,30 +178,30 @@ impl IRBuilder {
     let preds = &self.ir.blocks[blk.0].preds;
     if preds.len() == 1 {
       let parent = preds[0];
-      self.get_var(name, parent)
+      self.get_var(sym, parent)
     } else {
       // add an empty phi node and mark it for later population
-      let phi = self.phi_create(name, blk);
-      self.blkmeta[blk.0].incomplete_phis.push((name.to_string(), phi));
-      ValueRef::Phi(blk, phi)
+      let phi = self.phi_create(sym, blk);
+      self.blkmeta[blk.0].incomplete_phis.push((sym, phi));
+      Ref::Phi(blk, phi)
     }
 
     // // Otherwise, search predecessors
     // if !b.sealed {
     //   // add an empty phi node and mark it for later population
-    //   let phi = self.phi_create(name, blk);
-    //   self.blkmeta[blk.0].incomplete_phis.push((name.to_string(), phi));
-    //   ValueRef::Phi(blk, phi)
+    //   let phi = self.phi_create(sym, blk);
+    //   self.blkmeta[blk.0].incomplete_phis.push((sym, phi));
+    //   Ref::Phi(blk, phi)
     // } else {
     //   let preds = &self.ir.blocks[blk.0].preds;
     //   if preds.len() == 1 {
     //     let parent = preds[0];
-    //     self.get_var(name, parent)
+    //     self.get_var(sym, parent)
     //   } else {
     //     // create a phi and immediately populate it
-    //     let phi = self.phi_create(name, blk);
-    //     self.phi_populate(name, blk, phi);
-    //     ValueRef::Phi(blk, phi)
+    //     let phi = self.phi_create(sym, blk);
+    //     self.phi_populate(sym, blk, phi);
+    //     Ref::Phi(blk, phi)
     //   }
     // }
 
@@ -241,19 +209,19 @@ impl IRBuilder {
     // panic!("UNIMPL");
   }
 
-  fn set_var(&mut self, name: &str, blk: BlockRef, r: ValueRef) {
-    self.blkmeta[blk.0].defs.insert(name.to_string(), r);
+  fn set_var<S: Into<Symbol>>(&mut self, sym: S, blk: BlockRef, r: Ref) {
+    self.ir.blocks[blk.0].defs.insert(sym.into(), r);
   }
 
   fn get_block(&mut self, effective: Address) -> BlockRef {
     *self.addrmap.get(&effective).unwrap()
   }
 
-  fn append_instr(&mut self, instr: Instr) -> ValueRef {
+  fn append_instr(&mut self, instr: Instr) -> Ref {
     let blk = &mut self.ir.blocks[self.cur.0];
     let idx = blk.instrs.len();
     blk.instrs.push(instr);
-    ValueRef::Instr(self.cur, InstrRef(idx))
+    Ref::Instr(self.cur, InstrRef(idx))
   }
 
   fn append_jmp(&mut self, next: BlockRef) {
@@ -261,11 +229,11 @@ impl IRBuilder {
 
     self.append_instr(Instr {
       opcode: Opcode::Jmp,
-      operands: vec![ValueRef::Instr(next, InstrRef(0))],
+      operands: vec![Ref::Block(next)],
     });
   }
 
-  fn append_jne(&mut self, cond: ValueRef, true_blk: BlockRef, false_blk: BlockRef) {
+  fn append_jne(&mut self, cond: Ref, true_blk: BlockRef, false_blk: BlockRef) {
     self.ir.blocks[true_blk.0].preds.push(self.cur);
     self.ir.blocks[false_blk.0].preds.push(self.cur);
 
@@ -273,8 +241,8 @@ impl IRBuilder {
       opcode: Opcode::Jne,
       operands: vec![
         cond,
-        ValueRef::Instr(true_blk, InstrRef(0)),
-        ValueRef::Instr(false_blk, InstrRef(0))],
+        Ref::Block(true_blk),
+        Ref::Block(false_blk)],
     });
   }
 
@@ -294,7 +262,7 @@ impl IRBuilder {
       _ => { // no trailing jump, insert one
         self.append_instr(Instr{
           opcode: Opcode::Jmp,
-          operands: vec![ValueRef::Instr(next_bref, InstrRef(0))],
+          operands: vec![Ref::Instr(next_bref, InstrRef(0))],
         });
       }
     }
@@ -309,20 +277,20 @@ impl IRBuilder {
 /////////////////////////////////////////////////////////////////////////////////////
 
 impl IRBuilder {
-  fn append_asm_src_reg(&mut self, reg: &instr::OperandReg) -> ValueRef {
-    self.get_var(reg_name(reg.0), self.cur)
+  fn append_asm_src_reg(&mut self, reg: &instr::OperandReg) -> Ref {
+    self.get_var(reg.0, self.cur)
   }
 
-  fn append_asm_dst_reg(&mut self, reg: &instr::OperandReg, vref: ValueRef) {
-    self.set_var(reg_name(reg.0), self.cur, vref);
+  fn append_asm_dst_reg(&mut self, reg: &instr::OperandReg, vref: Ref) {
+    self.set_var(reg.0, self.cur, vref);
   }
 
-  fn compute_mem_address(&mut self, mem: &instr::OperandMem) -> ValueRef {
+  fn compute_mem_address(&mut self, mem: &instr::OperandMem) -> Ref {
     assert!(mem.reg2.is_none());
 
     let addr = match (&mem.reg1, &mem.off) {
       (Some(reg1), Some(off)) => {
-        let reg = self.get_var(reg_name(*reg1), self.cur);
+        let reg = self.get_var(reg1, self.cur);
         let off = self.ir.append_const((*off as i16).into());
 
         self.append_instr(Instr {
@@ -331,7 +299,7 @@ impl IRBuilder {
         })
       }
       (Some(reg1), None) => {
-        self.get_var(reg_name(*reg1), self.cur)
+        self.get_var(reg1, self.cur)
       }
       (None, Some(off)) => {
         self.ir.append_const((*off as i16).into())
@@ -344,9 +312,9 @@ impl IRBuilder {
     addr
   }
 
-  fn append_asm_src_mem(&mut self, mem: &instr::OperandMem) -> ValueRef {
+  fn append_asm_src_mem(&mut self, mem: &instr::OperandMem) -> Ref {
     let addr = self.compute_mem_address(mem);
-    let seg = self.get_var(reg_name(mem.sreg), self.cur);
+    let seg = self.get_var(mem.sreg, self.cur);
 
     let opcode = match mem.sz {
       instr::Size::Size8 => Opcode::Load8,
@@ -360,9 +328,9 @@ impl IRBuilder {
     })
   }
 
-  fn append_asm_dst_mem(&mut self, mem: &instr::OperandMem, vref: ValueRef) {
+  fn append_asm_dst_mem(&mut self, mem: &instr::OperandMem, vref: Ref) {
     let addr = self.compute_mem_address(mem);
-    let seg = self.get_var(reg_name(mem.sreg), self.cur);
+    let seg = self.get_var(mem.sreg, self.cur);
 
     let opcode = match mem.sz {
       instr::Size::Size8 => Opcode::Store8,
@@ -376,7 +344,7 @@ impl IRBuilder {
     });
   }
 
-  fn append_asm_src_imm(&mut self, imm: &instr::OperandImm) -> ValueRef {
+  fn append_asm_src_imm(&mut self, imm: &instr::OperandImm) -> Ref {
     // TODO: Is it okay to sign-ext away the size here??
     let k: i32 = match imm.sz {
       instr::Size::Size8 => (imm.val as i8).into(),
@@ -386,15 +354,15 @@ impl IRBuilder {
     self.ir.append_const(k)
   }
 
-  fn append_asm_src_rel(&mut self, _rel: &instr::OperandRel) -> ValueRef {
+  fn append_asm_src_rel(&mut self, _rel: &instr::OperandRel) -> Ref {
     panic!("unimpl");
   }
 
-  fn append_asm_src_far(&mut self, _far: &instr::OperandFar) -> ValueRef {
+  fn append_asm_src_far(&mut self, _far: &instr::OperandFar) -> Ref {
     panic!("unimpl");
   }
 
-  fn append_asm_src_operand(&mut self, oper: &instr::Operand) -> ValueRef {
+  fn append_asm_src_operand(&mut self, oper: &instr::Operand) -> Ref {
     match oper {
       instr::Operand::Reg(reg) => self.append_asm_src_reg(reg),
       instr::Operand::Mem(mem) => self.append_asm_src_mem(mem),
@@ -404,7 +372,7 @@ impl IRBuilder {
     }
   }
 
-  fn append_asm_dst_operand(&mut self, oper: &instr::Operand, vref: ValueRef) {
+  fn append_asm_dst_operand(&mut self, oper: &instr::Operand, vref: Ref) {
     match oper {
       instr::Operand::Reg(reg) => self.append_asm_dst_reg(reg, vref),
       instr::Operand::Mem(mem) => self.append_asm_dst_mem(mem, vref),
@@ -414,15 +382,15 @@ impl IRBuilder {
     };
   }
 
-  fn get_flags(&mut self) -> ValueRef {
-    self.get_var("FLAGS", self.cur)
+  fn get_flags(&mut self) -> Ref {
+    self.get_var(instr::Reg::FLAGS, self.cur)
   }
 
-  fn set_flags(&mut self, vref: ValueRef) {
-    self.set_var("FLAGS", self.cur, vref);
+  fn set_flags(&mut self, vref: Ref) {
+    self.set_var(instr::Reg::FLAGS, self.cur, vref);
   }
 
-  fn append_update_flags(&mut self, vref: ValueRef) {
+  fn append_update_flags(&mut self, vref: Ref) {
     let old_flags = self.get_flags();
     let new_flags = self.append_instr(Instr {
       opcode: Opcode::UpdateFlags,
@@ -465,17 +433,17 @@ impl IRBuilder {
       }
       instr::Opcode::OP_LEAVE => {
         // mov sp, bp
-        let vref = self.get_var(reg_name(instr::Reg::BP), self.cur);
-        self.set_var(reg_name(instr::Reg::SP), self.cur, vref);
+        let vref = self.get_var(instr::Reg::BP, self.cur);
+        self.set_var(instr::Reg::SP, self.cur, vref);
         // pop bp
         let vref = self.append_instr(Instr {
           opcode: Opcode::Pop,
           operands: vec![],
         });
-        self.set_var(reg_name(instr::Reg::BP), self.cur, vref);
+        self.set_var(instr::Reg::BP, self.cur, vref);
       }
       instr::Opcode::OP_RETF => {
-        let vref = self.get_var(reg_name(instr::Reg::AX), self.cur);
+        let vref = self.get_var(instr::Reg::AX, self.cur);
         self.append_instr(Instr {
           opcode: Opcode::Ret,
           operands: vec![vref],
@@ -605,7 +573,7 @@ impl IRBuilder {
           opcode: Opcode::Call,
           operands: vec![seg, off],
         });
-        self.set_var(reg_name(instr::Reg::AX), self.cur, ret);
+        self.set_var(instr::Reg::AX, self.cur, ret);
       }
       instr::Opcode::OP_LES => {
         let vref = self.append_asm_src_operand(&ins.operands[2]);

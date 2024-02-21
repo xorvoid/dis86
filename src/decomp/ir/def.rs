@@ -1,3 +1,6 @@
+use crate::instr;
+use std::collections::HashMap;
+
 // SSA IR Definitions
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)] pub struct ConstRef(pub usize);
@@ -6,18 +9,34 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)] pub struct PhiRef(pub usize);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ValueRef {
+pub enum Ref {
   //None,
   Const(ConstRef),
   Instr(BlockRef, InstrRef),
   Phi(BlockRef, PhiRef),
   Init(&'static str),  // FIXME: Don't use a String
+  Block(BlockRef),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Symbol(pub instr::Reg);
+
+impl From<instr::Reg> for Symbol {
+  fn from(reg: instr::Reg) -> Self {
+    Self(reg)
+  }
+}
+
+impl From<&instr::Reg> for Symbol {
+  fn from(reg: &instr::Reg) -> Self {
+    Self(*reg)
+  }
 }
 
 #[derive(Debug)]
 pub struct Instr {
   pub opcode: Opcode,
-  pub operands: Vec<ValueRef>,
+  pub operands: Vec<Ref>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -94,27 +113,10 @@ impl Opcode {
   }
 }
 
-// #[derive(Debug, Clone, Copy)]
-// pub enum Jump {
-//   Jmp(Jmp),
-//   Jne(Jne),
-// }
-
-// #[derive(Debug, Clone, Copy)]
-// pub struct Jmp {
-//   pub blk: BlockRef,
-// }
-
-// #[derive(Debug, Clone, Copy)]
-// pub struct Jne {
-//   pub cond: ValueRef,
-//   pub true_blk: BlockRef,
-//   pub false_blk: BlockRef,
-// }
-
 #[derive(Debug)]
 pub struct Block {
   pub name: String,
+  pub defs: HashMap<Symbol, Ref>,
   pub preds: Vec<BlockRef>,
   pub phis: Vec<Instr>,
   pub instrs: Vec<Instr>,
@@ -127,17 +129,17 @@ pub struct IR {
 }
 
 impl IR {
-  pub fn append_const(&mut self, val: i32) -> ValueRef {
+  pub fn append_const(&mut self, val: i32) -> Ref {
     // Search existing constants for a duplicate (TODO: Make this into a hash-tbl if it gets slow)
     for (i, constval) in self.consts.iter().enumerate() {
       if val == *constval {
-        return ValueRef::Const(ConstRef(i))
+        return Ref::Const(ConstRef(i))
       }
     }
 
     // Add new constant
     let idx = self.consts.len();
     self.consts.push(val);
-    ValueRef::Const(ConstRef(idx))
+    Ref::Const(ConstRef(idx))
   }
 }
