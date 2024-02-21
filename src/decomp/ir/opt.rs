@@ -43,34 +43,6 @@ pub fn reduce_phi(ir: &mut IR) {
   }
 }
 
-pub fn reduce_phi_old(ir: &mut IR) {
-  for b in 0..ir.blocks.len() {
-    for i in ir.blocks[b].instrs.range() {
-      let r = Ref::Instr(BlockRef(b), i);
-      if ir.instr(r).unwrap().opcode != Opcode::Phi { continue; }
-
-      // propagate while checking conditions
-      let mut operands = ir.instr(r).unwrap().operands.clone();
-      let mut same = true;
-      for j in 0..operands.len() {
-        operands[j] = operand_propagate(ir, operands[j]);
-        if operands[j] != operands[0] {
-          same = false;
-        }
-      }
-      let first = operands[0];
-      ir.instr_mut(r).unwrap().operands = operands;
-
-      // all operands the same? reduce to a mov
-      if same {
-        let instr = ir.instr_mut(r).unwrap();
-        instr.opcode = Opcode::Ref;
-        instr.operands = vec![first];
-      }
-    }
-  }
-}
-
 pub fn value_propagation(ir: &mut IR) {
   for b in 0..ir.blocks.len() {
     for i in ir.blocks[b].instrs.range() {
