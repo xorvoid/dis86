@@ -377,6 +377,31 @@ impl IRBuilder {
     self.set_flags(new_flags);
   }
 
+  fn pin_register(&mut self, reg: instr::Reg) {
+    let vref = self.get_var(reg, self.cur);
+    self.append_instr(Opcode::Pin, vec![vref]);
+  }
+
+  fn pin_registers(&mut self) {
+    self.pin_register(instr::Reg::AX);
+    self.pin_register(instr::Reg::CX);
+    self.pin_register(instr::Reg::DX);
+    self.pin_register(instr::Reg::BX);
+
+    self.pin_register(instr::Reg::SP);
+    self.pin_register(instr::Reg::BP);
+    self.pin_register(instr::Reg::SI);
+    self.pin_register(instr::Reg::DI);
+
+    self.pin_register(instr::Reg::ES);
+    //self.pin_register(instr::Reg::CS);
+    self.pin_register(instr::Reg::SS);
+    self.pin_register(instr::Reg::DS);
+
+    //self.pin_register(instr::Reg::IP);
+    self.pin_register(instr::Reg::FLAGS);
+  }
+
   fn append_asm_instr(&mut self, ins: &instr::Instr) {
     //println!("## {}", intel_syntax::format(ins, &[], false).unwrap());
     assert!(ins.rep.is_none());
@@ -409,6 +434,7 @@ impl IRBuilder {
         self.set_var(instr::Reg::BP, self.cur, vref);
       }
       instr::Opcode::OP_RETF => {
+        self.pin_registers();
         let vref = self.get_var(instr::Reg::AX, self.cur);
         self.append_instr(Opcode::Ret, vec![vref]);
       }

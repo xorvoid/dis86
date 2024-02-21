@@ -41,6 +41,8 @@ pub struct Instr {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Opcode {
   Nop,
+  Pin,
+  Ref,
   Phi,
   Push,
   Pop,
@@ -78,6 +80,8 @@ impl Opcode {
   pub fn as_str(&self) -> &'static str {
     match self {
       Opcode::Nop         => "nop",
+      Opcode::Pin         => "pin",
+      Opcode::Ref         => "ref",
       Opcode::Phi         => "phi",
       Opcode::Push        => "push",
       Opcode::Pop         => "pop",
@@ -143,6 +147,14 @@ impl IR {
   pub fn instr(&self, r: Ref) -> Option<&Instr> {
     if let Ref::Instr(b, i) = r {
       Some(&self.blocks[b.0].instrs[i])
+    } else {
+      None
+    }
+  }
+
+  pub fn instr_mut(&mut self, r: Ref) -> Option<&mut Instr> {
+    if let Ref::Instr(b, i) = r {
+      Some(&mut self.blocks[b.0].instrs[i])
     } else {
       None
     }
