@@ -236,7 +236,12 @@ impl IRBuilder {
     *self.addrmap.get(&effective).unwrap()
   }
 
-  fn append_instr(&mut self, instr: Instr) -> Ref {
+  fn append_instr(&mut self, opcode: Opcode, operands: Vec<Ref>) -> Ref {
+    let instr = Instr {
+      debug: None,
+      opcode,
+      operands,
+    };
     let blk = &mut self.ir.blocks[self.cur.0];
     let idx = blk.instrs.push_back(instr);
     Ref::Instr(self.cur, idx)
@@ -244,26 +249,16 @@ impl IRBuilder {
 
   fn append_jmp(&mut self, next: BlockRef) {
     self.ir.blocks[next.0].preds.push(self.cur);
-
-    self.append_instr(Instr {
-      debug: None,
-      opcode: Opcode::Jmp,
-      operands: vec![Ref::Block(next)],
-    });
+    self.append_instr(Opcode::Jmp, vec![Ref::Block(next)]);
   }
 
   fn append_jne(&mut self, cond: Ref, true_blk: BlockRef, false_blk: BlockRef) {
     self.ir.blocks[true_blk.0].preds.push(self.cur);
     self.ir.blocks[false_blk.0].preds.push(self.cur);
-
-    self.append_instr(Instr {
-      debug: None,
-      opcode: Opcode::Jne,
-      operands: vec![
-        cond,
-        Ref::Block(true_blk),
-        Ref::Block(false_blk)],
-    });
+    self.append_instr(Opcode::Jne, vec![
+      cond,
+      Ref::Block(true_blk),
+      Ref::Block(false_blk)]);
   }
 
   fn switch_blk(&mut self, bref: BlockRef) {
@@ -304,12 +299,7 @@ impl IRBuilder {
       (Some(reg1), Some(off)) => {
         let reg = self.get_var(reg1, self.cur);
         let off = self.ir.append_const((*off as i16).into());
-
-        self.append_instr(Instr {
-          debug: None,
-          opcode: Opcode::Add,
-          operands: vec![reg, off],
-        })
+        self.append_instr(Opcode::Add, vec![reg, off])
       }
       (Some(reg1), None) => {
         self.get_var(reg1, self.cur)
@@ -334,12 +324,7 @@ impl IRBuilder {
       instr::Size::Size16 => Opcode::Load16,
       instr::Size::Size32 => Opcode::Load32,
     };
-
-    self.append_instr(Instr {
-      debug: None,
-      opcode,
-      operands: vec![seg, addr],
-    })
+    self.append_instr(opcode, vec![seg, addr])
   }
 
   fn append_asm_dst_mem(&mut self, mem: &instr::OperandMem, vref: Ref) {
@@ -352,11 +337,7 @@ impl IRBuilder {
       _ => panic!("32-bit stores not supported"),
     };
 
-    self.append_instr(Instr {
-      debug: None,
-      opcode,
-      operands: vec![seg, addr, vref],
-    });
+    self.append_instr(opcode, vec![seg, addr, vref]);
   }
 
   fn append_asm_src_imm(&mut self, imm: &instr::OperandImm) -> Ref {
@@ -407,11 +388,7 @@ impl IRBuilder {
 
   fn append_update_flags(&mut self, vref: Ref) {
     let old_flags = self.get_flags();
-    let new_flags = self.append_instr(Instr {
-      debug: None,
-      opcode: Opcode::UpdateFlags,
-      operands: vec![old_flags, vref],
-    });
+    let new_flags = self.append_instr(Opcode::UpdateFlags, vec![old_flags, vref]);
     self.set_flags(new_flags);
   }
 
@@ -423,11 +400,7 @@ impl IRBuilder {
     if let Some(opcode) = simple_binary_operation(ins.opcode) {
       let a = self.append_asm_src_operand(&ins.operands[0]);
       let b = self.append_asm_src_operand(&ins.operands[1]);
-      let vref = self.append_instr(Instr {
-        debug: None,
-        opcode,
-        operands: vec![a, b],
-      });
+      let vref = self.append_instr(opcode, vec![a, b]);
       self.append_asm_dst_operand(&ins.operands[0], vref);
       return;
     }
@@ -436,18 +409,10 @@ impl IRBuilder {
     match &ins.opcode {
       instr::Opcode::OP_PUSH => {
         let a = self.append_asm_src_operand(&ins.operands[0]);
-        self.append_instr(Instr {
-          debug: None,
-          opcode: Opcode::Push,
-          operands: vec![a],
-        });
+        self.append_instr(Opcode::Push, vec![a]);
       }
       instr::Opcode::OP_POP => {
-        let vref = self.append_instr(Instr {
-          debug: None,
-          opcode: Opcode::Pop,
-          operands: vec![],
-        });
+        let vref = self.append_instr(Opcode::Pop, vec![]);
         self.append_asm_dst_operand(&ins.operands[0], vref);
       }
       instr::Opcode::OP_LEAVE => {
@@ -455,20 +420,12 @@ impl IRBuilder {
         let vref = self.get_var(instr::Reg::BP, self.cur);
         self.set_var(instr::Reg::SP, self.cur, vref);
         // pop bp
-        let vref = self.append_instr(Instr {
-          debug: None,
-          opcode: Opcode::Pop,
-          operands: vec![],
-        });
+        let vref = self.append_instr(Opcode::Pop, vec![]);
         self.set_var(instr::Reg::BP, self.cur, vref);
       }
       instr::Opcode::OP_RETF => {
         let vref = self.get_var(instr::Reg::AX, self.cur);
-        self.append_instr(Instr {
-          debug: None,
-          opcode: Opcode::Ret,
-          operands: vec![vref],
-        });
+        self.append_instr(Opcode::Ret, vec![vref]);
       }
       instr::Opcode::OP_MOV => {
         let vref = self.append_asm_src_operand(&ins.operands[1]);
@@ -477,11 +434,7 @@ impl IRBuilder {
       instr::Opcode::OP_INC => {
         let one = self.ir.append_const(1);
         let vref = self.append_asm_src_operand(&ins.operands[0]);
-        let vref = self.append_instr(Instr {
-          debug: None,
-          opcode: Opcode::Add,
-          operands: vec![vref, one],
-        });
+        let vref = self.append_instr(Opcode::Add, vec![vref, one]);
         self.append_asm_dst_operand(&ins.operands[0], vref);
       }
       instr::Opcode::OP_JMP => {
@@ -500,11 +453,7 @@ impl IRBuilder {
         let true_blk = self.get_block(effective);
 
         let flags = self.get_flags();
-        let cond = self.append_instr(Instr {
-          debug: None,
-          opcode: Opcode::EqFlags,
-          operands: vec![flags],
-        });
+        let cond = self.append_instr(Opcode::EqFlags, vec![flags]);
 
         self.append_jne(cond, true_blk, false_blk);
       }
@@ -517,11 +466,7 @@ impl IRBuilder {
         let true_blk = self.get_block(effective);
 
         let flags = self.get_flags();
-        let cond = self.append_instr(Instr {
-          debug: None,
-          opcode: Opcode::NeqFlags,
-          operands: vec![flags],
-        });
+        let cond = self.append_instr(Opcode::NeqFlags, vec![flags]);
 
         self.append_jne(cond, true_blk, false_blk);
       }
@@ -534,11 +479,7 @@ impl IRBuilder {
         let true_blk = self.get_block(effective);
 
         let flags = self.get_flags();
-        let cond = self.append_instr(Instr {
-          debug: None,
-          opcode: Opcode::GtFlags,
-          operands: vec![flags],
-        });
+        let cond = self.append_instr(Opcode::GtFlags, vec![flags]);
 
         self.append_jne(cond, true_blk, false_blk);
       }
@@ -551,11 +492,7 @@ impl IRBuilder {
         let true_blk = self.get_block(effective);
 
         let flags = self.get_flags();
-        let cond = self.append_instr(Instr {
-          debug: None,
-          opcode: Opcode::GeqFlags,
-          operands: vec![flags],
-        });
+        let cond = self.append_instr(Opcode::GeqFlags, vec![flags]);
 
         self.append_jne(cond, true_blk, false_blk);
       }
@@ -568,11 +505,7 @@ impl IRBuilder {
         let true_blk = self.get_block(effective);
 
         let flags = self.get_flags();
-        let cond = self.append_instr(Instr {
-          debug: None,
-          opcode: Opcode::LtFlags,
-          operands: vec![flags],
-        });
+        let cond = self.append_instr(Opcode::LtFlags, vec![flags]);
 
         self.append_jne(cond, true_blk, false_blk);
       }
@@ -585,11 +518,7 @@ impl IRBuilder {
         let true_blk = self.get_block(effective);
 
         let flags = self.get_flags();
-        let cond = self.append_instr(Instr {
-          debug: None,
-          opcode: Opcode::LeqFlags,
-          operands: vec![flags],
-        });
+        let cond = self.append_instr(Opcode::LeqFlags, vec![flags]);
 
         self.append_jne(cond, true_blk, false_blk);
       }
@@ -597,46 +526,28 @@ impl IRBuilder {
         let instr::Operand::Far(far) = &ins.operands[0] else { panic!("Unsupported OP_CALLF operand") };
         let seg = self.ir.append_const(far.seg.into());
         let off = self.ir.append_const(far.off.into());
-        let ret = self.append_instr(Instr {
-          debug: None,
-          opcode: Opcode::Call,
-          operands: vec![seg, off],
-        });
+        let ret = self.append_instr(Opcode::Call, vec![seg, off]);
         self.set_var(instr::Reg::AX, self.cur, ret);
       }
       instr::Opcode::OP_LES => {
         let vref = self.append_asm_src_operand(&ins.operands[2]);
-        let upper = self.append_instr(Instr {
-          debug: None,
-          opcode: Opcode::Upper16,
-          operands: vec![vref],
-        });
+
+        let upper = self.append_instr(Opcode::Upper16, vec![vref]);
         self.append_asm_dst_operand(&ins.operands[0], upper);
-        let lower = self.append_instr(Instr {
-          debug: None,
-          opcode: Opcode::Lower16,
-          operands: vec![vref],
-        });
+
+        let lower = self.append_instr(Opcode::Lower16, vec![vref]);
         self.append_asm_dst_operand(&ins.operands[1], lower);
       }
       instr::Opcode::OP_TEST => {
         let a = self.append_asm_src_operand(&ins.operands[0]);
         let b = self.append_asm_src_operand(&ins.operands[1]);
-        let vref = self.append_instr(Instr {
-          debug: None,
-          opcode: Opcode::And,
-          operands: vec![a, b],
-        });
+        let vref = self.append_instr(Opcode::And, vec![a, b]);
         self.append_update_flags(vref);
       }
       instr::Opcode::OP_CMP => {
         let a = self.append_asm_src_operand(&ins.operands[0]);
         let b = self.append_asm_src_operand(&ins.operands[1]);
-        let vref = self.append_instr(Instr {
-          debug: None,
-          opcode: Opcode::Sub,
-          operands: vec![a, b],
-        });
+        let vref = self.append_instr(Opcode::Sub, vec![a, b]);
         self.append_update_flags(vref);
       }
       _ => panic!("Unimpl opcode: {:?}", ins.opcode),

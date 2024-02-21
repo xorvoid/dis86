@@ -1,21 +1,17 @@
 use crate::instr;
-use crate::util::dvec::DVec;
+use crate::util::dvec::{DVec, DVecIndex};
 use std::collections::HashMap;
 
 // SSA IR Definitions
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)] pub struct ConstRef(pub usize);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)] pub struct BlockRef(pub usize);
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)] pub struct InstrRef(pub usize);
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)] pub struct PhiRef(pub usize);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Ref {
   //None,
   Const(ConstRef),
-  // Instr2(BlockRef, InstrRef),
-  // Phi2(BlockRef, PhiRef),
-  Instr(BlockRef, i64),
+  Instr(BlockRef, DVecIndex),
   Init(&'static str),  // FIXME: Don't use a String
   Block(BlockRef),
 }
