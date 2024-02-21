@@ -68,6 +68,6 @@ pub fn run(appname: &str) {
     instr_list.push(instr);
   }
 
-  decomp::blah(&instr_list);
-
+  let ir = decomp::ir::build::from_instrs(&instr_list);
+  println!("{}", ir);
 }
