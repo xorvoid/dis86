@@ -405,6 +405,31 @@ impl IRBuilder {
     //self.pin_register(instr::Reg::IP);
   }
 
+  fn append_push(&mut self, vref: Ref) {
+    let ss = self.get_var(instr::Reg::SS, self.cur);
+    let sp = self.get_var(instr::Reg::SP, self.cur);
+    let k = self.ir.append_const(2);
+
+    // decrement SP
+    let sp = self.append_instr(Opcode::Sub, vec![sp, k]);
+    self.set_var(instr::Reg::SP, self.cur, sp);
+
+    // store to SS:SP
+    self.append_instr(Opcode::Store16, vec![ss, sp, vref]);
+  }
+
+  fn append_pop(&mut self) -> Ref {
+    let ss = self.get_var(instr::Reg::SS, self.cur);
+    let sp = self.get_var(instr::Reg::SP, self.cur);
+    let k = self.ir.append_const(2);
+
+    let val = self.append_instr(Opcode::Load16, vec![ss, sp]);
+    let sp = self.append_instr(Opcode::Add, vec![sp, k]);
+    self.set_var(instr::Reg::SP, self.cur, sp);
+
+    val
+  }
+
   fn append_asm_instr(&mut self, ins: &instr::Instr) {
     //println!("## {}", intel_syntax::format(ins, &[], false).unwrap());
     assert!(ins.rep.is_none());
@@ -422,10 +447,10 @@ impl IRBuilder {
     match &ins.opcode {
       instr::Opcode::OP_PUSH => {
         let a = self.append_asm_src_operand(&ins.operands[0]);
-        self.append_instr(Opcode::Push, vec![a]);
+        self.append_push(a);
       }
       instr::Opcode::OP_POP => {
-        let vref = self.append_instr(Opcode::Pop, vec![]);
+        let vref = self.append_pop();
         self.append_asm_dst_operand(&ins.operands[0], vref);
       }
       instr::Opcode::OP_LEAVE => {
@@ -433,7 +458,7 @@ impl IRBuilder {
         let vref = self.get_var(instr::Reg::BP, self.cur);
         self.set_var(instr::Reg::SP, self.cur, vref);
         // pop bp
-        let vref = self.append_instr(Opcode::Pop, vec![]);
+        let vref = self.append_pop();
         self.set_var(instr::Reg::BP, self.cur, vref);
       }
       instr::Opcode::OP_RETF => {
