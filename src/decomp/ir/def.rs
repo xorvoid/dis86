@@ -159,6 +159,22 @@ impl Opcode {
       _ => false,
     }
   }
+
+  pub fn maybe_unused(&self) -> bool {
+    match self {
+      Opcode::Nop => true,
+      Opcode::Pin => true,
+      Opcode::Store8 => true,
+      Opcode::Store16 => true,
+      Opcode::WriteVar8 => true,
+      Opcode::WriteVar16 => true,
+      Opcode::Call => true,
+      Opcode::Ret => true,
+      Opcode::Jmp => true,
+      Opcode::Jne => true,
+      _ => false,
+    }
+  }
 }
 
 #[derive(Debug)]

@@ -124,7 +124,7 @@ impl SymbolMap {
   }
 }
 
-pub fn symbolize(ir: &mut IR) {
+pub fn symbolize_stack(ir: &mut IR) {
   let ss = ir.blocks[0].defs.get(&instr::Reg::SS.into()).unwrap();
   let bp = ir.blocks[0].defs.get(&instr::Reg::BP.into()).unwrap();
 
@@ -193,4 +193,8 @@ pub fn symbolize(ir: &mut IR) {
       instr.operands = vec![Ref::Symbol(sym), instr.operands[2]];
     }
   }
+}
+
+pub fn symbolize(ir: &mut IR) {
+  symbolize_stack(ir);
 }
