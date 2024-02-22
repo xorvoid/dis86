@@ -134,6 +134,17 @@ impl Opcode {
     }
   }
 
+  pub fn operation_size(&self) -> u32 {
+    match self {
+      Opcode::Load8 => 1,
+      Opcode::Load16 => 2,
+      Opcode::Load32 => 4,
+      Opcode::Store8 => 1,
+      Opcode::Store16 => 2,
+      _ => unreachable!(),
+    }
+  }
+
   pub fn has_no_result(&self) -> bool {
     match self {
       Opcode::Nop => true,

@@ -89,7 +89,7 @@ impl Formatter {
           write!(f, "t{}", self.map(r))?;
         }
       }
-      Ref::Symbol(sym) => write!(f, "{}", ir.symbols.symbol(sym).name)?,
+      Ref::Symbol(sym) => write!(f, "{}", ir.symbols.symbol_name(sym))?,
     }
 
     Ok(buf)
