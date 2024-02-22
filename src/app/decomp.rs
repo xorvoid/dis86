@@ -70,6 +70,9 @@ pub fn run(appname: &str) {
 
   let mut ir = decomp::ir::build::from_instrs(&instr_list);
   decomp::ir::opt::optimize(&mut ir);
+  decomp::ir::sym::symbolize(&mut ir);
+  decomp::ir::opt::optimize(&mut ir);
 
   println!("{}", ir);
+  println!("{:#?}", ir.symbols);
 }

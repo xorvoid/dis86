@@ -1,4 +1,5 @@
 use crate::instr;
+use crate::decomp::ir::sym;
 use crate::util::dvec::{DVec, DVecIndex};
 use std::collections::HashMap;
 
@@ -14,6 +15,7 @@ pub enum Ref {
   Instr(BlockRef, DVecIndex),
   Init(&'static str),  // FIXME: Don't use a String
   Block(BlockRef),
+  Symbol(sym::SymbolRef),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -49,11 +51,17 @@ pub enum Opcode {
   Shl,
   And,
   Xor,
+  //AddrOf,
   Load8,
   Load16,
   Load32,
   Store8,
   Store16,
+  ReadVar8,
+  ReadVar16,
+  ReadVar32,
+  WriteVar8,
+  WriteVar16,
   Lower16,     // |n: u32| => n as u16
   Upper16,     // |n: u32| => (n >> 16) as u16
   UpdateFlags,
@@ -82,11 +90,17 @@ impl Opcode {
       Opcode::Shl         => "shl",
       Opcode::And         => "and",
       Opcode::Xor         => "xor",
+      //Opcode::AddrOf      => "addrof",
       Opcode::Load8       => "load8",
       Opcode::Load16      => "load16",
       Opcode::Load32      => "load32",
       Opcode::Store8      => "store8",
       Opcode::Store16     => "store16",
+      Opcode::ReadVar8    => "readvar8",
+      Opcode::ReadVar16   => "readvar16",
+      Opcode::ReadVar32   => "readvar32",
+      Opcode::WriteVar8   => "writevar8",
+      Opcode::WriteVar16  => "writevar16",
       Opcode::Lower16     => "lower16",
       Opcode::Upper16     => "upper16",
       Opcode::UpdateFlags => "updf",
@@ -103,12 +117,31 @@ impl Opcode {
     }
   }
 
+  pub fn is_load(&self) -> bool {
+    match self {
+      Opcode::Load8 => true,
+      Opcode::Load16 => true,
+      Opcode::Load32 => true,
+      _ => false,
+    }
+  }
+
+  pub fn is_store(&self) -> bool {
+    match self {
+      Opcode::Store8 => true,
+      Opcode::Store16 => true,
+      _ => false,
+    }
+  }
+
   pub fn has_no_result(&self) -> bool {
     match self {
       Opcode::Nop => true,
       Opcode::Pin => true,
       Opcode::Store8 => true,
       Opcode::Store16 => true,
+      Opcode::WriteVar8 => true,
+      Opcode::WriteVar16 => true,
       Opcode::Ret => true,
       Opcode::Jmp => true,
       Opcode::Jne => true,
@@ -128,6 +161,7 @@ pub struct Block {
 #[derive(Debug)]
 pub struct IR {
   pub consts: Vec<i32>,
+  pub symbols: sym::SymbolMap,
   pub blocks: Vec<Block>,
 }
 
@@ -162,5 +196,13 @@ impl IR {
     let idx = self.consts.len();
     self.consts.push(val);
     Ref::Const(ConstRef(idx))
+  }
+
+  pub fn lookup_const(&self, k: Ref) -> Option<i32> {
+    if let Ref::Const(ConstRef(i)) = k {
+      Some(self.consts[i])
+    } else {
+      None
+    }
   }
 }

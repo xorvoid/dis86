@@ -10,6 +10,22 @@ fn operand_propagate(ir: &IR, mut r: Ref) -> Ref {
   }
 }
 
+pub fn reduce_xor(ir: &mut IR) {
+  for b in 0..ir.blocks.len() {
+    for i in ir.blocks[b].instrs.range() {
+      let r = Ref::Instr(BlockRef(b), i);
+      let instr = ir.instr(r).unwrap();
+      if instr.opcode != Opcode::Xor || instr.operands[0] != instr.operands[1] {
+        continue;
+      }
+      let k = ir.append_const(0);
+      let instr = ir.instr_mut(r).unwrap();
+      instr.opcode = Opcode::Ref;
+      instr.operands = vec![k];
+    }
+  }
+}
+
 pub fn reduce_phi(ir: &mut IR) {
   for b in 0..ir.blocks.len() {
     for i in ir.blocks[b].instrs.range() {
@@ -92,6 +108,7 @@ pub fn deadcode_elimination(ir: &mut IR) {
 pub fn optimize(ir: &mut IR) {
   // constant_fold(ir);
   // reduce_jne(ir);
+  reduce_xor(ir);
   reduce_phi(ir);
   value_propagation(ir);
   deadcode_elimination(ir);

@@ -84,6 +84,7 @@ impl IRBuilder {
     let mut this = Self {
       ir: IR {
         consts: vec![],
+        symbols: sym::SymbolMap::new(),
         blocks: vec![],
       },
       blkmeta: vec![],
@@ -468,6 +469,7 @@ impl IRBuilder {
       }
       instr::Opcode::OP_MOV => {
         let vref = self.append_asm_src_operand(&ins.operands[1]);
+        //let vref = self.append_instr(Opcode::Ref, vec![vref]);
         self.append_asm_dst_operand(&ins.operands[0], vref);
       }
       instr::Opcode::OP_INC => {

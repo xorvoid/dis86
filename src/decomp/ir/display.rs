@@ -1,6 +1,6 @@
 use crate::instr;
 use crate::decomp::ir::*;
-use std::fmt;
+use std::fmt::{self, Write};
 use std::collections::HashMap;
 
 impl fmt::Display for Opcode {
@@ -36,17 +36,18 @@ fn reg_name(r: instr::Reg) -> &'static str {
   }
 }
 
-struct RefMapper {
+pub struct Formatter {
   map: HashMap<Ref, usize>,
   next: usize,
+  out: String,
 }
 
-impl RefMapper {
-  fn new(ir: &IR) -> Self {
-    let _ = ir;
+impl Formatter {
+  pub fn new() -> Self {
     Self {
       map: HashMap::new(),
       next: 0,
+      out: String::new(),
     }
   }
 
@@ -62,66 +63,86 @@ impl RefMapper {
     }
   }
 
-  fn fmt(&mut self, ir: &IR, r: Ref) -> String {
+  pub fn finish(self) -> String {
+    self.out
+  }
+
+  pub fn ref_string(&mut self, ir: &IR, r: Ref) -> Result<String, fmt::Error> {
+    let mut buf = String::new();
+    let f = &mut buf;
+
     match r {
       Ref::Const(ConstRef(num)) => {
         let k = ir.consts[num] as i16;
         if -1024 <= k && k <= 16 {
-          format!("#{}", k)
+          write!(f, "#{}", k)?;
         } else {
-          format!("#0x{:x}", k)
+          write!(f, "#0x{:x}", k)?;
         }
       }
-      Ref::Init(sym) => format!("{}.0", sym),
-      Ref::Block(blk) => format!("b{}", blk.0),
+      Ref::Init(sym) => write!(f, "{}.0", sym)?,
+      Ref::Block(blk) => write!(f, "b{}", blk.0)?,
       Ref::Instr(_, _) => {
         if let Some((sym, num)) = ir.instr(r).unwrap().debug {
-          format!("{}.{}", reg_name(sym.0), num)
+          write!(f, "{}.{}", reg_name(sym.0), num)?;
         } else {
-          format!("t{}", self.map(r))
+          write!(f, "t{}", self.map(r))?;
         }
       }
+      Ref::Symbol(sym) => write!(f, "{}", ir.symbols.symbol(sym).name)?,
     }
+
+    Ok(buf)
   }
-}
 
-impl fmt::Display for IR {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    let mut r = RefMapper::new(self);
+  pub fn fmt_instr(&mut self, ir: &IR, dst: Ref, instr: &Instr) -> fmt::Result {
+    let s = self.ref_string(ir, dst)?;
+    if !instr.opcode.has_no_result() {
+      write!(&mut self.out, "  {:<8} = ", s)?;
+    } else {
+      write!(&mut self.out, "  {:<11}", "")?;
+    }
+    write!(&mut self.out, "{:<10}", instr.opcode.to_string())?;
+    for oper in &instr.operands {
+      let s = self.ref_string(ir, *oper)?;
+      write!(&mut self.out, " {:<12}", s)?;
+    }
+    writeln!(&mut self.out, "")?;
 
-    for (i, blk) in self.blocks.iter().enumerate() {
+    Ok(())
+  }
+
+  fn fmt_ir(&mut self, ir: &IR) -> fmt::Result {
+    for (i, blk) in ir.blocks.iter().enumerate() {
       // if self.is_block_dead(BlockRef(i)) {
       //   continue;
       // }
-      writeln!(f, "")?;
-      write!(f, "b{i}: (")?;
+      writeln!(&mut self.out, "")?;
+      write!(&mut self.out, "b{i}: (")?;
       for (k, p) in blk.preds.iter().enumerate() {
         if k != 0 {
-          write!(f, " ")?;
+          write!(&mut self.out, " ")?;
         }
-        write!(f, "b{}", p.0)?;
+        write!(&mut self.out, "b{}", p.0)?;
       }
-      writeln!(f, ") {}", blk.name)?;
+      writeln!(&mut self.out, ") {}", blk.name)?;
 
       for idx in blk.instrs.range() {
         let iref = Ref::Instr(BlockRef(i), idx);
         let instr = &blk.instrs[idx];
         if instr.opcode == Opcode::Nop { continue; }
-
-        let s = r.fmt(self, iref);
-        if !instr.opcode.has_no_result() {
-          write!(f, "  {:<8} = ", s)?;
-        } else {
-          write!(f, "  {:<11}", "")?;
-        }
-        write!(f, "{:<10}", instr.opcode.to_string())?;
-        for oper in &instr.operands {
-          let s = r.fmt(self, *oper);
-          write!(f, " {:<12}", s)?;
-        }
-        writeln!(f, "")?;
+        self.fmt_instr(ir, iref, instr)?;
       }
     }
+
     Ok(())
+  }
+}
+
+impl fmt::Display for IR {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    let mut r = Formatter::new();
+    r.fmt_ir(self)?;
+    write!(f, "{}", r.finish())
   }
 }
