@@ -73,6 +73,10 @@ static int run(options_t *opt)
     if (!cfg) FAIL("Failed to read config file: '%s'", opt->config);
   }
 
+  if (opt->start.seg != opt->end.seg) {
+    fprintf(stderr, "WARN: The start segment and end segment are different.. Near calls might decompile wrong.\n");
+  }
+
   size_t start_idx = segoff_abs(opt->start);
   size_t end_idx = segoff_abs(opt->end);
 
@@ -102,7 +106,7 @@ static int run(options_t *opt)
   char func_name[256];
   sprintf(func_name, "func_%08x__%04x_%04x", (u32)start_idx, opt->start.seg, opt->start.off);
 
-  const char *s = dis86_decompile(d, cfg, func_name, instr, n_instr);
+  const char *s = dis86_decompile(d, cfg, func_name, opt->start.seg, instr, n_instr);
   printf("%-30s\n", s);
   free((void*)s);
 

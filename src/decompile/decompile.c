@@ -19,6 +19,7 @@ struct decompiler
   dis86_decompile_config_t * cfg;
   dis86_decompile_config_t * default_cfg;
   const char *               func_name;
+  u16                        seg;
   dis86_instr_t *            ins;
   size_t                     n_ins;
 
@@ -31,6 +32,7 @@ struct decompiler
 static decompiler_t * decompiler_new( dis86_t *                  dis,
                                       dis86_decompile_config_t * opt_cfg,
                                       const char *               func_name,
+                                      u16                        seg,
                                       dis86_instr_t *            ins_arr,
                                       size_t                     n_ins )
 
@@ -43,6 +45,7 @@ static decompiler_t * decompiler_new( dis86_t *                  dis,
     d->cfg = d->default_cfg;
   }
   d->func_name = func_name;
+  d->seg       = seg;
   d->ins       = ins_arr;
   d->n_ins     = n_ins;
 
@@ -124,7 +127,7 @@ static void decompiler_initial_analysis(decompiler_t *d)
   }
 
   // Pass to convert to expression structures
-  d->meh = meh_new(d->cfg, d->symbols, d->ins, d->n_ins);
+  d->meh = meh_new(d->cfg, d->symbols, d->seg, d->ins, d->n_ins);
 
   // Report the symbols
   if (DEBUG_REPORT_SYMBOLS) {
@@ -192,6 +195,29 @@ static void decompiler_emit_postamble(decompiler_t *d, str_t *s)
   }
 }
 
+static const char *short_name(const char *name, size_t off, size_t n_bytes)
+{
+  static char buf[3] = {};
+  if (0 != strcmp(name, "AX") &&
+      0 != strcmp(name, "BX") &&
+      0 != strcmp(name, "CX") &&
+      0 != strcmp(name, "DX")) {
+    return NULL;
+  }
+
+  buf[0] = name[0];
+
+  assert(n_bytes == 1);
+  if (off == 0) {
+    buf[1] = 'L';
+  } else {
+    assert(off == 1);
+    buf[1] = 'H';
+  }
+
+  return buf;
+}
+
 static void symref_lvalue_str(symref_t ref, const char *name, str_t *s)
 {
   assert(ref.symbol);
@@ -201,7 +227,12 @@ static void symref_lvalue_str(symref_t ref, const char *name, str_t *s)
   }
 
   else {
-    str_fmt(s, "*(%s*)((u8*)&%s + %u)", n_bytes_as_type(ref.len), name, ref.off);
+    const char *sn = short_name(name, ref.off, ref.len);
+    if (sn) {
+      str_fmt(s, "%s", sn);
+    } else {
+      str_fmt(s, "*(%s*)((u8*)&%s + %u)", n_bytes_as_type(ref.len), name, ref.off);
+    }
   }
 }
 
@@ -218,8 +249,13 @@ static void symref_rvalue_str(symref_t ref, const char *name, str_t *s)
   }
 
   else {
-    u16 bits = 8 * ref.off;
-    str_fmt(s, "(%s)(%s>>%u)", n_bytes_as_type(ref.len), name, bits);
+    const char *sn = short_name(name, ref.off, ref.len);
+    if (sn) {
+      str_fmt(s, "%s", sn);
+    } else {
+      u16 bits = 8 * ref.off;
+      str_fmt(s, "(%s)(%s>>%u)", n_bytes_as_type(ref.len), name, bits);
+    }
   }
 }
 
@@ -391,13 +427,14 @@ static void decompiler_emit_expr(decompiler_t *d, expr_t *expr, str_t *ret_s)
 char *dis86_decompile( dis86_t *                  dis,
                        dis86_decompile_config_t * opt_cfg,
                        const char *               func_name,
+                       u16                        seg,
                        dis86_instr_t *            ins_arr,
                        size_t                     n_ins )
 {
   str_t ret_s[1];
   str_init(ret_s);
 
-  decompiler_t *d = decompiler_new(dis, opt_cfg, func_name, ins_arr, n_ins);
+  decompiler_t *d = decompiler_new(dis, opt_cfg, func_name, seg, ins_arr, n_ins);
   decompiler_initial_analysis(d);
   decompiler_emit_preamble(d, ret_s);
 

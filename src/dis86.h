@@ -69,6 +69,7 @@ void                       dis86_decompile_config_delete(dis86_decompile_config_
 char *dis86_decompile( dis86_t *                  dis,
                        dis86_decompile_config_t * opt_cfg, /* optional */
                        const char *               func_name,
+                       uint16_t                   seg,
                        dis86_instr_t *            ins,
                        size_t                     n_ins );
 

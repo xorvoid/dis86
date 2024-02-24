@@ -146,5 +146,5 @@ struct meh
   expr_t expr_arr[EXPR_MAX];
 };
 
-meh_t * meh_new(config_t *cfg, symbols_t *symbols, dis86_instr_t *ins, size_t n_ins);
+meh_t * meh_new(config_t *cfg, symbols_t *symbols, u16 seg, dis86_instr_t *ins, size_t n_ins);
 void    meh_delete(meh_t *m);

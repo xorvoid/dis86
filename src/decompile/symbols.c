@@ -142,7 +142,7 @@ void symbols_delete(symbols_t *s)
   symtab_delete(s->locals);
 }
 
-#define SYMTAB_MAX_SIZE 128
+#define SYMTAB_MAX_SIZE 4096
 
 struct symtab
 {

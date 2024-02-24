@@ -150,17 +150,28 @@ static size_t _impl_call_far(expr_t *expr, config_t *cfg, symbols_t *symbols, di
   return 1;
 }
 
-static size_t _impl_call_near(expr_t *expr, symbols_t *symbols, dis86_instr_t *ins)
+static size_t _impl_call_near(u16 seg, expr_t *expr,
+                              config_t *cfg, symbols_t *symbols, dis86_instr_t *ins)
 {
-  assert(ins->operand[0].type == OPERAND_TYPE_REL);
-  u16 effective = ins->addr + ins->n_bytes + ins->operand[0].u.rel.val;
+  if (ins->operand[0].type != OPERAND_TYPE_REL) {
+    expr->kind = EXPR_KIND_UNKNOWN;
+    return 1;
+  }
+
+  size_t effective = (u16)(ins->addr + ins->n_bytes + ins->operand[0].u.rel.val);
+  //printf("effective: 0x%x | seg: 0x%x\n", (u32)effective, seg);
+  assert(16*(size_t)seg <= effective && effective < 16*(size_t)seg + (1<<16));
+  u16 off = effective - 16*(size_t)seg;
+
+  segoff_t addr = {seg, off};
+  config_func_t *func = config_func_lookup(cfg, addr);
 
   expr->kind = EXPR_KIND_CALL;
   expr_call_t *k = expr->k.call;
   k->addr.type   = ADDR_TYPE_NEAR;
   k->addr.u.near = effective;
   k->remapped    = false;
-  k->func        = NULL;
+  k->func        = func;
 
   return 1;
 }
@@ -196,10 +207,10 @@ static size_t _impl_load_effective_addr(expr_t *expr, symbols_t *symbols, dis86_
 #define ABSTRACT_JUMP(_op)       _impl_abstract_jump(expr, symbols, ins, _op)
 //#define ABSTRACT_LOOP()          _impl_abstract_loop(expr, symbols, ins)
 #define CALL_FAR()               _impl_call_far(expr, cfg, symbols, ins)
-#define CALL_NEAR()              _impl_call_near(expr, symbols, ins)
+#define CALL_NEAR()              _impl_call_near(seg, expr, cfg, symbols, ins)
 #define LOAD_EFFECTIVE_ADDR()    _impl_load_effective_addr(expr, symbols, ins)
 
-static size_t extract_expr(expr_t *expr, config_t *cfg, symbols_t *symbols,
+static size_t extract_expr(u16 seg, expr_t *expr, config_t *cfg, symbols_t *symbols,
                            dis86_instr_t *ins, size_t n_ins)
 {
   switch (ins->opcode) {
@@ -314,6 +325,7 @@ value_t expr_destination(expr_t *expr)
 {
   switch (expr->kind) {
     case EXPR_KIND_UNKNOWN:       FAIL("EXPR_KIND_UNKNOWN UNSUPPORTED");
+    case EXPR_KIND_NONE:          return VALUE_NONE;
     case EXPR_KIND_OPERATOR1:     return expr->k.operator1->dest;
     case EXPR_KIND_OPERATOR2:     return expr->k.operator2->dest;
     case EXPR_KIND_OPERATOR3:     return expr->k.operator3->dest;
@@ -326,7 +338,7 @@ value_t expr_destination(expr_t *expr)
   }
 }
 
-meh_t * meh_new(config_t *cfg, symbols_t *symbols, dis86_instr_t *ins, size_t n_ins)
+meh_t * meh_new(config_t *cfg, symbols_t *symbols, u16 seg, dis86_instr_t *ins, size_t n_ins)
 {
   meh_t *m = calloc(1, sizeof(meh_t));
 
@@ -334,7 +346,7 @@ meh_t * meh_new(config_t *cfg, symbols_t *symbols, dis86_instr_t *ins, size_t n_
     assert(m->expr_len < ARRAY_SIZE(m->expr_arr));
 
     expr_t *expr = &m->expr_arr[m->expr_len];
-    size_t consumed = extract_expr(expr, cfg, symbols, ins, n_ins);
+    size_t consumed = extract_expr(seg, expr, cfg, symbols, ins, n_ins);
     assert(consumed <= n_ins);
     expr->ins = ins;
     expr->n_ins = consumed;
