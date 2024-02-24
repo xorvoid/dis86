@@ -197,29 +197,6 @@ pub fn symbolize_stack(ir: &mut IR) {
   }
 }
 
-fn symbolize_calls(ir: &mut IR, cfg: &Config) {
-  // Scan for calls, resolving to function names if possible
-  for b in 0..ir.blocks.len() {
-    for i in ir.blocks[b].instrs.range() {
-      let r = Ref::Instr(BlockRef(b), i);
-      let instr = ir.instr(r).unwrap();
-      if instr.opcode != Opcode::Call { continue; }
-
-      let Some(seg) = ir.lookup_const(instr.operands[0]) else { continue };
-      let Some(off) = ir.lookup_const(instr.operands[1]) else { continue };
-      let addr = SegOff{seg: seg.try_into().unwrap(), off: off.try_into().unwrap() };
-      let Some(func) = cfg.func_lookup(addr) else { continue };
-
-      let idx = ir.funcs.len();
-      ir.funcs.push(func.name.to_string());
-
-      let instr = ir.instr_mut(r).unwrap();
-      instr.operands = vec![Ref::Func(idx)];
-    }
-  }
-}
-
 pub fn symbolize(ir: &mut IR, cfg: &Config) {
   symbolize_stack(ir);
-  symbolize_calls(ir, cfg);
 }

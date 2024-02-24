@@ -1,7 +1,9 @@
 use crate::instr;
 use crate::util::dvec::DVec;
-use std::collections::{HashSet, HashMap};
+use crate::segoff::SegOff;
+use crate::decomp::config::Config;
 use crate::decomp::ir::*;
+use std::collections::{HashSet, HashMap};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Address(usize);
@@ -54,13 +56,14 @@ fn jump_target(ins: &instr::Instr) -> Option<Address> {
   Some(tgt)
 }
 
-struct IRBuilder {
+struct IRBuilder<'a> {
   ir: IR,
   blkmeta: Vec<BlockMeta>,
   addrmap: HashMap<Address, BlockRef>,
   symbol_count: HashMap<Symbol, usize>,
   // ref_to_symbol: HashMap<Ref, (Symbol, usize)>,
   cur: BlockRef,
+  cfg: &'a Config,
 }
 
 struct BlockMeta {
@@ -79,14 +82,15 @@ impl Block {
   }
 }
 
-impl IRBuilder {
-  fn new() -> Self {
+impl<'a> IRBuilder<'a> {
+  fn new(cfg: &'a Config) -> Self {
     let mut this = Self {
       ir: IR::new(),
       blkmeta: vec![],
       addrmap: HashMap::new(),
       symbol_count: HashMap::new(),
       cur: BlockRef(0),
+      cfg,
     };
 
     // Create and seal the entry block
@@ -265,7 +269,7 @@ impl IRBuilder {
 
 /////////////////////////////////////////////////////////////////////////////////////
 
-impl IRBuilder {
+impl IRBuilder<'_> {
   fn append_asm_src_reg(&mut self, reg: &instr::OperandReg) -> Ref {
     self.get_var(reg.0, self.cur)
   }
@@ -561,10 +565,19 @@ impl IRBuilder {
       }
       instr::Opcode::OP_CALLF => {
         let instr::Operand::Far(far) = &ins.operands[0] else { panic!("Unsupported OP_CALLF operand") };
-        let seg = self.ir.append_const(far.seg.into());
-        let off = self.ir.append_const(far.off.into());
-        let ret = self.append_instr(Opcode::Call, vec![seg, off]);
-        self.set_var(instr::Reg::AX, self.cur, ret);
+        let addr = SegOff { seg: far.seg, off: far.off };
+        if let Some(func) = self.cfg.func_lookup(addr) {
+          // Known function
+          let idx = self.ir.funcs.len();
+          self.ir.funcs.push(func.name.to_string());
+          let ret = self.append_instr(Opcode::Call, vec![Ref::Func(idx)]);
+        } else {
+          // Unknown function
+          let seg = self.ir.append_const(far.seg.into());
+          let off = self.ir.append_const(far.off.into());
+          let ret = self.append_instr(Opcode::Call, vec![seg, off]);
+          self.set_var(instr::Reg::AX, self.cur, ret);
+        }
       }
       instr::Opcode::OP_LES => {
         let vref = self.append_asm_src_operand(&ins.operands[2]);
@@ -625,8 +638,8 @@ impl IRBuilder {
   }
 }
 
-pub fn from_instrs(instrs: &[instr::Instr]) -> IR {
-  let mut bld = IRBuilder::new();
+pub fn from_instrs(instrs: &[instr::Instr], cfg: &Config) -> IR {
+  let mut bld = IRBuilder::new(cfg);
   bld.build_from_instrs(instrs);
   bld.ir
 }

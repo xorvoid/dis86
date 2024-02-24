@@ -73,7 +73,7 @@ pub fn run(appname: &str) {
     instr_list.push(instr);
   }
 
-  let mut ir = build::from_instrs(&instr_list);
+  let mut ir = build::from_instrs(&instr_list, &cfg);
   opt::optimize(&mut ir);
   sym::symbolize(&mut ir, &cfg);
   opt::optimize(&mut ir);
