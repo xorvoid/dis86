@@ -3,11 +3,12 @@ use std::ffi::{CStr, CString};
 use std::mem::MaybeUninit;
 use std::marker::PhantomData;
 
-pub enum Elt<'a> {
+pub enum Value<'a> {
   Node(Node<'a>),
   Str(&'a str),
 }
 
+#[derive(Clone)]
 pub struct Node<'a> {
   ctx: *mut bsl_t,
   phantom: PhantomData<&'a Root>,
@@ -22,6 +23,10 @@ pub struct Iter<'a> {
   phantom: PhantomData<Node<'a>>,
 }
 
+pub fn parse(inp: &str) -> Option<Root> {
+  Root::parse(inp)
+}
+
 impl Root {
   pub fn parse(inp: &str) -> Option<Root> {
     let mut err: c_int = 0;
@@ -33,7 +38,7 @@ impl Root {
     Some(Root { ctx })
   }
 
-  pub fn get(&self, key: &str) -> Option<Elt> { node_get(self.ctx, key) }
+  pub fn get(&self, key: &str) -> Option<Value> { node_get(self.ctx, key) }
   pub fn get_str(&self, key: &str) -> Option<&str> { node_get_str(self.ctx, key) }
   pub fn get_node(&self, key: &str) -> Option<Node> { node_get_node(self.ctx, key) }
 }
@@ -44,33 +49,47 @@ impl Drop for Root {
   }
 }
 
-impl<'a> Elt<'a> {
-  fn from_raw(typ: c_int, ptr: *mut c_void) -> Elt<'a> {
+impl<'a> Value<'a> {
+  fn from_raw(typ: c_int, ptr: *mut c_void) -> Value<'a> {
     if typ == BSL_TYPE_STR {
       let cstr = unsafe { CStr::from_ptr(ptr as *const c_char) };
-      Elt::Str(cstr.to_str().unwrap())
+      Value::Str(cstr.to_str().unwrap())
     } else if typ == BSL_TYPE_NODE {
-      Elt::Node(Node { ctx: ptr as *mut bsl_t, phantom: PhantomData})
+      Value::Node(Node { ctx: ptr as *mut bsl_t, phantom: PhantomData})
     } else {
       panic!("Unexpected type: {}", typ);
     }
   }
+
+  pub fn as_node(&self) -> Option<Node<'a>> {
+    match self {
+      Self::Node(n) => Some(n.clone()),
+      _ => None,
+    }
+  }
+
+  pub fn as_str(&self) -> Option<&'a str> {
+    match self {
+      Self::Str(s) => Some(s),
+      _ => None,
+    }
+  }
 }
 
-fn node_get<'a>(ctx: *mut bsl_t, key: &str) -> Option<Elt<'a>> {
+fn node_get<'a>(ctx: *mut bsl_t, key: &str) -> Option<Value<'a>> {
   let key_cstr = CString::new(key).unwrap();
   let mut typ: c_int = 0;
   let ptr = unsafe { bsl_get_generic(ctx, key_cstr.as_ptr(), &mut typ) };
   if ptr.is_null() {
     return None;
   }
-  Some(Elt::from_raw(typ, ptr))
+  Some(Value::from_raw(typ, ptr))
 }
 
 fn node_get_str<'a>(ctx: *mut bsl_t, key: &str) -> Option<&'a str> {
   let elt = node_get(ctx, key)?;
   match elt {
-    Elt::Str(s) => Some(s),
+    Value::Str(s) => Some(s),
     _ => None,
   }
 }
@@ -78,13 +97,13 @@ fn node_get_str<'a>(ctx: *mut bsl_t, key: &str) -> Option<&'a str> {
 fn node_get_node<'a>(ctx: *mut bsl_t, key: &str) -> Option<Node<'a>> {
   let elt = node_get(ctx, key)?;
   match elt {
-    Elt::Node(n) => Some(n),
+    Value::Node(n) => Some(n),
     _ => None,
   }
 }
 
 impl<'a> Node<'a> {
-  pub fn get(&self, key: &str) -> Option<Elt> { node_get(self.ctx, key) }
+  pub fn get(&self, key: &str) -> Option<Value> { node_get(self.ctx, key) }
   pub fn get_str(&self, key: &str) -> Option<&str> { node_get_str(self.ctx, key) }
   pub fn get_node(&self, key: &str) -> Option<Node> { node_get_node(self.ctx, key) }
 
@@ -96,7 +115,7 @@ impl<'a> Node<'a> {
 }
 
 impl<'a> Iterator for Iter<'a> {
-  type Item = (&'a str, Elt<'a>);
+  type Item = (&'a str, Value<'a>);
   fn next(&mut self) -> Option<Self::Item> {
     let mut typ: c_int = -1;
     let mut key: *const c_char = std::ptr::null();
@@ -106,7 +125,7 @@ impl<'a> Iterator for Iter<'a> {
       return None;
     }
     let key = unsafe { CStr::from_ptr(key) }.to_str().unwrap();
-    let elt = Elt::from_raw(typ, val);
+    let elt = Value::from_raw(typ, val);
     Some((key, elt))
   }
 }
