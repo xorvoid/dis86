@@ -1,4 +1,5 @@
 mod util;
+pub mod bsl;
 mod binary;
 mod instr;
 mod instr_fmt;
