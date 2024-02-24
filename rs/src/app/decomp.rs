@@ -1,7 +1,8 @@
 use pico_args;
 use crate::segoff::SegOff;
 use crate::decode::Decoder;
-use crate::decomp;
+use crate::decomp::ir::{build, opt, sym};
+use crate::decomp::config::Config;
 
 fn print_help(appname: &str) {
   println!("usage: {} dis OPTIONS", appname);
@@ -15,6 +16,7 @@ fn print_help(appname: &str) {
 #[derive(Debug)]
 struct Args {
   binary: String,
+  config: String,
   start_addr: SegOff,
   end_addr: SegOff,
 }
@@ -30,6 +32,7 @@ fn parse_args(appname: &str) -> Result<Args, pico_args::Error> {
 
   // Parse out all args
   let args = Args {
+    config: pargs.value_from_str("--config")?,
     binary: pargs.value_from_str("--binary")?,
     start_addr: pargs.value_from_str("--start-addr")?,
     end_addr: pargs.value_from_str("--end-addr")?,
@@ -54,6 +57,8 @@ pub fn run(appname: &str) {
     }
   };
 
+  let cfg = Config::from_path(&args.config).unwrap();
+
   let start_idx = args.start_addr.abs();
   let end_idx = args.end_addr.abs();
 
@@ -68,11 +73,11 @@ pub fn run(appname: &str) {
     instr_list.push(instr);
   }
 
-  let mut ir = decomp::ir::build::from_instrs(&instr_list);
-  decomp::ir::opt::optimize(&mut ir);
-  decomp::ir::sym::symbolize(&mut ir);
-  decomp::ir::opt::optimize(&mut ir);
+  let mut ir = build::from_instrs(&instr_list);
+  opt::optimize(&mut ir);
+  sym::symbolize(&mut ir, &cfg);
+  opt::optimize(&mut ir);
 
   println!("{}", ir);
-  println!("{:#?}", ir.symbols);
+  //println!("{:#?}", ir.symbols);
 }

@@ -90,6 +90,7 @@ impl Formatter {
         }
       }
       Ref::Symbol(sym) => write!(f, "{}", ir.symbols.symbol_name(sym))?,
+      Ref::Func(idx) => write!(f, "{}", ir.funcs[idx])?,
     }
 
     Ok(buf)
@@ -105,7 +106,7 @@ impl Formatter {
     write!(&mut self.out, "{:<10}", instr.opcode.to_string())?;
     for oper in &instr.operands {
       let s = self.ref_string(ir, *oper)?;
-      write!(&mut self.out, " {:<12}", s)?;
+      write!(&mut self.out, " {:<20}", s)?;
     }
     writeln!(&mut self.out, "")?;
 

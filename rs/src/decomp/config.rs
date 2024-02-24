@@ -3,36 +3,48 @@ use crate::bsl;
 
 #[derive(Debug)]
 pub struct Func {
-  name: String,
-  addr: SegOff,
-  ret:  String,
-  args: Option<u16>,  // None means "unknown", Some(0) means "no args"
-  pop_args_after_call: bool,
+  pub name: String,
+  pub addr: SegOff,
+  pub ret:  String,
+  pub args: Option<u16>,  // None means "unknown", Some(0) means "no args"
+  pub pop_args_after_call: bool,
 }
 
 #[derive(Debug)]
 pub struct Global {
-  name: String,
-  offset: u16,
-  typ: String,
+  pub name: String,
+  pub offset: u16,
+  pub typ: String,
 }
 
 #[derive(Debug)]
 pub struct Segmap {
-  name: String,
-  from: u16,
-  to: u16,
+  pub name: String,
+  pub from: u16,
+  pub to: u16,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Config {
-  funcs: Vec<Func>,
-  globals: Vec<Global>,
-  segmaps: Vec<Segmap>,
+  pub funcs: Vec<Func>,
+  pub globals: Vec<Global>,
+  pub segmaps: Vec<Segmap>,
 }
 
 impl Config {
-  pub fn from_file(path: &str) -> Result<Config, String> {
+  pub fn func_lookup(&self, addr: SegOff) -> Option<&Func> {
+    // TODO: Consider something better than linear search
+    for f in &self.funcs {
+      if addr == f.addr {
+        return Some(f)
+      }
+    }
+    None
+  }
+}
+
+impl Config {
+  pub fn from_path(path: &str) -> Result<Config, String> {
     let mut cfg = Config {
       funcs: vec![],
       globals: vec![],

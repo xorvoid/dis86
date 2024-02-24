@@ -82,11 +82,7 @@ impl Block {
 impl IRBuilder {
   fn new() -> Self {
     let mut this = Self {
-      ir: IR {
-        consts: vec![],
-        symbols: sym::SymbolMap::new(),
-        blocks: vec![],
-      },
+      ir: IR::new(),
       blkmeta: vec![],
       addrmap: HashMap::new(),
       symbol_count: HashMap::new(),

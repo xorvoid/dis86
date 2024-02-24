@@ -16,6 +16,7 @@ pub enum Ref {
   Init(&'static str),  // FIXME: Don't use a String
   Block(BlockRef),
   Symbol(sym::SymbolRef),
+  Func(usize),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -189,10 +190,20 @@ pub struct Block {
 pub struct IR {
   pub consts: Vec<i32>,
   pub symbols: sym::SymbolMap,
+  pub funcs: Vec<String>,
   pub blocks: Vec<Block>,
 }
 
 impl IR {
+  pub fn new() -> Self {
+    Self {
+      consts: vec![],
+      symbols: sym::SymbolMap::new(),
+      funcs: vec![],
+      blocks: vec![],
+    }
+  }
+
   pub fn instr(&self, r: Ref) -> Option<&Instr> {
     if let Ref::Instr(b, i) = r {
       Some(&self.blocks[b.0].instrs[i])
