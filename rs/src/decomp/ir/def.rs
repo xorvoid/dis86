@@ -172,6 +172,7 @@ impl Opcode {
       Opcode::WriteVar8 => true,
       Opcode::WriteVar16 => true,
       Opcode::Call => true,
+      Opcode::CallArgs => true,
       Opcode::Ret => true,
       Opcode::Jmp => true,
       Opcode::Jne => true,

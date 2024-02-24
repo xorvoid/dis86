@@ -570,7 +570,25 @@ impl IRBuilder<'_> {
           // Known function
           let idx = self.ir.funcs.len();
           self.ir.funcs.push(func.name.to_string());
-          let ret = self.append_instr(Opcode::Call, vec![Ref::Func(idx)]);
+          if let Some(nargs) = &func.args {
+            // Known args
+            let mut operands = vec![Ref::Func(idx)];
+            let ss = self.get_var(instr::Reg::SS, self.cur);
+            let sp = self.get_var(instr::Reg::SP, self.cur);
+            for i in 0..(*nargs as i32) {
+              let mut off = sp;
+              if i != 0 {
+                let k = self.ir.append_const(2*i);
+                off = self.append_instr(Opcode::Add, vec![sp, k]);
+              }
+              let val = self.append_instr(Opcode::Load16, vec![ss, off]);
+              operands.push(val);
+            }
+            self.append_instr(Opcode::CallArgs, operands);
+          } else {
+            // Unknown args
+            self.append_instr(Opcode::Call, vec![Ref::Func(idx)]);
+          }
         } else {
           // Unknown function
           let seg = self.ir.append_const(far.seg.into());
