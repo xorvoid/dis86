@@ -60,11 +60,10 @@ pub fn reduce_phi(ir: &mut IR) {
 }
 
 fn arith_const_oper(ir: &IR, vref: Ref) -> Option<(Ref, i32)> {
-  let instr = ir.instr(vref).unwrap();
+  let instr = ir.instr(vref)?;
   if instr.operands.len() != 2 { return None; }
 
   let (nref, cref) = (instr.operands[0], instr.operands[1]);
-  let Ref::Instr(_, _) = nref else { return None };
   let Ref::Const(_) = cref else { return None };
 
   match instr.opcode {
