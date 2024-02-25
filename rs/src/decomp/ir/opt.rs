@@ -1,5 +1,5 @@
 use crate::decomp::ir::def::*;
-use std::collections::HashSet;
+use std::collections::{hash_map, HashMap, HashSet};
 
 // Propagate operand through any ref opcodes
 fn operand_propagate(ir: &IR, mut r: Ref) -> Ref {
@@ -150,12 +150,49 @@ pub fn deadcode_elimination(ir: &mut IR) {
   }
 }
 
+fn allow_cse(opcode: Opcode) -> bool {
+  match opcode {
+    Opcode::Add => true,
+    Opcode::Sub => true,
+    _ => false,
+  }
+}
+
+pub fn common_subexpression_elimination(ir: &mut IR) {
+  let mut prev = HashMap::new();
+  for b in 0..ir.blocks.len() {
+    for i in ir.blocks[b].instrs.range() {
+      let r = Ref::Instr(BlockRef(b), i);
+      let instr = ir.instr(r).unwrap();
+      if !allow_cse(instr.opcode) { continue; }
+
+      // FIXME: Hacky due to the "debug" field which has always felt out of place
+      let mut key = instr.clone();
+      key.debug = None;
+
+      let prev_ref = match prev.entry(key) {
+        hash_map::Entry::Vacant(x) => {
+          x.insert(r);
+          continue;
+        }
+        hash_map::Entry::Occupied(x) => *x.get(),
+      };
+
+      let instr = ir.instr_mut(r).unwrap();
+      instr.opcode = Opcode::Ref;
+      instr.operands = vec![prev_ref];
+    }
+  }
+}
+
 pub fn optimize(ir: &mut IR) {
   // constant_fold(ir);
   // reduce_jne(ir);
   reduce_xor(ir);
   reduce_phi(ir);
   arithmetic_accumulation(ir);
+  value_propagation(ir);
+  common_subexpression_elimination(ir);
   value_propagation(ir);
   deadcode_elimination(ir);
   // jump_propagation(ir);

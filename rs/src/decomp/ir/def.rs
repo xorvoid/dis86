@@ -34,14 +34,14 @@ impl From<&instr::Reg> for Symbol {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Instr {
   pub debug: Option<(Symbol, usize)>,
   pub opcode: Opcode,
   pub operands: Vec<Ref>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Opcode {
   Nop,
   Pin,
