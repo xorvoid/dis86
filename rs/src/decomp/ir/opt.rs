@@ -185,15 +185,52 @@ pub fn common_subexpression_elimination(ir: &mut IR) {
   }
 }
 
+pub fn forward_store_to_load(ir: &mut IR) {
+  let mut prev_stores = vec![];
+
+  let prev_lookup = |ir: &IR, prev_stores: &[Ref], seg, off| -> Option<Ref> {
+    for store_ref in prev_stores.iter().rev() {
+      let store_instr = ir.instr(*store_ref).unwrap();
+      // FIXME: Need to pessimize to account for possible aliasing
+      if seg == store_instr.operands[0] && off == store_instr.operands[1] {
+        return Some(store_instr.operands[2]);
+      }
+    }
+    None
+  };
+
+  for b in 0..ir.blocks.len() {
+    for i in ir.blocks[b].instrs.range() {
+      let r = Ref::Instr(BlockRef(b), i);
+      let instr = ir.instr(r).unwrap();
+      if instr.opcode.is_store() {
+        prev_stores.push(r);
+      }
+      if !instr.opcode.is_load() { continue; }
+      let seg = instr.operands[0];
+      let off = instr.operands[1];
+      let Some(store_val) = prev_lookup(ir, &prev_stores, seg, off) else {continue };
+
+      let instr = ir.instr_mut(r).unwrap();
+      instr.opcode = Opcode::Ref;
+      instr.operands = vec![store_val];
+    }
+  }
+}
+
+const N_OPT_PASSES: usize = 3;
+
 pub fn optimize(ir: &mut IR) {
-  // constant_fold(ir);
-  // reduce_jne(ir);
-  reduce_xor(ir);
-  reduce_phi(ir);
-  arithmetic_accumulation(ir);
-  value_propagation(ir);
-  common_subexpression_elimination(ir);
-  value_propagation(ir);
+  for _ in 0..N_OPT_PASSES {
+    // constant_fold(ir);
+    // reduce_jne(ir);
+    reduce_xor(ir);
+    reduce_phi(ir);
+    arithmetic_accumulation(ir);
+    value_propagation(ir);
+    common_subexpression_elimination(ir);
+    value_propagation(ir);
+    // jump_propagation(ir);
+  }
   deadcode_elimination(ir);
-  // jump_propagation(ir);
 }
