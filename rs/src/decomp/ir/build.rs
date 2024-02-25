@@ -479,6 +479,7 @@ impl IRBuilder<'_> {
           // Known function
           let idx = self.ir.funcs.len();
           self.ir.funcs.push(func.name.to_string());
+          let mut ret;
           if let Some(nargs) = &func.args {
             // Known args
             let mut operands = vec![Ref::Func(idx)];
@@ -493,10 +494,24 @@ impl IRBuilder<'_> {
               let val = self.append_instr(Opcode::Load16, vec![ss, off]);
               operands.push(val);
             }
-            self.append_instr(Opcode::CallArgs, operands);
+            ret = self.append_instr(Opcode::CallArgs, operands);
           } else {
             // Unknown args
-            self.append_instr(Opcode::Call, vec![Ref::Func(idx)]);
+            ret = self.append_instr(Opcode::Call, vec![Ref::Func(idx)]);
+          }
+          match &func.ret as &str {
+            "void" => {}, // nothing to do
+            "u16" => {
+              self.ir.set_var(instr::Reg::AX, self.cur, ret);
+            }
+            "u32" => {
+              let upper = self.append_instr(Opcode::Upper16, vec![ret]);
+              self.ir.set_var(instr::Reg::DX, self.cur, upper);
+
+              let lower = self.append_instr(Opcode::Lower16, vec![ret]);
+              self.ir.set_var(instr::Reg::AX, self.cur, lower);
+            }
+            _ => panic!("Unsupported function return type: {}", func.ret),
           }
         } else {
           // Unknown function
