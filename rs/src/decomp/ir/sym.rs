@@ -167,10 +167,10 @@ pub fn symbolize_stack(ir: &mut IR) {
       // println!("{}", f.finish());
 
       if off > 0 {
-        let name = format!("_param_{:04}", off);
+        let name = format!("_param_{:04}", off+2);
         ir.symbols.params.append(&name, off, size);
       } else {
-        let name = format!("_local_{:04}", -off);
+        let name = format!("_local_{:04}", -(off+2));
         ir.symbols.locals.append(&name, off, size);
       }
     }

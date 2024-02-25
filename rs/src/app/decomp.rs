@@ -78,8 +78,10 @@ pub fn run(appname: &str) {
   sym::symbolize(&mut ir, &cfg);
   // opt::forward_store_to_load(&mut ir);
   opt::optimize(&mut ir);
-  //opt::mem_symbol_to_ref(&mut ir);
+
+  opt::mem_symbol_to_ref(&mut ir);
+  opt::optimize(&mut ir);
 
   println!("{}", ir);
-  println!("{:#?}", ir.symbols);
+  //println!("{:#?}", ir.symbols);
 }

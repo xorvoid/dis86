@@ -166,11 +166,7 @@ pub fn common_subexpression_elimination(ir: &mut IR) {
       let instr = ir.instr(r).unwrap();
       if !allow_cse(instr.opcode) { continue; }
 
-      // FIXME: Hacky due to the "debug" field which has always felt out of place
-      let mut key = instr.clone();
-      key.debug = None;
-
-      let prev_ref = match prev.entry(key) {
+      let prev_ref = match prev.entry(instr.clone()) {
         hash_map::Entry::Vacant(x) => {
           x.insert(r);
           continue;
@@ -218,29 +214,6 @@ pub fn forward_store_to_load(ir: &mut IR) {
   }
 }
 
-fn get_var(ir: &IR, name: &Name, blk: BlockRef) -> Ref {
-  // TODO: Unify with build::IRBuilder::get_var
-
-  // Defined locally in this block? Easy.
-  match ir.blocks[blk.0].defs.get(name) {
-    Some(val) => return *val,
-    None => (),
-  }
-
-  // Otherwise, search predecessors
-  let preds = &ir.blocks[blk.0].preds;
-  if preds.len() == 1 {
-    let parent = preds[0];
-    get_var(ir, name, parent)
-  } else {
-    panic!("Unimpl | Need PHI!!");
-    // // create a phi and immediately populate it
-    // let phi = self.phi_create(sym.clone(), blk);
-    // self.phi_populate(sym, phi);
-    // phi
-  }
-}
-
 pub fn mem_symbol_to_ref(ir: &mut IR) {
   // FIXME: Need to pessimize with escape-analysis
   // TODO: Expand the scope of this.. only handing 16-bit symbols and operations
@@ -257,12 +230,11 @@ pub fn mem_symbol_to_ref(ir: &mut IR) {
         let name = Name::Var(ir.symbols.symbol_name(symref));
 
         let instr = ir.instr_mut(r).unwrap();
-        instr.debug = Some((name.clone(), 42));
         instr.opcode = Opcode::Ref;
         instr.operands = vec![instr.operands[1]];
 
         // Add the def
-        ir.blocks[b].defs.insert(name, r);
+        ir.set_var(name, BlockRef(b), r);
       }
 
       else if instr.opcode == Opcode::ReadVar16 {
@@ -271,10 +243,9 @@ pub fn mem_symbol_to_ref(ir: &mut IR) {
         if ir.symbols.symbol(symref).size != 2 { continue; }
 
         let name = Name::Var(ir.symbols.symbol_name(symref));
-        let vref = get_var(ir, &name, BlockRef(b));
+        let vref = ir.get_var(name, BlockRef(b));
 
         let instr = ir.instr_mut(r).unwrap();
-        instr.debug = Some((name.clone(), 42));
         instr.opcode = Opcode::Ref;
         instr.operands = vec![vref];
       }

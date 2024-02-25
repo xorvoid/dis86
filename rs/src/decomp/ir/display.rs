@@ -92,7 +92,7 @@ impl Formatter {
       Ref::Init(sym) => write!(f, "{}.0", sym)?,
       Ref::Block(blk) => write!(f, "b{}", blk.0)?,
       Ref::Instr(_, _) => {
-        if let Some((sym, num)) = &ir.instr(r).unwrap().debug {
+        if let Some((sym, num)) = ir.names.get(&r) {
           write!(f, "{}.{}", sym, num)?;
         } else {
           write!(f, "t{}", self.map(r))?;

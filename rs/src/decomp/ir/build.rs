@@ -60,8 +60,6 @@ struct IRBuilder<'a> {
   ir: IR,
   blkmeta: Vec<BlockMeta>,
   addrmap: HashMap<Address, BlockRef>,
-  symbol_count: HashMap<Name, usize>,
-  // ref_to_symbol: HashMap<Ref, (Name, usize)>,
   cur: BlockRef,
   cfg: &'a Config,
 }
@@ -90,7 +88,6 @@ impl<'a> IRBuilder<'a> {
       ir: IR::new(),
       blkmeta: vec![],
       addrmap: HashMap::new(),
-      symbol_count: HashMap::new(),
       cur: BlockRef(0),
       cfg,
     };
@@ -137,7 +134,6 @@ impl<'a> IRBuilder<'a> {
 
   fn append_instr(&mut self, opcode: Opcode, operands: Vec<Ref>) -> Ref {
     let instr = Instr {
-      debug: None,
       opcode,
       operands,
     };

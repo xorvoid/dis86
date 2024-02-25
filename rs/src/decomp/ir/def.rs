@@ -39,7 +39,6 @@ impl From<&instr::Reg> for Name {
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Instr {
-  pub debug: Option<(Name, usize)>,
   pub opcode: Opcode,
   pub operands: Vec<Ref>,
 }
@@ -199,6 +198,8 @@ pub struct IR {
   pub consts: Vec<i32>,
   pub symbols: sym::SymbolMap,
   pub funcs: Vec<String>,
+  pub names: HashMap<Ref, (Name, usize)>,
+  pub name_next: HashMap<Name, usize>,
   pub blocks: Vec<Block>,
 }
 
@@ -208,6 +209,8 @@ impl IR {
       consts: vec![],
       symbols: sym::SymbolMap::new(),
       funcs: vec![],
+      names: HashMap::new(),
+      name_next: HashMap::new(),
       blocks: vec![],
     }
   }
@@ -275,7 +278,6 @@ impl IR {
     // create phi node (without operands) to terminate recursion
 
     let idx = self.blocks[blk.0].instrs.push_front(Instr {
-      debug: None,
       opcode: Opcode::Phi,
       operands: vec![],
     });
@@ -319,17 +321,7 @@ impl IR {
   pub fn set_var<S: Into<Name>>(&mut self, sym: S, blk: BlockRef, r: Ref) {
     let sym = sym.into();
     self.blocks[blk.0].defs.insert(sym.clone(), r);
-
-    // set up debug symbol
-    if let Ref::Instr(b, i) = r {
-      let instr = &mut self.blocks[b.0].instrs[i];
-      if instr.debug.is_none() {
-        // let num_ptr = self.symbol_count.entry(sym.clone()).or_insert(1);
-        // let num = *num_ptr;
-        // *num_ptr += 1;
-        instr.debug = Some((sym, 42));
-      }
-    }
+    self.set_name(&sym, r);
   }
 
   pub fn seal_block(&mut self, r: BlockRef) {
@@ -340,4 +332,11 @@ impl IR {
       self.phi_populate(sym, phi)
     }
   }
+
+  fn set_name(&mut self, name: &Name, r: Ref) {
+   let idx_ref = self.name_next.entry(name.clone()).or_insert(1);
+   let idx = *idx_ref;
+   *idx_ref = idx+1;
+   self.names.insert(r, (name.clone(), idx));
+ }
 }
