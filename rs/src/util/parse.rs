@@ -11,6 +11,7 @@ pub fn hex_u64(s: &str) -> Result<u64, &'static str> {
   Ok(ret)
 }
 
+#[allow(unused)]
 pub fn hex_u32(s: &str) -> Result<u32, &'static str> {
   if s.len() > 8 {
     return Err("Hex string too long to fit in u32");
@@ -27,6 +28,7 @@ pub fn hex_u16(s: &str) -> Result<u16, &'static str> {
   Ok(n as u16)
 }
 
+#[allow(unused)]
 pub fn hex_u8(s: &str) -> Result<u8, &'static str> {
   if s.len() > 2 {
     return Err("Hex string too long to fit in u8");

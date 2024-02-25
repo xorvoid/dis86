@@ -60,15 +60,15 @@ struct IRBuilder<'a> {
   ir: IR,
   blkmeta: Vec<BlockMeta>,
   addrmap: HashMap<Address, BlockRef>,
-  symbol_count: HashMap<Symbol, usize>,
-  // ref_to_symbol: HashMap<Ref, (Symbol, usize)>,
+  symbol_count: HashMap<Name, usize>,
+  // ref_to_symbol: HashMap<Ref, (Name, usize)>,
   cur: BlockRef,
   cfg: &'a Config,
 }
 
 struct BlockMeta {
-  sealed: bool, // has all predecessors?
-  incomplete_phis: Vec<(Symbol, Ref)>,
+  //sealed: bool, // has all predecessors?
+  //incomplete_phis: Vec<(Name, Ref)>,
 }
 
 impl Block {
@@ -78,6 +78,8 @@ impl Block {
       defs: HashMap::new(),
       preds: vec![],
       instrs: DVec::new(),
+      sealed: false,
+      incomplete_phis: vec![],
     }
   }
 }
@@ -95,26 +97,26 @@ impl<'a> IRBuilder<'a> {
 
     // Create and seal the entry block
     let entry = this.new_block("entry");
-    this.seal_block(entry);
+    this.ir.seal_block(entry);
 
     // Set initial register values
-    this.set_var(instr::Reg::AX, this.cur, Ref::Init("ax"));
-    this.set_var(instr::Reg::CX, this.cur, Ref::Init("cx"));
-    this.set_var(instr::Reg::DX, this.cur, Ref::Init("dx"));
-    this.set_var(instr::Reg::BX, this.cur, Ref::Init("bx"));
+    this.ir.set_var(instr::Reg::AX, this.cur, Ref::Init("ax"));
+    this.ir.set_var(instr::Reg::CX, this.cur, Ref::Init("cx"));
+    this.ir.set_var(instr::Reg::DX, this.cur, Ref::Init("dx"));
+    this.ir.set_var(instr::Reg::BX, this.cur, Ref::Init("bx"));
 
-    this.set_var(instr::Reg::SP, this.cur, Ref::Init("sp"));
-    this.set_var(instr::Reg::BP, this.cur, Ref::Init("bp"));
-    this.set_var(instr::Reg::SI, this.cur, Ref::Init("si"));
-    this.set_var(instr::Reg::DI, this.cur, Ref::Init("di"));
+    this.ir.set_var(instr::Reg::SP, this.cur, Ref::Init("sp"));
+    this.ir.set_var(instr::Reg::BP, this.cur, Ref::Init("bp"));
+    this.ir.set_var(instr::Reg::SI, this.cur, Ref::Init("si"));
+    this.ir.set_var(instr::Reg::DI, this.cur, Ref::Init("di"));
 
-    this.set_var(instr::Reg::ES, this.cur, Ref::Init("es"));
-    this.set_var(instr::Reg::CS, this.cur, Ref::Init("cs"));
-    this.set_var(instr::Reg::SS, this.cur, Ref::Init("ss"));
-    this.set_var(instr::Reg::DS, this.cur, Ref::Init("ds"));
+    this.ir.set_var(instr::Reg::ES, this.cur, Ref::Init("es"));
+    this.ir.set_var(instr::Reg::CS, this.cur, Ref::Init("cs"));
+    this.ir.set_var(instr::Reg::SS, this.cur, Ref::Init("ss"));
+    this.ir.set_var(instr::Reg::DS, this.cur, Ref::Init("ds"));
 
-    this.set_var(instr::Reg::IP, this.cur, Ref::Init("ip"));
-    this.set_var(instr::Reg::FLAGS, this.cur, Ref::Init("flags"));
+    this.ir.set_var(instr::Reg::IP, this.cur, Ref::Init("ip"));
+    this.ir.set_var(instr::Reg::FLAGS, this.cur, Ref::Init("flags"));
 
     this
   }
@@ -123,99 +125,10 @@ impl<'a> IRBuilder<'a> {
     let idx = self.ir.blocks.len();
     self.ir.blocks.push(Block::new(name));
     self.blkmeta.push(BlockMeta {
-      sealed: false,
-      incomplete_phis: vec![],
+      // sealed: false,
+      // incomplete_phis: vec![],
     });
     BlockRef(idx)
-  }
-
-  fn seal_block(&mut self, r: BlockRef) {
-    let b = &mut self.blkmeta[r.0];
-    if b.sealed { panic!("block is already sealed!"); }
-    b.sealed = true;
-    for (sym, phi) in std::mem::replace(&mut b.incomplete_phis, vec![]) {
-      self.phi_populate(sym, phi)
-    }
-  }
-
-  fn phi_populate<S: Into<Symbol>>(&mut self, sym: S, phiref: Ref) {
-    let sym: Symbol = sym.into();
-    let Ref::Instr(blk, idx) = phiref else { panic!("Invalid ref") };
-
-    let preds = self.ir.blocks[blk.0].preds.clone(); // ARGH: Need to break borrow on 'self' so we can recurse
-    assert!(self.ir.blocks[blk.0].instrs[idx].opcode == Opcode::Phi);
-
-    // recurse each pred
-    let mut refs = vec![];
-    for b in preds {
-      refs.push(self.get_var(sym, b));
-    }
-
-    // update the phi with operands
-    self.ir.blocks[blk.0].instrs[idx].operands = refs;
-
-    // TODO: Remove trivial phis
-  }
-
-  fn phi_create(&mut self, sym: Symbol, blk: BlockRef) -> Ref {
-    // create phi node (without operands) to terminate recursion
-
-    let idx = self.ir.blocks[blk.0].instrs.push_front(Instr {
-      debug: None,
-      opcode: Opcode::Phi,
-      operands: vec![],
-    });
-
-    let vref = Ref::Instr(blk, idx);
-    self.set_var(sym, blk, vref);
-
-    vref
-  }
-
-  fn get_var<S: Into<Symbol>>(&mut self, sym: S, blk: BlockRef) -> Ref {
-    let sym: Symbol = sym.into();
-
-    // Defined locally in this block? Easy.
-    match self.ir.blocks[blk.0].defs.get(&sym) {
-      Some(val) => return *val,
-      None => (),
-    }
-
-    // Otherwise, search predecessors
-    let b = &self.blkmeta[blk.0];
-    if !b.sealed {
-      // add an empty phi node and mark it for later population
-      let phi = self.phi_create(sym, blk);
-      self.blkmeta[blk.0].incomplete_phis.push((sym, phi));
-      phi
-    } else {
-      let preds = &self.ir.blocks[blk.0].preds;
-      if preds.len() == 1 {
-        let parent = preds[0];
-        self.get_var(sym, parent)
-      } else {
-        // create a phi and immediately populate it
-        let phi = self.phi_create(sym, blk);
-        self.phi_populate(sym, phi);
-        phi
-      }
-    }
-  }
-
-  fn set_var<S: Into<Symbol>>(&mut self, sym: S, blk: BlockRef, r: Ref) {
-    let sym = sym.into();
-    self.ir.blocks[blk.0].defs.insert(sym, r);
-
-    // set up debug symbol
-    if let Ref::Instr(b, i) = r {
-      let instr = &mut self.ir.blocks[b.0].instrs[i];
-      if instr.debug.is_none() {
-        let num_ptr = self.symbol_count.entry(sym).or_insert(1);
-        let num = *num_ptr;
-        *num_ptr += 1;
-        instr.debug = Some((sym, num));
-      }
-    }
   }
 
   fn get_block(&mut self, effective: Address) -> BlockRef {
@@ -271,11 +184,11 @@ impl<'a> IRBuilder<'a> {
 
 impl IRBuilder<'_> {
   fn append_asm_src_reg(&mut self, reg: &instr::OperandReg) -> Ref {
-    self.get_var(reg.0, self.cur)
+    self.ir.get_var(reg.0, self.cur)
   }
 
   fn append_asm_dst_reg(&mut self, reg: &instr::OperandReg, vref: Ref) {
-    self.set_var(reg.0, self.cur, vref);
+    self.ir.set_var(reg.0, self.cur, vref);
   }
 
   fn compute_mem_address(&mut self, mem: &instr::OperandMem) -> Ref {
@@ -283,12 +196,12 @@ impl IRBuilder<'_> {
 
     let addr = match (&mem.reg1, &mem.off) {
       (Some(reg1), Some(off)) => {
-        let reg = self.get_var(reg1, self.cur);
+        let reg = self.ir.get_var(reg1, self.cur);
         let off = self.ir.append_const((*off as i16).into());
         self.append_instr(Opcode::Add, vec![reg, off])
       }
       (Some(reg1), None) => {
-        self.get_var(reg1, self.cur)
+        self.ir.get_var(reg1, self.cur)
       }
       (None, Some(off)) => {
         self.ir.append_const((*off as i16).into())
@@ -303,7 +216,7 @@ impl IRBuilder<'_> {
 
   fn append_asm_src_mem(&mut self, mem: &instr::OperandMem) -> Ref {
     let addr = self.compute_mem_address(mem);
-    let seg = self.get_var(mem.sreg, self.cur);
+    let seg = self.ir.get_var(mem.sreg, self.cur);
 
     let opcode = match mem.sz {
       instr::Size::Size8 => Opcode::Load8,
@@ -315,7 +228,7 @@ impl IRBuilder<'_> {
 
   fn append_asm_dst_mem(&mut self, mem: &instr::OperandMem, vref: Ref) {
     let addr = self.compute_mem_address(mem);
-    let seg = self.get_var(mem.sreg, self.cur);
+    let seg = self.ir.get_var(mem.sreg, self.cur);
 
     let opcode = match mem.sz {
       instr::Size::Size8 => Opcode::Store8,
@@ -365,11 +278,11 @@ impl IRBuilder<'_> {
   }
 
   fn get_flags(&mut self) -> Ref {
-    self.get_var(instr::Reg::FLAGS, self.cur)
+    self.ir.get_var(instr::Reg::FLAGS, self.cur)
   }
 
   fn set_flags(&mut self, vref: Ref) {
-    self.set_var(instr::Reg::FLAGS, self.cur, vref);
+    self.ir.set_var(instr::Reg::FLAGS, self.cur, vref);
   }
 
   fn append_update_flags(&mut self, vref: Ref) {
@@ -379,7 +292,7 @@ impl IRBuilder<'_> {
   }
 
   fn pin_register(&mut self, reg: instr::Reg) {
-    let vref = self.get_var(reg, self.cur);
+    let vref = self.ir.get_var(reg, self.cur);
     self.append_instr(Opcode::Pin, vec![vref]);
   }
 
@@ -407,26 +320,26 @@ impl IRBuilder<'_> {
   }
 
   fn append_push(&mut self, vref: Ref) {
-    let ss = self.get_var(instr::Reg::SS, self.cur);
-    let sp = self.get_var(instr::Reg::SP, self.cur);
+    let ss = self.ir.get_var(instr::Reg::SS, self.cur);
+    let sp = self.ir.get_var(instr::Reg::SP, self.cur);
     let k = self.ir.append_const(2);
 
     // decrement SP
     let sp = self.append_instr(Opcode::Sub, vec![sp, k]);
-    self.set_var(instr::Reg::SP, self.cur, sp);
+    self.ir.set_var(instr::Reg::SP, self.cur, sp);
 
     // store to SS:SP
     self.append_instr(Opcode::Store16, vec![ss, sp, vref]);
   }
 
   fn append_pop(&mut self) -> Ref {
-    let ss = self.get_var(instr::Reg::SS, self.cur);
-    let sp = self.get_var(instr::Reg::SP, self.cur);
+    let ss = self.ir.get_var(instr::Reg::SS, self.cur);
+    let sp = self.ir.get_var(instr::Reg::SP, self.cur);
     let k = self.ir.append_const(2);
 
     let val = self.append_instr(Opcode::Load16, vec![ss, sp]);
     let sp = self.append_instr(Opcode::Add, vec![sp, k]);
-    self.set_var(instr::Reg::SP, self.cur, sp);
+    self.ir.set_var(instr::Reg::SP, self.cur, sp);
 
     val
   }
@@ -456,15 +369,15 @@ impl IRBuilder<'_> {
       }
       instr::Opcode::OP_LEAVE => {
         // mov sp, bp
-        let vref = self.get_var(instr::Reg::BP, self.cur);
-        self.set_var(instr::Reg::SP, self.cur, vref);
+        let vref = self.ir.get_var(instr::Reg::BP, self.cur);
+        self.ir.set_var(instr::Reg::SP, self.cur, vref);
         // pop bp
         let vref = self.append_pop();
-        self.set_var(instr::Reg::BP, self.cur, vref);
+        self.ir.set_var(instr::Reg::BP, self.cur, vref);
       }
       instr::Opcode::OP_RETF => {
         self.pin_registers();
-        let vref = self.get_var(instr::Reg::AX, self.cur);
+        let vref = self.ir.get_var(instr::Reg::AX, self.cur);
         self.append_instr(Opcode::Ret, vec![vref]);
       }
       instr::Opcode::OP_MOV => {
@@ -573,8 +486,8 @@ impl IRBuilder<'_> {
           if let Some(nargs) = &func.args {
             // Known args
             let mut operands = vec![Ref::Func(idx)];
-            let ss = self.get_var(instr::Reg::SS, self.cur);
-            let sp = self.get_var(instr::Reg::SP, self.cur);
+            let ss = self.ir.get_var(instr::Reg::SS, self.cur);
+            let sp = self.ir.get_var(instr::Reg::SP, self.cur);
             for i in 0..(*nargs as i32) {
               let mut off = sp;
               if i != 0 {
@@ -594,7 +507,7 @@ impl IRBuilder<'_> {
           let seg = self.ir.append_const(far.seg.into());
           let off = self.ir.append_const(far.off.into());
           let ret = self.append_instr(Opcode::Call, vec![seg, off]);
-          self.set_var(instr::Reg::AX, self.cur, ret);
+          self.ir.set_var(instr::Reg::AX, self.cur, ret);
         }
       }
       instr::Opcode::OP_LES => {
@@ -649,8 +562,8 @@ impl IRBuilder<'_> {
 
     // Step 4: walk blocks and seal them
     for i in 0..self.ir.blocks.len() {
-      if !self.blkmeta[i].sealed {
-        self.seal_block(BlockRef(i));
+      if !self.ir.blocks[i].sealed {
+        self.ir.seal_block(BlockRef(i));
       }
     }
   }

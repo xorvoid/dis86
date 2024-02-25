@@ -75,10 +75,11 @@ pub fn run(appname: &str) {
 
   let mut ir = build::from_instrs(&instr_list, &cfg);
   opt::optimize(&mut ir);
-  // sym::symbolize(&mut ir, &cfg);
+  sym::symbolize(&mut ir, &cfg);
   // opt::forward_store_to_load(&mut ir);
-  // opt::optimize(&mut ir);
+  opt::optimize(&mut ir);
+  //opt::mem_symbol_to_ref(&mut ir);
 
   println!("{}", ir);
-  //println!("{:#?}", ir.symbols);
+  println!("{:#?}", ir.symbols);
 }

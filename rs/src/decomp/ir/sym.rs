@@ -1,8 +1,5 @@
-use crate::instr;
-use crate::segoff::SegOff;
 use crate::decomp::config::Config;
 use crate::decomp::ir::def::*;
-//use crate::decomp::ir::display::Formatter;
 use std::cmp::Ordering;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -116,8 +113,16 @@ impl SymbolMap {
     None
   }
 
+  pub fn symbol(&self, r: SymbolRef) -> &Symbol {
+    &self.get_table(r.0).symbols[r.1]
+  }
+
+  pub fn symbol_type(&self, r: SymbolRef) -> SymbolType {
+    r.0
+  }
+
   pub fn symbol_name(&self, r: SymbolRef) -> String {
-    let name = &self.get_table(r.0).symbols[r.1].name;
+    let name = &self.symbol(r).name;
     if r.2 == 0 {
       format!("{}", name)
     } else {
@@ -127,8 +132,8 @@ impl SymbolMap {
 }
 
 pub fn symbolize_stack(ir: &mut IR) {
-  let ss = ir.blocks[0].defs.get(&instr::Reg::SS.into()).unwrap();
-  let bp = ir.blocks[0].defs.get(&instr::Reg::BP.into()).unwrap();
+  let ss = Ref::Init("ss"); //ir.blocks[0].defs.get(&instr::Reg::SS.into()).unwrap();
+  let sp = Ref::Init("sp"); //ir.blocks[0].defs.get(&instr::Reg::BP.into()).unwrap();
 
   // Detect locals and params
   let mut var_mem_refs = vec![];
@@ -139,22 +144,26 @@ pub fn symbolize_stack(ir: &mut IR) {
       let mem_ref = r;
       let mem_instr = ir.instr(mem_ref).unwrap();
       if !mem_instr.opcode.is_load() && !mem_instr.opcode.is_store() { continue; }
-      if mem_instr.operands[0] != *ss { continue; }
+      if mem_instr.operands[0] != ss { continue; }
 
       let addr_ref = mem_instr.operands[1];
       let addr_instr = ir.instr(addr_ref).unwrap();
-      if addr_instr.opcode != Opcode::Add { continue; }
-      if addr_instr.operands[0] != *bp { continue; }
+      if addr_instr.operands[0] != sp { continue; }
 
-      let Some(off) = ir.lookup_const(addr_instr.operands[1]) else { continue };
+      let off = match addr_instr.opcode {
+        Opcode::Add => ir.lookup_const(addr_instr.operands[1]),
+        Opcode::Sub => ir.lookup_const(addr_instr.operands[1]).map(|x| -x),
+        _ => None,
+      };
+      let Some(off) = off else { continue };
 
       let size = mem_instr.opcode.operation_size();
 
       var_mem_refs.push((mem_ref, off));
 
-      // let mut f = Formatter::new();
+      // let mut f = crate::decomp::ir::display::Formatter::new();
       // f.fmt_instr(ir, addr_ref, addr_instr).unwrap();
-      // f.fmt_instr(ir, load_ref, load_instr).unwrap();
+      // f.fmt_instr(ir, mem_ref, mem_instr).unwrap();
       // println!("{}", f.finish());
 
       if off > 0 {
@@ -174,7 +183,7 @@ pub fn symbolize_stack(ir: &mut IR) {
   // Update the IR
   for (mem_ref, off) in var_mem_refs {
     let typ = if off > 0 { SymbolType::Param } else { SymbolType::Local };
-    let size = ir.instr(mem_ref).unwrap().opcode.operation_size();
+    //let size = ir.instr(mem_ref).unwrap().opcode.operation_size();
     let sym = ir.symbols.find_ref(typ, off).unwrap();
 
     let instr = ir.instr_mut(mem_ref).unwrap();
@@ -197,6 +206,6 @@ pub fn symbolize_stack(ir: &mut IR) {
   }
 }
 
-pub fn symbolize(ir: &mut IR, cfg: &Config) {
+pub fn symbolize(ir: &mut IR, _cfg: &Config) {
   symbolize_stack(ir);
 }

@@ -19,24 +19,27 @@ pub enum Ref {
   Func(usize),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Symbol(pub instr::Reg);
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Name {
+  Reg(instr::Reg),
+  Var(String),
+}
 
-impl From<instr::Reg> for Symbol {
+impl From<instr::Reg> for Name {
   fn from(reg: instr::Reg) -> Self {
-    Self(reg)
+    Self::Reg(reg)
   }
 }
 
-impl From<&instr::Reg> for Symbol {
+impl From<&instr::Reg> for Name {
   fn from(reg: &instr::Reg) -> Self {
-    Self(*reg)
+    Self::Reg(*reg)
   }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Instr {
-  pub debug: Option<(Symbol, usize)>,
+  pub debug: Option<(Name, usize)>,
   pub opcode: Opcode,
   pub operands: Vec<Ref>,
 }
@@ -184,9 +187,11 @@ impl Opcode {
 #[derive(Debug)]
 pub struct Block {
   pub name: String,
-  pub defs: HashMap<Symbol, Ref>,
+  pub defs: HashMap<Name, Ref>,
   pub preds: Vec<BlockRef>,
   pub instrs: DVec<Instr>,
+  pub sealed: bool, // has all predecessors?
+  pub incomplete_phis: Vec<(Name, Ref)>,
 }
 
 #[derive(Debug)]
@@ -244,6 +249,95 @@ impl IR {
       Some(self.consts[i])
     } else {
       None
+    }
+  }
+
+  fn phi_populate<S: Into<Name>>(&mut self, sym: S, phiref: Ref) {
+    let sym: Name = sym.into();
+    let Ref::Instr(blk, idx) = phiref else { panic!("Invalid ref") };
+
+    let preds = self.blocks[blk.0].preds.clone(); // ARGH: Need to break borrow on 'self' so we can recurse
+    assert!(self.blocks[blk.0].instrs[idx].opcode == Opcode::Phi);
+
+    // recurse each pred
+    let mut refs = vec![];
+    for b in preds {
+      refs.push(self.get_var(sym.clone(), b));
+    }
+
+    // update the phi with operands
+    self.blocks[blk.0].instrs[idx].operands = refs;
+
+    // TODO: Remove trivial phis
+  }
+
+  fn phi_create(&mut self, sym: Name, blk: BlockRef) -> Ref {
+    // create phi node (without operands) to terminate recursion
+
+    let idx = self.blocks[blk.0].instrs.push_front(Instr {
+      debug: None,
+      opcode: Opcode::Phi,
+      operands: vec![],
+    });
+
+    let vref = Ref::Instr(blk, idx);
+    self.set_var(sym, blk, vref);
+
+    vref
+  }
+
+  pub fn get_var<S: Into<Name>>(&mut self, sym: S, blk: BlockRef) -> Ref {
+    let sym: Name = sym.into();
+
+    // Defined locally in this block? Easy.
+    match self.blocks[blk.0].defs.get(&sym) {
+      Some(val) => return *val,
+      None => (),
+    }
+
+    // Otherwise, search predecessors
+    let b = &self.blocks[blk.0];
+    if !b.sealed {
+      // add an empty phi node and mark it for later population
+      let phi = self.phi_create(sym.clone(), blk);
+      self.blocks[blk.0].incomplete_phis.push((sym, phi));
+      phi
+    } else {
+      let preds = &self.blocks[blk.0].preds;
+      if preds.len() == 1 {
+        let parent = preds[0];
+        self.get_var(sym, parent)
+      } else {
+        // create a phi and immediately populate it
+        let phi = self.phi_create(sym.clone(), blk);
+        self.phi_populate(sym, phi);
+        phi
+      }
+    }
+  }
+
+  pub fn set_var<S: Into<Name>>(&mut self, sym: S, blk: BlockRef, r: Ref) {
+    let sym = sym.into();
+    self.blocks[blk.0].defs.insert(sym.clone(), r);
+
+    // set up debug symbol
+    if let Ref::Instr(b, i) = r {
+      let instr = &mut self.blocks[b.0].instrs[i];
+      if instr.debug.is_none() {
+        // let num_ptr = self.symbol_count.entry(sym.clone()).or_insert(1);
+        // let num = *num_ptr;
+        // *num_ptr += 1;
+        instr.debug = Some((sym, 42));
+      }
+    }
+  }
+
+  pub fn seal_block(&mut self, r: BlockRef) {
+    let b = &mut self.blocks[r.0];
+    if b.sealed { panic!("block is already sealed!"); }
+    b.sealed = true;
+    for (sym, phi) in std::mem::replace(&mut b.incomplete_phis, vec![]) {
+      self.phi_populate(sym, phi)
     }
   }
 }

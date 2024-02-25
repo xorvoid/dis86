@@ -1,4 +1,5 @@
 use crate::decomp::ir::def::*;
+use crate::decomp::ir::sym;
 use std::collections::{hash_map, HashMap, HashSet};
 
 // Propagate operand through any ref opcodes
@@ -76,8 +77,8 @@ fn arith_const_oper(ir: &IR, vref: Ref) -> Option<(Ref, i32)> {
 pub fn arithmetic_accumulation(ir: &mut IR) {
   for b in 0..ir.blocks.len() {
     for i in ir.blocks[b].instrs.range() {
-      let mut vref = Ref::Instr(BlockRef(b), i);
-      let Some((_, mut a)) = arith_const_oper(ir, vref) else { continue };
+      let vref = Ref::Instr(BlockRef(b), i);
+      let Some((_, a)) = arith_const_oper(ir, vref) else { continue };
 
 
       let instr = ir.instr(vref).unwrap();
@@ -215,6 +216,71 @@ pub fn forward_store_to_load(ir: &mut IR) {
       instr.operands = vec![store_val];
     }
   }
+}
+
+fn get_var(ir: &IR, name: &Name, blk: BlockRef) -> Ref {
+  // TODO: Unify with build::IRBuilder::get_var
+
+  // Defined locally in this block? Easy.
+  match ir.blocks[blk.0].defs.get(name) {
+    Some(val) => return *val,
+    None => (),
+  }
+
+  // Otherwise, search predecessors
+  let preds = &ir.blocks[blk.0].preds;
+  if preds.len() == 1 {
+    let parent = preds[0];
+    get_var(ir, name, parent)
+  } else {
+    panic!("Unimpl | Need PHI!!");
+    // // create a phi and immediately populate it
+    // let phi = self.phi_create(sym.clone(), blk);
+    // self.phi_populate(sym, phi);
+    // phi
+  }
+}
+
+pub fn mem_symbol_to_ref(ir: &mut IR) {
+  // FIXME: Need to pessimize with escape-analysis
+  // TODO: Expand the scope of this.. only handing 16-bit symbols and operations
+  for b in 0..ir.blocks.len() {
+    for i in ir.blocks[b].instrs.range() {
+      let r = Ref::Instr(BlockRef(b), i);
+      let instr = ir.instr(r).unwrap();
+
+      if instr.opcode == Opcode::WriteVar16 {
+        let Ref::Symbol(symref) = instr.operands[0] else { continue };
+        if ir.symbols.symbol_type(symref) != sym::SymbolType::Local { continue; }
+        if ir.symbols.symbol(symref).size != 2 { continue; }
+
+        let name = Name::Var(ir.symbols.symbol_name(symref));
+
+        let instr = ir.instr_mut(r).unwrap();
+        instr.debug = Some((name.clone(), 42));
+        instr.opcode = Opcode::Ref;
+        instr.operands = vec![instr.operands[1]];
+
+        // Add the def
+        ir.blocks[b].defs.insert(name, r);
+      }
+
+      else if instr.opcode == Opcode::ReadVar16 {
+        let Ref::Symbol(symref) = instr.operands[0] else { continue };
+        if ir.symbols.symbol_type(symref) != sym::SymbolType::Local { continue; }
+        if ir.symbols.symbol(symref).size != 2 { continue; }
+
+        let name = Name::Var(ir.symbols.symbol_name(symref));
+        let vref = get_var(ir, &name, BlockRef(b));
+
+        let instr = ir.instr_mut(r).unwrap();
+        instr.debug = Some((name.clone(), 42));
+        instr.opcode = Opcode::Ref;
+        instr.operands = vec![vref];
+      }
+    }
+  }
+
 }
 
 const N_OPT_PASSES: usize = 3;

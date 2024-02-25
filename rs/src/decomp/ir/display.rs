@@ -36,6 +36,15 @@ fn reg_name(r: instr::Reg) -> &'static str {
   }
 }
 
+impl fmt::Display for Name {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      Name::Reg(r) => write!(f, "{}", reg_name(*r)),
+      Name::Var(v) => write!(f, "{}", v),
+    }
+  }
+}
+
 pub struct Formatter {
   map: HashMap<Ref, usize>,
   next: usize,
@@ -83,8 +92,8 @@ impl Formatter {
       Ref::Init(sym) => write!(f, "{}.0", sym)?,
       Ref::Block(blk) => write!(f, "b{}", blk.0)?,
       Ref::Instr(_, _) => {
-        if let Some((sym, num)) = ir.instr(r).unwrap().debug {
-          write!(f, "{}.{}", reg_name(sym.0), num)?;
+        if let Some((sym, num)) = &ir.instr(r).unwrap().debug {
+          write!(f, "{}.{}", sym, num)?;
         } else {
           write!(f, "t{}", self.map(r))?;
         }
