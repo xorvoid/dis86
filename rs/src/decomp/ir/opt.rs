@@ -292,20 +292,30 @@ pub fn simplify_branch_conds(ir: &mut IR) {
         _ => continue,
       };
 
+      let opcode_eq = opcode_new == Opcode::Eq || opcode_new == Opcode::Neq;
+
       let upd_ref = instr.operands[0];
       let upd_instr = ir.instr(upd_ref).unwrap();
       if upd_instr.opcode != Opcode::UpdateFlags { continue; }
 
-      let sub_ref = upd_instr.operands[1];
-      let sub_instr = ir.instr(sub_ref).unwrap();
-      if sub_instr.opcode != Opcode::Sub { continue; }
+      let pred_ref = upd_instr.operands[1];
+      let pred_instr = ir.instr(pred_ref).unwrap();
 
-      let lhs = sub_instr.operands[0];
-      let rhs = sub_instr.operands[1];
+      if pred_instr.opcode == Opcode::Sub {
+        let lhs = pred_instr.operands[0];
+        let rhs = pred_instr.operands[1];
 
-      let instr = ir.instr_mut(r).unwrap();
-      instr.opcode = opcode_new;
-      instr.operands = vec![lhs, rhs];
+        let instr = ir.instr_mut(r).unwrap();
+        instr.opcode = opcode_new;
+        instr.operands = vec![lhs, rhs];
+      }
+
+      else if pred_instr.opcode == Opcode::And && opcode_eq {
+        let z = ir.append_const(0);
+        let instr = ir.instr_mut(r).unwrap();
+        instr.opcode = opcode_new;
+        instr.operands = vec![pred_ref, z];
+      }
     }
   }
 }
