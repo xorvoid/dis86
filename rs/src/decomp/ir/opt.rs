@@ -1,6 +1,6 @@
 use crate::decomp::ir::def::*;
 use crate::decomp::ir::sym;
-use std::collections::{hash_map, HashMap, HashSet};
+use std::collections::{hash_map, HashMap, HashSet, VecDeque};
 
 // Propagate operand through any ref opcodes
 fn operand_propagate(ir: &IR, mut r: Ref) -> Ref {
@@ -118,54 +118,49 @@ pub fn value_propagation(ir: &mut IR) {
   }
 }
 
-fn is_deadcode(ir: &IR, r: Ref, uses: &HashMap<Ref, usize>) -> bool {
-  let instr = ir.instr(r).unwrap();
-  if instr.opcode.has_side_effects() { return false; }
-
-  let n_uses = uses.get(&r).unwrap_or(&0);
-  if *n_uses == 0 { return true; }
-  if *n_uses > 1 { return false; }
-
-  // Handle special cyclic case, e.g.
-  //   $1 = phi $2, ...
-  //   $2 = op $1, ...
-  // If there are no other uses of $2 or $1 than the cyclic self-use mutual self-use, then they are actually dead
-  for oref in &instr.operands {
-    let Some(oper_instr) = ir.instr(*oref) else { continue };
-    if *uses.get(&oref).unwrap() != 1 { continue; }
-    if oper_instr.opcode != Opcode::Phi { continue; }
-    if oper_instr.operands.iter().find(|x| *x == &r).is_none() { continue; }
-    return true;
-  }
-  false
-}
-
 pub fn deadcode_elimination(ir: &mut IR) {
-  // pass 1: find all uses
-  let mut uses = HashMap::new();
+  // Mark and Sweep DCE
+  //   DCE has the same sort of problem as garbage-collection. If you implement it by
+  //   removing code only when n_uses == 0, then you can never remove dead-cycles.
+  //   This is the same problem as using a refcnt-based GC. By contrast, mark-and-sweep
+  //   "just works"
+
+  // First we populate the "root set" which we'll consider to be any side-effecting
+  // operation. This may be a little pessimistic, but we consider it the responsibility
+  // of other opt passes to "prove" that side-effects are not required and reduce them to
+  // code that DCE can eliminate.
+
+  let mut unprocessed = VecDeque::new();
   for b in 0..ir.blocks.len() {
     for i in ir.blocks[b].instrs.range() {
       let r = Ref::Instr(BlockRef(b), i);
       let instr = ir.instr(r).unwrap();
-      // Add operands
-      for oper in &instr.operands {
-        *uses.entry(*oper).or_insert(0) += 1;
+      if instr.opcode.has_side_effects() {
+        unprocessed.push_back(r);
       }
     }
   }
-  // pass 2: remove unused
-  for b in (0..ir.blocks.len()).rev() {
-    for i in ir.blocks[b].instrs.range().rev() {
-      let r = Ref::Instr(BlockRef(b), i);
-      if !is_deadcode(ir, r, &uses) { continue; }
 
-      // Remove uses to enable more dead-code
-      let instr = ir.instr_mut(r).unwrap();
-      for oref in &instr.operands {
-        *uses.get_mut(oref).unwrap() -= 1;
+  // Next, we build up the live-set by recursively processing the deps
+  // of any live ref.. adding each to the liveset until we're done
+  let mut live_refs = HashSet::new();
+  while let Some(r) = unprocessed.pop_front() {
+    if live_refs.get(&r).is_some() { continue; } // already processed
+    live_refs.insert(r);
+    // add all operands to the unprocessed lise
+    if let Some(instr) = ir.instr(r) {
+      for oper_ref in &instr.operands {
+        unprocessed.push_back(*oper_ref);
       }
+    }
+  }
 
-      // Overwrite the instr to nop
+  // Lastly, use the live set to remove dead-code
+  for b in 0..ir.blocks.len() {
+    for i in ir.blocks[b].instrs.range() {
+      let r = Ref::Instr(BlockRef(b), i);
+      if live_refs.get(&r).is_some() { continue; } // live
+      let instr = ir.instr_mut(r).unwrap();
       instr.opcode = Opcode::Nop;
       instr.operands = vec![];
     }
