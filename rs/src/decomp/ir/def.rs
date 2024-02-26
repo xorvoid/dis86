@@ -74,6 +74,12 @@ pub enum Opcode {
   GeqFlags,
   LtFlags,
   LeqFlags,
+  Eq,
+  Neq,
+  Gt,
+  Geq,
+  Lt,
+  Leq,
   Call,
   CallArgs,
   Ret,
@@ -114,6 +120,12 @@ impl Opcode {
       Opcode::GeqFlags    => "geqf",
       Opcode::LtFlags     => "gtf",
       Opcode::LeqFlags    => "geqf",
+      Opcode::Eq          => "eq",
+      Opcode::Neq         => "neq",
+      Opcode::Gt          => "gt",
+      Opcode::Geq         => "geq",
+      Opcode::Lt          => "lt",
+      Opcode::Leq         => "leq",
       Opcode::Call        => "call",
       Opcode::CallArgs    => "callargs",
       Opcode::Ret         => "ret",
@@ -168,6 +180,22 @@ impl Opcode {
   pub fn maybe_unused(&self) -> bool {
     match self {
       Opcode::Nop => true,
+      Opcode::Pin => true,
+      Opcode::Store8 => true,
+      Opcode::Store16 => true,
+      Opcode::WriteVar8 => true,
+      Opcode::WriteVar16 => true,
+      Opcode::Call => true,
+      Opcode::CallArgs => true,
+      Opcode::Ret => true,
+      Opcode::Jmp => true,
+      Opcode::Jne => true,
+      _ => false,
+    }
+  }
+
+  pub fn has_side_effects(&self) -> bool {
+    match self {
       Opcode::Pin => true,
       Opcode::Store8 => true,
       Opcode::Store16 => true,

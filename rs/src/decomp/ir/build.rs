@@ -308,7 +308,8 @@ impl IRBuilder<'_> {
     self.pin_register(instr::Reg::SS);
     self.pin_register(instr::Reg::DS);
 
-    self.pin_register(instr::Reg::FLAGS);
+    // ??? Technically we should have this ???
+    //self.pin_register(instr::Reg::FLAGS);
 
     // What would this even mean??
     //self.pin_register(instr::Reg::CS);
@@ -479,7 +480,7 @@ impl IRBuilder<'_> {
           // Known function
           let idx = self.ir.funcs.len();
           self.ir.funcs.push(func.name.to_string());
-          let mut ret;
+          let ret;
           if let Some(nargs) = &func.args {
             // Known args
             let mut operands = vec![Ref::Func(idx)];

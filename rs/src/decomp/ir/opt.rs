@@ -118,32 +118,54 @@ pub fn value_propagation(ir: &mut IR) {
   }
 }
 
+fn is_deadcode(ir: &IR, r: Ref, uses: &HashMap<Ref, usize>) -> bool {
+  let instr = ir.instr(r).unwrap();
+  if instr.opcode.has_side_effects() { return false; }
+
+  let n_uses = uses.get(&r).unwrap_or(&0);
+  if *n_uses == 0 { return true; }
+  if *n_uses > 1 { return false; }
+
+  // Handle special cyclic case, e.g.
+  //   $1 = phi $2, ...
+  //   $2 = op $1, ...
+  // If there are no other uses of $2 or $1 than the cyclic self-use mutual self-use, then they are actually dead
+  for oref in &instr.operands {
+    let Some(oper_instr) = ir.instr(*oref) else { continue };
+    if *uses.get(&oref).unwrap() != 1 { continue; }
+    if oper_instr.opcode != Opcode::Phi { continue; }
+    if oper_instr.operands.iter().find(|x| *x == &r).is_none() { continue; }
+    return true;
+  }
+  false
+}
+
 pub fn deadcode_elimination(ir: &mut IR) {
   // pass 1: find all uses
-  let mut used = HashSet::new();
+  let mut uses = HashMap::new();
   for b in 0..ir.blocks.len() {
     for i in ir.blocks[b].instrs.range() {
       let r = Ref::Instr(BlockRef(b), i);
       let instr = ir.instr(r).unwrap();
-      // Add instructions with side-effects
-      if instr.opcode != Opcode::Nop && instr.opcode.maybe_unused() {
-        used.insert(r);
-      }
       // Add operands
       for oper in &instr.operands {
-        used.insert(*oper);
+        *uses.entry(*oper).or_insert(0) += 1;
       }
     }
   }
   // pass 2: remove unused
-  for b in 0..ir.blocks.len() {
-    for i in ir.blocks[b].instrs.range() {
+  for b in (0..ir.blocks.len()).rev() {
+    for i in ir.blocks[b].instrs.range().rev() {
       let r = Ref::Instr(BlockRef(b), i);
-      if used.get(&r).is_some() {
-        continue;
-      }
-      // Overwrite the instr to nop
+      if !is_deadcode(ir, r, &uses) { continue; }
+
+      // Remove uses to enable more dead-code
       let instr = ir.instr_mut(r).unwrap();
+      for oref in &instr.operands {
+        *uses.get_mut(oref).unwrap() -= 1;
+      }
+
+      // Overwrite the instr to nop
       instr.opcode = Opcode::Nop;
       instr.operands = vec![];
     }
@@ -254,8 +276,41 @@ pub fn mem_symbol_to_ref(ir: &mut IR) {
 
 }
 
-const N_OPT_PASSES: usize = 3;
+pub fn simplify_branch_conds(ir: &mut IR) {
+  for b in 0..ir.blocks.len() {
+    for i in ir.blocks[b].instrs.range() {
+      let r = Ref::Instr(BlockRef(b), i);
+      let instr = ir.instr(r).unwrap();
 
+      let opcode_new = match instr.opcode {
+        Opcode::EqFlags  => Opcode::Eq,
+        Opcode::NeqFlags => Opcode::Neq,
+        Opcode::GtFlags  => Opcode::Gt,
+        Opcode::GeqFlags => Opcode::Geq,
+        Opcode::LtFlags  => Opcode::Lt,
+        Opcode::LeqFlags => Opcode::Leq,
+        _ => continue,
+      };
+
+      let upd_ref = instr.operands[0];
+      let upd_instr = ir.instr(upd_ref).unwrap();
+      if upd_instr.opcode != Opcode::UpdateFlags { continue; }
+
+      let sub_ref = upd_instr.operands[1];
+      let sub_instr = ir.instr(sub_ref).unwrap();
+      if sub_instr.opcode != Opcode::Sub { continue; }
+
+      let lhs = sub_instr.operands[0];
+      let rhs = sub_instr.operands[1];
+
+      let instr = ir.instr_mut(r).unwrap();
+      instr.opcode = opcode_new;
+      instr.operands = vec![lhs, rhs];
+    }
+  }
+}
+
+const N_OPT_PASSES: usize = 3;
 pub fn optimize(ir: &mut IR) {
   for _ in 0..N_OPT_PASSES {
     // constant_fold(ir);
@@ -266,6 +321,7 @@ pub fn optimize(ir: &mut IR) {
     value_propagation(ir);
     common_subexpression_elimination(ir);
     value_propagation(ir);
+    simplify_branch_conds(ir);
     // jump_propagation(ir);
   }
   deadcode_elimination(ir);
