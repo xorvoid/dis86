@@ -91,6 +91,21 @@ impl SymbolTable {
 
     self.symbols = new_symbols;
   }
+
+  pub fn finalize_non_overlaping(&mut self) {
+    self.symbols.sort_by(|a, b| match a.off.cmp(&b.off) {
+      Ordering::Less => Ordering::Less,
+      Ordering::Greater => Ordering::Greater,
+      Ordering::Equal => a.size.cmp(&b.size),
+    });
+
+    // FIXME: ADD THIS BACK
+    // for idx in 1..self.symbols.len() {
+    //   if self.symbols[idx].start() < self.symbols[idx-1].end() { // overlapping
+    //     panic!("Overlapping symbols: {} and {}", self.symbols[idx-1].name, self.symbols[idx].name);
+    //   }
+    // }
+  }
 }
 
 impl SymbolMap {
@@ -206,6 +221,62 @@ pub fn symbolize_stack(ir: &mut IR) {
   }
 }
 
-pub fn symbolize(ir: &mut IR, _cfg: &Config) {
+pub fn populate_globals(ir: &mut IR, cfg: &Config) {
+  for g in &cfg.globals {
+    let size = match &g.typ as &str {
+      "u8" => 1,
+      "u16" => 2,
+      "u32" => 4,
+      _ => {
+        eprintln!("WARN: Unsupported type '{}' for {} ... assuming u32", g.typ, g.name);
+        4
+      }
+    };
+    ir.symbols.globals.append(&g.name, g.offset.into(), size);
+  }
+  ir.symbols.globals.finalize_non_overlaping();
+}
+
+pub fn symbolize_globals(ir: &mut IR, cfg: &Config) {
+  populate_globals(ir, cfg);
+
+  let ds = Ref::Init("ds");
+
+  for b in 0..ir.blocks.len() {
+    for i in ir.blocks[b].instrs.range() {
+      let r = Ref::Instr(BlockRef(b), i);
+      let instr = ir.instr(r).unwrap();
+      if !instr.opcode.is_load() && !instr.opcode.is_store() { continue; }
+      if instr.operands[0] != ds { continue; }
+      let off_ref = instr.operands[1];
+      let Some(off) = ir.lookup_const(off_ref) else { continue };
+      let Some(sym) = ir.symbols.find_ref(SymbolType::Global, off) else {
+        eprintln!("WARN: Could not find global for DS:{:04x}", off);
+        continue;
+      };
+
+      let instr = ir.instr_mut(r).unwrap();
+      if instr.opcode.is_load() {
+        instr.opcode = match instr.opcode {
+          Opcode::Load8 => Opcode::ReadVar8,
+          Opcode::Load16 => Opcode::ReadVar16,
+          Opcode::Load32 => Opcode::ReadVar32,
+          _ => unreachable!(),
+        };
+        instr.operands = vec![Ref::Symbol(sym)];
+      } else {
+        instr.opcode = match instr.opcode {
+          Opcode::Store8 => Opcode::WriteVar8,
+          Opcode::Store16 => Opcode::WriteVar16,
+          _ => unreachable!(),
+        };
+        instr.operands = vec![Ref::Symbol(sym), instr.operands[2]];
+      }
+    }
+  }
+}
+
+pub fn symbolize(ir: &mut IR, cfg: &Config) {
   symbolize_stack(ir);
+  symbolize_globals(ir, cfg);
 }
