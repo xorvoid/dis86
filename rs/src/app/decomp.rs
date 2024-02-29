@@ -3,6 +3,7 @@ use crate::segoff::SegOff;
 use crate::decode::Decoder;
 use crate::decomp::ir::{build, opt, sym};
 use crate::decomp::config::Config;
+use crate::decomp::gen;
 
 fn print_help(appname: &str) {
   println!("usage: {} dis OPTIONS", appname);
@@ -83,5 +84,11 @@ pub fn run(appname: &str) {
   opt::optimize(&mut ir);
 
   println!("{}", ir);
+  println!("===========================================================================");
+
+  let mut buf = String::new();
+  gen::generate(&ir, &mut buf).unwrap();
+
+  println!("{}", buf);
   //println!("{:#?}", ir.symbols);
 }

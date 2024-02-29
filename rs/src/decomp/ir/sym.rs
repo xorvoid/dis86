@@ -10,7 +10,11 @@ pub enum SymbolType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SymbolRef(SymbolType, usize /* index */, i32 /* off-adjust */);
+pub struct SymbolRef {
+  pub typ: SymbolType,
+  pub idx: usize /* id */,
+  pub off: i32, /* off-adjust */
+}
 
 #[derive(Debug, Clone)]
 pub struct Symbol {
@@ -122,26 +126,30 @@ impl SymbolMap {
     let tbl = self.get_table(typ);
     for (i, sym) in tbl.symbols.iter().enumerate() {
       if sym.start() <= off && off < sym.end() {
-        return Some(SymbolRef(typ, i, off - sym.start()));
+        return Some(SymbolRef {
+          typ,
+          idx: i,
+          off: off - sym.start()
+        });
       }
     }
     None
   }
 
   pub fn symbol(&self, r: SymbolRef) -> &Symbol {
-    &self.get_table(r.0).symbols[r.1]
+    &self.get_table(r.typ).symbols[r.idx]
   }
 
   pub fn symbol_type(&self, r: SymbolRef) -> SymbolType {
-    r.0
+    r.typ
   }
 
   pub fn symbol_name(&self, r: SymbolRef) -> String {
     let name = &self.symbol(r).name;
-    if r.2 == 0 {
+    if r.off == 0 {
       format!("{}", name)
     } else {
-      format!("{}@+{}", name, r.2)
+      format!("{}@+{}", name, r.off)
     }
   }
 }
