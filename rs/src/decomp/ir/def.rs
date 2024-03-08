@@ -19,6 +19,17 @@ pub enum Ref {
   Func(usize),
 }
 
+impl Ref {
+  pub fn unwrap_symbol(self) -> sym::SymbolRef {
+    let Ref::Symbol(symref) = self else { panic!("expected symbol ref") };
+    symref
+  }
+  pub fn unwrap_func(self) -> usize {
+    let Ref::Func(idx) = self else { panic!("expected function ref") };
+    idx
+  }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Name {
   Reg(instr::Reg),
@@ -37,6 +48,9 @@ impl From<&instr::Reg> for Name {
   }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct FullName(pub Name, pub usize);
+
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Instr {
   pub opcode: Opcode,
@@ -52,7 +66,9 @@ pub enum Opcode {
   Add,
   Sub,
   Shl,
+  Shr,
   And,
+  Or,
   Xor,
   Load8,
   Load16,
@@ -102,7 +118,9 @@ impl Opcode {
       Opcode::Sub         => "sub",
       Opcode::Add         => "add",
       Opcode::Shl         => "shl",
+      Opcode::Shr         => "shr",
       Opcode::And         => "and",
+      Opcode::Or          => "or",
       Opcode::Xor         => "xor",
       //Opcode::AddrOf      => "addrof",
       Opcode::Load8       => "load8",
@@ -235,7 +253,7 @@ pub struct IR {
   pub consts: Vec<i32>,
   pub symbols: sym::SymbolMap,
   pub funcs: Vec<String>,
-  pub names: HashMap<Ref, (Name, usize)>,
+  pub names: HashMap<Ref, FullName>,
   pub name_next: HashMap<Name, usize>,
   pub blocks: Vec<Block>,
 }
@@ -374,6 +392,6 @@ impl IR {
    let idx_ref = self.name_next.entry(name.clone()).or_insert(1);
    let idx = *idx_ref;
    *idx_ref = idx+1;
-   self.names.insert(r, (name.clone(), idx));
+   self.names.insert(r, FullName(name.clone(), idx));
  }
 }

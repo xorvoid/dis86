@@ -374,8 +374,11 @@ impl IRBuilder<'_> {
       }
       instr::Opcode::OP_RETF => {
         self.pin_registers();
-        let vref = self.ir.get_var(instr::Reg::AX, self.cur);
-        self.append_instr(Opcode::Ret, vec![vref]);
+        // FIXME: WHEN RETURN A VALUE OR NOT?
+        //let vref = self.ir.get_var(instr::Reg::AX, self.cur);
+        //self.append_instr(Opcode::Ret, vec![vref]);
+        self.append_instr(Opcode::Ret, vec![]);
+
       }
       instr::Opcode::OP_MOV => {
         let vref = self.append_asm_src_operand(&ins.operands[1]);

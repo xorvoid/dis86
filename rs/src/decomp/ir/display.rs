@@ -48,7 +48,7 @@ impl fmt::Display for Name {
 pub struct Formatter {
   map: HashMap<Ref, usize>,
   next: usize,
-  out: String,
+  pub(crate) out: String, // HAX pub(crate)
 }
 
 impl Formatter {
@@ -92,7 +92,7 @@ impl Formatter {
       Ref::Init(sym) => write!(f, "{}.0", sym)?,
       Ref::Block(blk) => write!(f, "b{}", blk.0)?,
       Ref::Instr(_, _) => {
-        if let Some((sym, num)) = ir.names.get(&r) {
+        if let Some(FullName(sym, num)) = ir.names.get(&r) {
           write!(f, "{}.{}", sym, num)?;
         } else {
           write!(f, "t{}", self.map(r))?;
@@ -104,6 +104,20 @@ impl Formatter {
 
     Ok(buf)
   }
+
+  pub fn fmt_blkhdr(&mut self, blkref: BlockRef, blk: &Block) -> fmt::Result {
+    writeln!(&mut self.out, "")?;
+    write!(&mut self.out, "b{}: (", blkref.0)?;
+    for (k, p) in blk.preds.iter().enumerate() {
+      if k != 0 {
+        write!(&mut self.out, " ")?;
+      }
+      write!(&mut self.out, "b{}", p.0)?;
+    }
+    writeln!(&mut self.out, ") {}", blk.name)?;
+    Ok(())
+  }
+
 
   pub fn fmt_instr(&mut self, ir: &IR, dst: Ref, instr: &Instr) -> fmt::Result {
     let s = self.ref_string(ir, dst)?;
@@ -127,18 +141,10 @@ impl Formatter {
       // if self.is_block_dead(BlockRef(i)) {
       //   continue;
       // }
-      writeln!(&mut self.out, "")?;
-      write!(&mut self.out, "b{i}: (")?;
-      for (k, p) in blk.preds.iter().enumerate() {
-        if k != 0 {
-          write!(&mut self.out, " ")?;
-        }
-        write!(&mut self.out, "b{}", p.0)?;
-      }
-      writeln!(&mut self.out, ") {}", blk.name)?;
-
+      let bref = BlockRef(i);
+      self.fmt_blkhdr(bref, blk)?;
       for idx in blk.instrs.range() {
-        let iref = Ref::Instr(BlockRef(i), idx);
+        let iref = Ref::Instr(bref, idx);
         let instr = &blk.instrs[idx];
         if instr.opcode == Opcode::Nop { continue; }
         self.fmt_instr(ir, iref, instr)?;

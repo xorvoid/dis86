@@ -1,191 +1,130 @@
-use crate::decomp::ir::*;
-use std::collections::HashMap;
+use crate::decomp::ast::*;
 use std::fmt;
 
-struct Emit<'a> {
-  ir: &'a IR,
+struct Gen<'a> {
   f: &'a mut dyn fmt::Write,
-  vars: HashMap<Ref, usize>,
-  next: usize,
 }
 
-impl Emit<'_> {
-  fn refstr(&mut self, r: Ref) -> String {
-    if let Some(k) = self.ir.lookup_const(r) {
-      if k > 128 {
-        return format!("0x{:x}", k);
-      } else {
-        return format!("{}", k);
-      }
-    }
-    if let Some((name, num)) = self.ir.names.get(&r) {
-      return format!("{}{}", name, num);
-    }
-    let num = match self.vars.get(&r) {
-      Some(num) => *num,
-      None => {
-        let n = self.next;
-        self.next += 1;
-        self.vars.insert(r, n);
-        n
-      }
+impl Gen<'_> {
+  fn gen_uoper(&mut self, oper: &UnaryOperator) -> fmt::Result {
+    let s = match oper {
+      UnaryOperator::Addr => "(u8*)&",
     };
-    return format!("t{}", num);
+    write!(self.f, "{}", s)
   }
 
-  fn symbol(&mut self, sref: Ref, size: u32) -> String {
-    let Ref::Symbol(symref) = sref else { panic!("Expected symbol ref") };
-    let sym = self.ir.symbols.symbol(symref);
-    if symref.off != 0 {
-      format!("*(u{}*)((u8*)&{}+{})", 8*size, sym.name, symref.off)
-    } else if sym.size != size {
-      format!("*(u{}*)&{}", 8*size, sym.name)
-    } else {
-      format!("{}", sym.name)
+  fn gen_boper(&mut self, oper: &BinaryOperator) -> fmt::Result {
+    let s = match oper {
+      BinaryOperator::Add => "+",
+      BinaryOperator::Sub => "-",
+      BinaryOperator::And => "&",
+      BinaryOperator::Or  => "|",
+      BinaryOperator::Xor => "^",
+      BinaryOperator::Shl => "<<",
+      BinaryOperator::Shr => ">>",
+      BinaryOperator::Eq  => "==",
+      BinaryOperator::Neq => "!=",
+      BinaryOperator::Gt  => ">",
+      BinaryOperator::Geq => ">=",
+      BinaryOperator::Lt  => "<",
+      BinaryOperator::Leq => "<=",
+    };
+    write!(self.f, " {} ", s)
+  }
+
+  fn gen_expr(&mut self, expr: &Expr) -> fmt::Result {
+    match expr {
+      Expr::Unary(u) => {
+        self.gen_uoper(&u.op)?;
+        self.gen_expr(&u.rhs)?;
+      }
+      Expr::Binary(b) => {
+        write!(self.f, "(")?;
+        self.gen_expr(&b.lhs)?;
+        self.gen_boper(&b.op)?;
+        self.gen_expr(&b.rhs)?;
+        write!(self.f, ")")?;
+      }
+      Expr::Const(k) => {
+        if *k > 128 {
+          write!(self.f, "0x{:x}", k)?;
+        } else {
+          write!(self.f, "{}", k)?;
+        }
+      }
+      Expr::Name(n) => {
+        write!(self.f, "{}", n)?;
+      }
+      Expr::Ptr16(seg, off) => {
+        write!(self.f, "PTR_16(")?;
+        self.gen_expr(seg)?;
+        write!(self.f, ", ")?;
+        self.gen_expr(off)?;
+        write!(self.f, ")")?;
+      }
+      Expr::Ptr32(seg, off) => {
+        write!(self.f, "PTR_32(")?;
+        self.gen_expr(seg)?;
+        write!(self.f, ", ")?;
+        self.gen_expr(off)?;
+        write!(self.f, ")")?;
+      }
+      Expr::Cast(typ, expr) => {
+        write!(self.f, "({})", typ)?;
+        self.gen_expr(expr)?;
+      }
+      Expr::Deref(expr) => {
+        write!(self.f, "*")?;
+        self.gen_expr(expr)?;
+      }
+      Expr::Call(name, args) => {
+        self.gen_expr(name)?;
+        write!(self.f, "(")?;
+        for (i, arg) in args.iter().enumerate() {
+          if i != 0 { write!(self.f, ", ")?; }
+          self.gen_expr(arg)?;
+        }
+        write!(self.f, ")")?;
+      }
+      _ => write!(self.f, "UNIMPL_EXPR /* {:?} */", expr)?,
     }
-  }
-
-  fn label(&mut self, name: &str) -> fmt::Result {
-    writeln!(self.f, "\n{}:", name)
-  }
-
-  fn jmp(&mut self, name: &str) -> fmt::Result {
-    writeln!(self.f, "  goto {};", name)
-  }
-
-  fn jne(&mut self, cond: Ref, tblk: &str, fblk: &str) -> fmt::Result {
-    let c = self.refstr(cond);
-    writeln!(self.f, "  if ({}) goto {};", c, tblk)?;
-    writeln!(self.f, "  else goto {};", fblk)?;
     Ok(())
   }
 
-  fn func(&mut self, name: &str, r: Ref, operands: &[Ref]) -> fmt::Result {
-    let dst = self.refstr(r);
-    write!(self.f, "  {} = {}(", dst, name)?;
-    for (i, arg) in operands.iter().enumerate() {
-      if i != 0 { write!(self.f, ", ")? }
-      let s = self.refstr(*arg);
-      write!(self.f, "{}", s)?;
+  fn gen_stmt(&mut self, stmt: &Stmt) -> fmt::Result {
+    match stmt {
+      Stmt::None => (),
+      Stmt::Assign(s) => {
+        self.gen_expr(&s.lhs)?;
+        write!(self.f, " = ")?;
+        self.gen_expr(&s.rhs)?;
+        writeln!(self.f, ";")?;
+      }
+      Stmt::Goto(g) => {
+        writeln!(self.f, "goto {};", g.tgt.0)?;
+        writeln!(self.f, "")?;
+      }
+      Stmt::CondGoto(g) => {
+        write!(self.f, "if (")?;
+        self.gen_expr(&g.cond)?;
+        writeln!(self.f, ") goto {};", g.tgt_true.0)?;
+        writeln!(self.f, "else goto {};", g.tgt_false.0)?;
+        writeln!(self.f, "")?;
+      }
+      _ => writeln!(self.f, "UNIMPL_STMT;")?,
     }
-    writeln!(self.f, ");")
+    Ok(())
   }
 
-  fn store(&mut self, name: &str, r: Ref) -> fmt::Result {
-    let instr = self.ir.instr(r).unwrap();
-    let n = instr.operands.len();
-    write!(self.f, "  {}(", name)?;
-    for (i, arg) in instr.operands[..n-1].iter().enumerate() {
-      if i != 0 { write!(self.f, ", ")? }
-      let s = self.refstr(*arg);
-      write!(self.f, "{}", s)?;
+  fn gen(&mut self, func: &Function) -> fmt::Result {
+    for stmt in &func.body {
+      self.gen_stmt(stmt)?;
     }
-    let s = self.refstr(instr.operands[n-1]);
-    writeln!(self.f, ") = {};", s)
-  }
-
-  fn binop(&mut self, operator: &str, r: Ref) -> fmt::Result {
-    let dst = self.refstr(r);
-    let instr = self.ir.instr(r).unwrap();
-    let lhs = self.refstr(instr.operands[0]);
-    let rhs = self.refstr(instr.operands[1]);
-    writeln!(self.f, "  {} = {} {} {};", dst, lhs, operator, rhs)
+    Ok(())
   }
 }
 
-pub fn generate(ir: &IR, f: &mut dyn fmt::Write) -> fmt::Result {
-  let mut emit = Emit {
-    ir, f, vars: HashMap::new(), next: 0,
-  };
-
-  for b in 0..ir.blocks.len() {
-    let blk = &ir.blocks[b];
-    emit.label(&blk.name)?;
-    for i in blk.instrs.range() {
-      let r = Ref::Instr(BlockRef(b), i);
-      let instr = ir.instr(r).unwrap();
-      match instr.opcode {
-        Opcode::Nop => (),
-        Opcode::Pin => panic!("Unimpl Pin"),
-        Opcode::Ref => panic!("Unimpl Ref"),
-        Opcode::Phi => {
-          //return Ok(());
-          panic!("Unimpl Phi");
-        }
-        Opcode::Add => emit.binop("+", r)?,
-        Opcode::Sub => emit.binop("-", r)?,
-        Opcode::Shl => emit.binop("<<", r)?,
-        Opcode::And => emit.binop("&", r)?,
-        Opcode::Xor => emit.binop("^", r)?,
-        Opcode::Load8 => panic!("Unimpl Load8"),
-        Opcode::Load16 => emit.func("*PTR_16", r, &instr.operands)?,
-        Opcode::Load32 => panic!("Unimpl Load32"),
-        Opcode::Store8 => panic!("Unimpl Store8"),
-        Opcode::Store16 => emit.store("*PTR_16", r)?,
-
-        Opcode::ReadVar8 => panic!("Unimpl ReadVar8"),
-        Opcode::ReadVar16 => {
-          let dst = emit.refstr(r);
-          let src = emit.symbol(instr.operands[0], 2);
-          writeln!(emit.f, "  {} = {};", dst, src)?;
-        }
-        Opcode::ReadVar32 => {
-          let dst = emit.refstr(r);
-          let src = emit.symbol(instr.operands[0], 4);
-          writeln!(emit.f, "  {} = {};", dst, src)?;
-        }
-        Opcode::WriteVar8 => panic!("Unimpl WriteVar8"),
-        Opcode::WriteVar16 => {
-          let dst = emit.symbol(instr.operands[0], 2);
-          let src = emit.refstr(instr.operands[1]);
-          writeln!(emit.f, "  {} = {};", dst, src)?;
-        }
-        Opcode::ReadArr8 => panic!("Unimpl ReadArr8"),
-        Opcode::ReadArr16 => panic!("Unimpl ReadArr16"),
-        Opcode::ReadArr32 => panic!("Unimpl ReadArr32"),
-        Opcode::WriteArr8 => panic!("Unimpl WriteArr8"),
-        Opcode::WriteArr16 => panic!("Unimpl WriteArr16"),
-        Opcode::Lower16 => {
-          let dst = emit.refstr(r);
-          let arg = emit.refstr(instr.operands[0]);
-          writeln!(emit.f, "  {} = (u16)({});", dst, arg)?;
-        }
-        Opcode::Upper16 => {
-          let dst = emit.refstr(r);
-          let arg = emit.refstr(instr.operands[0]);
-          writeln!(emit.f, "  {} = (u16)({} >> 16);", dst, arg)?;
-        }
-        Opcode::UpdateFlags => panic!("Unimpl UpdateFlags"),
-        Opcode::EqFlags => panic!("Unimpl EqFlags"),
-        Opcode::NeqFlags => panic!("Unimpl NeqFlags"),
-        Opcode::GtFlags => panic!("Unimpl GtFlags"),
-        Opcode::GeqFlags => panic!("Unimpl GeqFlags"),
-        Opcode::LtFlags => panic!("Unimpl LtFlags"),
-        Opcode::LeqFlags => panic!("Unimpl LeqFlags"),
-        Opcode::Eq => emit.binop("==", r)?,
-        Opcode::Neq => emit.binop("!=", r)?,
-        Opcode::Gt => panic!("Unimpl Gt"),
-        Opcode::Geq => panic!("Unimpl Geq"),
-        Opcode::Lt => panic!("Unimpl Lt"),
-        Opcode::Leq => panic!("Unimpl Leq"),
-        Opcode::Call => panic!("Unimpl Call"),
-        Opcode::CallArgs => {
-          let Ref::Func(idx) = instr.operands[0] else { panic!("Expected function reference for first operand of callargs") };
-          let name = &ir.funcs[idx];
-          emit.func(name, r, &instr.operands[1..])?;
-        }
-        Opcode::Ret => panic!("Unimpl Ret"),
-        Opcode::Jmp => {
-          let Ref::Block(BlockRef(b)) = instr.operands[0] else { panic!("Expected blockref for first operand of Jmp") };
-          emit.jmp(&ir.blocks[b].name)?;
-        }
-        Opcode::Jne => {
-          let Ref::Block(BlockRef(t)) = instr.operands[1] else { panic!("Expected blockref for second operand of Jne") };
-          let Ref::Block(BlockRef(f)) = instr.operands[2] else { panic!("Expected blockref for third operand of Jne") };
-          emit.jne(instr.operands[0], &ir.blocks[t].name, &ir.blocks[f].name)?;
-        }
-      }
-    }
-  }
-  Ok(())
+pub fn generate(func: &Function, f: &mut dyn fmt::Write) -> fmt::Result {
+  let mut g = Gen { f };
+  g.gen(func)
 }

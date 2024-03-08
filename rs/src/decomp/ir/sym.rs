@@ -14,6 +14,7 @@ pub struct SymbolRef {
   pub typ: SymbolType,
   pub idx: usize /* id */,
   pub off: i32, /* off-adjust */
+  pub sz: u32, /* size */
 }
 
 #[derive(Debug, Clone)]
@@ -121,7 +122,7 @@ impl SymbolMap {
     }
   }
 
-  pub fn find_ref(&self, typ: SymbolType, off: i32) -> Option<SymbolRef> {
+  pub fn find_ref(&self, typ: SymbolType, off: i32, sz: u32) -> Option<SymbolRef> {
     // FIXME: This is sorted: can use binary search
     let tbl = self.get_table(typ);
     for (i, sym) in tbl.symbols.iter().enumerate() {
@@ -129,7 +130,8 @@ impl SymbolMap {
         return Some(SymbolRef {
           typ,
           idx: i,
-          off: off - sym.start()
+          off: off - sym.start(),
+          sz,
         });
       }
     }
@@ -182,7 +184,7 @@ pub fn symbolize_stack(ir: &mut IR) {
 
       let size = mem_instr.opcode.operation_size();
 
-      var_mem_refs.push((mem_ref, off));
+      var_mem_refs.push((mem_ref, off, size));
 
       // let mut f = crate::decomp::ir::display::Formatter::new();
       // f.fmt_instr(ir, addr_ref, addr_instr).unwrap();
@@ -204,10 +206,10 @@ pub fn symbolize_stack(ir: &mut IR) {
   ir.symbols.locals.coalesce();
 
   // Update the IR
-  for (mem_ref, off) in var_mem_refs {
+  for (mem_ref, off, sz) in var_mem_refs {
     let typ = if off > 0 { SymbolType::Param } else { SymbolType::Local };
     //let size = ir.instr(mem_ref).unwrap().opcode.operation_size();
-    let sym = ir.symbols.find_ref(typ, off).unwrap();
+    let sym = ir.symbols.find_ref(typ, off, sz).unwrap();
 
     let instr = ir.instr_mut(mem_ref).unwrap();
     if instr.opcode.is_load() {
@@ -257,8 +259,9 @@ pub fn symbolize_globals(ir: &mut IR, cfg: &Config) {
       if !instr.opcode.is_load() && !instr.opcode.is_store() { continue; }
       if instr.operands[0] != ds { continue; }
       let off_ref = instr.operands[1];
+      let size = instr.opcode.operation_size();
       let Some(off) = ir.lookup_const(off_ref) else { continue };
-      let Some(sym) = ir.symbols.find_ref(SymbolType::Global, off) else {
+      let Some(sym) = ir.symbols.find_ref(SymbolType::Global, off, size) else {
         eprintln!("WARN: Could not find global for DS:{:04x}", off);
         continue;
       };
