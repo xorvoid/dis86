@@ -3,17 +3,49 @@ use std::fmt;
 
 struct Gen<'a> {
   f: &'a mut dyn fmt::Write,
+  indent_level: usize,
+  newline: bool,
 }
 
-impl Gen<'_> {
-  fn gen_uoper(&mut self, oper: &UnaryOperator) -> fmt::Result {
+impl<'a> Gen<'a> {
+  fn new(f: &'a mut dyn fmt::Write) -> Self {
+    Self { f, indent_level: 0, newline: true }
+  }
+
+  fn endline(&mut self) -> fmt::Result {
+    self.f.write_str("\n")?;
+    self.newline = true;
+    Ok(())
+  }
+
+  fn text(&mut self, txt: &str) -> fmt::Result {
+    if self.newline {
+      write!(self.f, "{:indent$}", "", indent=2*self.indent_level)?;
+      self.newline = false;
+    }
+    self.f.write_str(txt)
+  }
+
+  fn enter_block(&mut self) -> fmt::Result {
+    self.text("{")?;
+    self.indent_level += 1;
+    Ok(())
+  }
+
+  fn leave_block(&mut self) -> fmt::Result {
+    self.indent_level -= 1;
+    self.text("}")?;
+    Ok(())
+  }
+
+  fn unary_oper(&mut self, oper: &UnaryOperator) -> fmt::Result {
     let s = match oper {
       UnaryOperator::Addr => "(u8*)&",
     };
-    write!(self.f, "{}", s)
+    self.text(s)
   }
 
-  fn gen_boper(&mut self, oper: &BinaryOperator) -> fmt::Result {
+  fn binary_oper(&mut self, oper: &BinaryOperator) -> fmt::Result {
     let s = match oper {
       BinaryOperator::Add => "+",
       BinaryOperator::Sub => "-",
@@ -29,102 +61,118 @@ impl Gen<'_> {
       BinaryOperator::Lt  => "<",
       BinaryOperator::Leq => "<=",
     };
-    write!(self.f, " {} ", s)
+    self.text(s)
   }
 
-  fn gen_expr(&mut self, expr: &Expr) -> fmt::Result {
+  fn expr(&mut self, expr: &Expr) -> fmt::Result {
     match expr {
       Expr::Unary(u) => {
-        self.gen_uoper(&u.op)?;
-        self.gen_expr(&u.rhs)?;
+        self.unary_oper(&u.op)?;
+        self.expr(&u.rhs)?;
       }
       Expr::Binary(b) => {
-        write!(self.f, "(")?;
-        self.gen_expr(&b.lhs)?;
-        self.gen_boper(&b.op)?;
-        self.gen_expr(&b.rhs)?;
-        write!(self.f, ")")?;
+        self.text("(")?;
+        self.expr(&b.lhs)?;
+        self.binary_oper(&b.op)?;
+        self.expr(&b.rhs)?;
+        self.text(")")?;
       }
       Expr::Const(k) => {
-        if *k > 128 {
-          write!(self.f, "0x{:x}", k)?;
+        let s = if *k > 128 {
+          format!("0x{:x}", k)
         } else {
-          write!(self.f, "{}", k)?;
-        }
+          format!("{}", k)
+        };
+        self.text(&s)?;
       }
       Expr::Name(n) => {
-        write!(self.f, "{}", n)?;
+        self.text(n)?;
       }
       Expr::Ptr16(seg, off) => {
-        write!(self.f, "PTR_16(")?;
-        self.gen_expr(seg)?;
-        write!(self.f, ", ")?;
-        self.gen_expr(off)?;
-        write!(self.f, ")")?;
+        self.text("PTR_16(")?;
+        self.expr(seg)?;
+        self.text(", ")?;
+        self.expr(off)?;
+        self.text(")")?;
       }
       Expr::Ptr32(seg, off) => {
-        write!(self.f, "PTR_32(")?;
-        self.gen_expr(seg)?;
-        write!(self.f, ", ")?;
-        self.gen_expr(off)?;
-        write!(self.f, ")")?;
+        self.text("PTR_32(")?;
+        self.expr(seg)?;
+        self.text(", ")?;
+        self.expr(off)?;
+        self.text(")")?;
       }
       Expr::Cast(typ, expr) => {
-        write!(self.f, "({})", typ)?;
-        self.gen_expr(expr)?;
+        self.text(&format!("({})", typ))?;
+        self.expr(expr)?;
       }
       Expr::Deref(expr) => {
-        write!(self.f, "*")?;
-        self.gen_expr(expr)?;
+        self.text("*")?;
+        self.expr(expr)?;
       }
       Expr::Call(name, args) => {
-        self.gen_expr(name)?;
-        write!(self.f, "(")?;
+        self.expr(name)?;
+        self.text("(")?;
         for (i, arg) in args.iter().enumerate() {
-          if i != 0 { write!(self.f, ", ")?; }
-          self.gen_expr(arg)?;
+          if i != 0 { self.text(", ")?; }
+          self.expr(arg)?;
         }
-        write!(self.f, ")")?;
+        self.text(")")?;
       }
-      _ => write!(self.f, "UNIMPL_EXPR /* {:?} */", expr)?,
+      _ => self.text(&format!("UNIMPL_EXPR /* {:?} */", expr))?,
     }
     Ok(())
   }
 
-  fn gen_stmt(&mut self, stmt: &Stmt) -> fmt::Result {
+  fn goto(&mut self, label: &Label) -> fmt::Result {
+    self.text("goto ")?;
+    self.text(&label.0)?;
+    self.text(";")?;
+    self.endline()
+  }
+
+  fn stmt(&mut self, stmt: &Stmt) -> fmt::Result {
     match stmt {
       Stmt::None => (),
       Stmt::Assign(s) => {
-        self.gen_expr(&s.lhs)?;
-        write!(self.f, " = ")?;
-        self.gen_expr(&s.rhs)?;
-        writeln!(self.f, ";")?;
+        self.expr(&s.lhs)?;
+        self.text(" = ")?;
+        self.expr(&s.rhs)?;
+        self.text(";")?;
+        self.endline()?;
       }
       Stmt::Goto(g) => {
-        writeln!(self.f, "goto {};", g.tgt.0)?;
-        writeln!(self.f, "")?;
+        self.goto(&g.tgt)?;
+        self.endline()?;
       }
       Stmt::CondGoto(g) => {
-        write!(self.f, "if (")?;
-        self.gen_expr(&g.cond)?;
-        writeln!(self.f, ") goto {};", g.tgt_true.0)?;
-        writeln!(self.f, "else goto {};", g.tgt_false.0)?;
-        writeln!(self.f, "")?;
+        self.text("if (")?;
+        self.expr(&g.cond)?;
+        self.text(") ")?;
+        self.goto(&g.tgt_true)?;
+        self.text("else ")?;
+        self.goto(&g.tgt_false)?;
+        self.endline()?;
       }
-      _ => writeln!(self.f, "UNIMPL_STMT;")?,
+      _ => self.text("UNIMPL_STMT;")?,
     }
     Ok(())
   }
 
   fn gen(&mut self, func: &Function) -> fmt::Result {
+    self.text(&format!("void {}()", func.name))?;
+    self.endline()?;
+    self.enter_block()?;
+    self.endline()?;
     for stmt in &func.body {
-      self.gen_stmt(stmt)?;
+      self.stmt(stmt)?;
     }
+    self.leave_block()?;
     Ok(())
   }
 }
 
 pub fn generate(func: &Function, f: &mut dyn fmt::Write) -> fmt::Result {
-  let mut g = Gen { f };
+  let mut g = Gen::new(f);
   g.gen(func)
 }

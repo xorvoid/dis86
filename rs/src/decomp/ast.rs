@@ -75,6 +75,7 @@ pub enum Stmt {
 
 #[derive(Debug)]
 pub struct Function {
+  pub name: String,
   //vars: // todo
   pub body: Vec<Stmt>,
 }
@@ -88,10 +89,11 @@ struct Builder<'a> {
 }
 
 impl<'a> Builder<'a> {
-  fn new(ir: &'a ir::IR) -> Self {
+  fn new(name: &str, ir: &'a ir::IR) -> Self {
     Self {
       ir,
       func: Function {
+        name: name.to_string(),
         body: vec![],
       },
       n_uses: HashMap::new(),
@@ -300,8 +302,8 @@ impl<'a> Builder<'a> {
 }
 
 impl Function {
-  pub fn from_ir(ir: &ir::IR) -> Self {
-    let mut bld = Builder::new(ir);
+  pub fn from_ir(name: &str, ir: &ir::IR) -> Self {
+    let mut bld = Builder::new(name, ir);
     bld.build();
 
     let s = display_ir_with_uses(ir, &bld.n_uses).unwrap();

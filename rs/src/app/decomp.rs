@@ -87,7 +87,7 @@ pub fn run(appname: &str) {
   //println!("{}", ir);
   //println!("===========================================================================");
 
-  let f = ast::Function::from_ir(&ir);
+  let f = ast::Function::from_ir("my_function", &ir);
   //println!("{:#?}", f);
 
 
