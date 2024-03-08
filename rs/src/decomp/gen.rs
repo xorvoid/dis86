@@ -26,6 +26,10 @@ impl<'a> Gen<'a> {
     self.f.write_str(txt)
   }
 
+  fn suppress_indent(&mut self) {
+    self.newline = false;
+  }
+
   fn enter_block(&mut self) -> fmt::Result {
     self.text("{")?;
     self.indent_level += 1;
@@ -134,6 +138,11 @@ impl<'a> Gen<'a> {
   fn stmt(&mut self, stmt: &Stmt) -> fmt::Result {
     match stmt {
       Stmt::None => (),
+      Stmt::Label(l) => {
+        self.suppress_indent();
+        self.text(&format!("{}:;", l.0))?;
+        self.endline()?;
+      }
       Stmt::Assign(s) => {
         self.expr(&s.lhs)?;
         self.text(" = ")?;
@@ -154,7 +163,15 @@ impl<'a> Gen<'a> {
         self.goto(&g.tgt_false)?;
         self.endline()?;
       }
-      _ => self.text("UNIMPL_STMT;")?,
+      Stmt::Return => {
+        self.text("return;")?;
+        self.endline()?;
+        self.endline()?;
+      }
+      _ => {
+        self.text(&format!("UNIMPL_STMT; /* {:?} */", stmt))?;
+        self.endline()?;
+      }
     }
     Ok(())
   }

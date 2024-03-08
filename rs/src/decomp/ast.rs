@@ -1,5 +1,5 @@
 use crate::decomp::ir;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Write;
 
 #[derive(Debug)]
@@ -16,7 +16,6 @@ pub enum Expr {
   Ptr32(Box<Expr>, Box<Expr>),
   UnimplPhi,
   UnimplPin,
-  UnimplRet,
 }
 
 #[derive(Debug)]
@@ -66,11 +65,13 @@ pub struct Goto {
 #[derive(Debug)]
 pub enum Stmt {
   None,
+  Label(Label),
   Instr(ir::Ref),
   Expr(Expr),
   Assign(Assign),
   CondGoto(CondGoto),
   Goto(Goto),
+  Return,
 }
 
 #[derive(Debug)]
@@ -78,6 +79,12 @@ pub struct Function {
   pub name: String,
   //vars: // todo
   pub body: Vec<Stmt>,
+}
+
+enum Next {
+  Return,
+  Fallthrough(ir::BlockRef), /* passive */
+  Branch(ir::BlockRef /* active */, ir::BlockRef /* passive */),
 }
 
 struct Builder<'a> {
@@ -216,7 +223,6 @@ impl<'a> Builder<'a> {
       }
       ir::Opcode::Phi => Expr::UnimplPhi,
       ir::Opcode::Pin => Expr::UnimplPin,
-      ir::Opcode::Ret => Expr::UnimplRet,
       _ => {
         Expr::None
       }
@@ -244,60 +250,103 @@ impl<'a> Builder<'a> {
     expr
   }
 
-  fn convert(&mut self) {
-    // Next convert to trivial instr statements
-    for b in 0..self.ir.blocks.len() {
-      for i in self.ir.blocks[b].instrs.range() {
-        let r = ir::Ref::Instr(ir::BlockRef(b), i);
-        let instr = self.ir.instr(r).unwrap();
-        match instr.opcode {
-          ir::Opcode::Nop => continue,
-          ir::Opcode::Jmp => {
-            // TODO: Handle phis!!
-            self.func.body.push(Stmt::Goto(Goto {
-              tgt: Label("label".to_string()),
-            }));
-          }
-          ir::Opcode::Jne => {
-            // TODO: Handle phis!!
-            let s = Stmt::CondGoto(CondGoto {
-              cond: self.ref_to_expr(instr.operands[0], 0),
-              tgt_true: Label("label".to_string()),
-              tgt_false: Label("label".to_string()),
-            });
-            self.func.body.push(s);
-          }
-          ir::Opcode::WriteVar16 => {
-            let lhs = self.symbol_to_expr(instr.operands[0].unwrap_symbol());
-            let rhs = self.ref_to_expr(instr.operands[1], 0);
-            self.func.body.push(Stmt::Assign(Assign { lhs, rhs }));
-          }
-          ir::Opcode::Store16 => {
-            let seg = self.ref_to_expr(instr.operands[0], 1);
-            let off = self.ref_to_expr(instr.operands[1], 1);
-            let lhs = Expr::Deref(Box::new(Expr::Ptr16(Box::new(seg), Box::new(off))));
-            let rhs = self.ref_to_expr(instr.operands[2], 0);
-            self.func.body.push(Stmt::Assign(Assign { lhs, rhs }));
-          }
-          _ => {
-            if self.n_uses.get(&r).unwrap_or(&0) == &1 { continue; }
+  fn blockref_to_label(&self, bref: ir::BlockRef) -> Label {
+    Label(self.ir.blocks[bref.0].name.clone())
+  }
 
-            let name = self.ref_name(r);
-            let rvalue = self.ref_to_expr(r, 0);
+  fn convert_blk(&mut self, bref: ir::BlockRef) -> Next {
+    let blk = &self.ir.blocks[bref.0];
+    if bref.0 != 0 { // for all except the entry block
+      let label = self.blockref_to_label(bref);
+      self.func.body.push(Stmt::Label(label));
+    }
 
-            self.func.body.push(Stmt::Assign(Assign {
-              lhs: Expr::Name(name),
-              rhs: rvalue,
-            }));
-          }
+    for i in blk.instrs.range() {
+      let r = ir::Ref::Instr(bref, i);
+      let instr = self.ir.instr(r).unwrap();
+      match instr.opcode {
+        ir::Opcode::Nop => continue,
+        ir::Opcode::Ret => {
+          self.func.body.push(Stmt::Return);
+          return Next::Return;
+        }
+        ir::Opcode::Jmp => {
+          // TODO: Handle phis!!
+          let passive = instr.operands[0].unwrap_block();
+          let tgt = self.blockref_to_label(passive);
+          self.func.body.push(Stmt::Goto(Goto {
+            tgt,
+          }));
+          return Next::Fallthrough(passive);
+        }
+        ir::Opcode::Jne => {
+          // TODO: Handle phis!!
+          let active = instr.operands[1].unwrap_block();
+          let passive = instr.operands[2].unwrap_block();
+          let tgt_true = self.blockref_to_label(active);
+          let tgt_false = self.blockref_to_label(passive);
+          let s = Stmt::CondGoto(CondGoto {
+            cond: self.ref_to_expr(instr.operands[0], 0),
+            tgt_true,
+            tgt_false,
+          });
+          self.func.body.push(s);
+          return Next::Branch(active, passive);
+        }
+        ir::Opcode::WriteVar16 => {
+          let lhs = self.symbol_to_expr(instr.operands[0].unwrap_symbol());
+          let rhs = self.ref_to_expr(instr.operands[1], 0);
+          self.func.body.push(Stmt::Assign(Assign { lhs, rhs }));
+        }
+        ir::Opcode::Store16 => {
+          let seg = self.ref_to_expr(instr.operands[0], 1);
+          let off = self.ref_to_expr(instr.operands[1], 1);
+          let lhs = Expr::Deref(Box::new(Expr::Ptr16(Box::new(seg), Box::new(off))));
+          let rhs = self.ref_to_expr(instr.operands[2], 0);
+          self.func.body.push(Stmt::Assign(Assign { lhs, rhs }));
+        }
+        _ => {
+          if self.n_uses.get(&r).unwrap_or(&0) == &1 { continue; }
+
+          let name = self.ref_name(r);
+          let rvalue = self.ref_to_expr(r, 0);
+
+          self.func.body.push(Stmt::Assign(Assign {
+            lhs: Expr::Name(name),
+            rhs: rvalue,
+          }));
         }
       }
     }
+    unreachable!("IR Block Should End With A Branching Instr");
   }
 
   fn build(&mut self) {
     self.compute_uses();
-    self.convert();
+    // let mut converted = HashSet::new();
+    // let mut queue = VecDeque::new();
+    // queue.push_back(ir::BlockRef(0));
+
+    // while queue.len() > 0 {
+    //   let bref = queue.pop_front().unwrap();
+    //   if converted.get(&bref).is_some() {
+    //     continue;
+    //   }
+    //   converted.insert(bref);
+    //   let next = self.convert_blk(bref);
+    //   match next {
+    //     Next::Return => continue,
+    //     Next::Fallthrough(passive) => queue.push_back(passive),
+    //     Next::Branch(active, passive) => {
+    //       queue.push_back(active);
+    //       queue.push_back(passive);
+    //     }
+    //   }
+    // }
+
+    for b in 0..self.ir.blocks.len() {
+      self.convert_blk(ir::BlockRef(b));
+    }
   }
 }
 

@@ -20,10 +20,16 @@ pub enum Ref {
 }
 
 impl Ref {
+  pub fn unwrap_block(self) -> BlockRef {
+    let Ref::Block(blkref) = self else { panic!("expected block ref") };
+    blkref
+  }
+
   pub fn unwrap_symbol(self) -> sym::SymbolRef {
     let Ref::Symbol(symref) = self else { panic!("expected symbol ref") };
     symref
   }
+
   pub fn unwrap_func(self) -> usize {
     let Ref::Func(idx) = self else { panic!("expected function ref") };
     idx
