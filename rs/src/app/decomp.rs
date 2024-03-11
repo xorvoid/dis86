@@ -6,7 +6,6 @@ use crate::decomp::config::Config;
 use crate::decomp::gen;
 use crate::decomp::ast;
 use crate::decomp::control_flow;
-use itertools::sorted;
 
 fn print_help(appname: &str) {
   println!("usage: {} dis OPTIONS", appname);
@@ -98,31 +97,12 @@ pub fn run(appname: &str) {
   println!("{}", buf);
 
   let func = control_flow::Function::from_ir(&ir);
-  print_control_structure(&func);
+  //println!("{:#?}", func);
+  control_flow::print(&func);
 
 
-  //println!("{:#?}", ctrlflow);
 
   //crate::decomp::control_flow::gen_graphviz_dotfile("ctrlflow.dot", &ir).unwrap();
 
   //println!("{:#?}", ir.symbols);
-}
-
-fn print_control_structure(func: &control_flow::Function) {
-  print_control_structure_recurse(&func.body, &func.all_elems, 0)
-}
-
-fn print_control_structure_recurse(body: &control_flow::Body, all_elems: &[control_flow::Elem], indent_level: usize) {
-  for id in sorted(body.elems.iter().cloned()) {
-    print!("{:indent$}{:?} | ", "", id, indent=2*indent_level);
-    let elem = &all_elems[id.0];
-    match &elem.detail {
-      control_flow::Detail::BasicBlock(b) => println!("BasicBlock({})", b.blkref.0),
-      control_flow::Detail::Loop(lp) => {
-        println!("Loop");
-        print_control_structure_recurse(&lp.body, all_elems, indent_level+1);
-      }
-      control_flow::Detail::If(i) => println!("If"),
-    }
-  }
 }

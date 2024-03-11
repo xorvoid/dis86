@@ -1,5 +1,5 @@
 use crate::decomp::ir;
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ElemId(pub usize);
@@ -36,10 +36,9 @@ pub struct If {
   pub entry: ElemId,
   pub exit: ElemId,
   pub then_body: Body,
-  pub else_body: Body,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Body {
   pub elems: HashSet<ElemId>,
   pub remap: HashMap<ElemId, ElemId>,
@@ -63,17 +62,6 @@ impl Loop {
   }
 }
 
-impl Elem {
-  // HAX HAX HAX THIS IS USELESS FOR ANYTHING EXCEPT LOOPS!
-  fn body(&self) -> Option<&Body> {
-    match &self.detail {
-      Detail::BasicBlock(_) => None,
-      Detail::Loop(x) => Some(&x.body),
-      Detail::If(_) => None,
-    }
-  }
-}
-
 impl Body {
   fn new() -> Self {
     Self {
@@ -82,19 +70,80 @@ impl Body {
     }
   }
 
-  // Insert sub-elem, removing any elems it's captured
-  fn insert_sub(&mut self, sub: ElemId, entry: ElemId, sub_body: &Body) {
-    if !sub_body.elems.is_subset(&self.elems) {
-      panic!("An inserted sub-elem must only use a subset of elems");
+  fn remove_elem(&mut self, remove: ElemId) {
+    if !self.elems.remove(&remove) {
+      panic!("Cannot remove elems that are not part of this body!");
     }
-    self.elems = self.elems.difference(&sub_body.elems).cloned().collect();
-    self.elems.insert(sub);
-    self.remap.insert(entry, sub);
+  }
+
+  fn remove_elems(&mut self, remove: &HashSet<ElemId>) {
+    if !remove.is_subset(&self.elems) {
+      panic!("Cannot remove elems that are not part of this body!");
+    }
+    self.elems = self.elems.difference(remove).cloned().collect();
+  }
+
+  // Insert loop, removing any elems it's captured
+  fn insert_loop(&mut self, lp: Loop, all_elems: &mut Vec<Elem>) {
+    // Step 0: Save some data
+    let loop_entry = lp.entry;
+    let loop_body = lp.body.clone();
+
+    // Step 1: Wrap up into a proper elem
+    let new_elem = Elem {
+      entry: lp.entry,
+      exits: lp.exits.clone(),
+      detail: Detail::Loop(lp),
+    };
+
+    // Step 2: Insert it into "all_elems", assigning an ElemId
+    let loop_id = ElemId(all_elems.len());
+    all_elems.push(new_elem);
+
+    // Step 3: Remove any captured elems
+    self.remove_elems(&loop_body.elems);
+    self.elems.insert(loop_id);
+    self.remap.insert(loop_entry, loop_id);
+  }
+
+  // Insert ifstmt, removing any elems it's captured
+  fn insert_ifstmt(&mut self, ifstmt: If, all_elems: &mut Vec<Elem>) {
+    // Step 0: Save some data
+    let ifstmt_entry = ifstmt.entry;
+    let ifstmt_then = ifstmt.then_body.clone();
+
+    // Step 1: Wrap up into a proper elem
+    let new_elem = Elem {
+      entry: ifstmt.entry,
+      exits: vec![ifstmt.exit],
+      detail: Detail::If(ifstmt),
+    };
+
+    // Step 2: Insert it into "all_elems", assigning an ElemId
+    let ifstmt_id = ElemId(all_elems.len());
+    all_elems.push(new_elem);
+
+    // Step 3: Remove any captured elems
+    self.remove_elems(&ifstmt_then.elems);
+    self.remove_elem(ifstmt_entry);
+    self.elems.insert(ifstmt_id);
+    self.remap.insert(ifstmt_entry, ifstmt_id);
   }
 
   fn exit(&self, node: ElemId, exit_idx: usize, all_elems: &[Elem]) -> Option<ElemId> {
     let next = *all_elems[node.0].exits.get(exit_idx)?;
     self.remap.get(&next).cloned().or(Some(next))
+  }
+
+  fn exits(&self, node: ElemId, all_elems: &[Elem]) -> Vec<ElemId> {
+    assert!(self.elems.get(&node).is_some());
+    let mut exits = all_elems[node.0].exits.clone();
+    for exit in &mut exits {
+      if let Some(remap) = self.remap.get(exit) {
+        *exit = *remap;
+      }
+    }
+    exits
   }
 }
 
@@ -134,16 +183,22 @@ impl Function {
 
   pub fn from_ir(ir: &ir::IR) -> Self {
     let mut func = Self::from_ir_naive(ir);
-    while infer_loop(&mut func) {}
+    infer_structure(func.entry, &mut func.body, &mut func.all_elems);
     func
   }
 }
 
-enum DFSAction {
+enum DFSAction<'a> {
   Cycle { from: ElemId, to: ElemId },
   Next(ElemId),
   Exit(ElemId),
+  Backtrack(&'a [ElemId]),
   Done,
+}
+
+enum DFSPending {
+  Expand(ElemId),
+  Backtrack,
 }
 
 struct DFS<'a> {
@@ -152,7 +207,7 @@ struct DFS<'a> {
   visited: Vec<bool>,
   path: Vec<ElemId>,
   exit_idx: Vec<usize>,
-  pending: Option<ElemId>,
+  pending: Option<DFSPending>,
 }
 
 impl<'a> DFS<'a> {
@@ -172,17 +227,26 @@ impl<'a> DFS<'a> {
   }
 
   fn apply_pending(&mut self) {
-    let Some(next) = self.pending.take() else { return };
-    self.visited[next.0] = true;
-    self.path.push(next);
-    self.exit_idx.push(0);
+    let Some(action) = self.pending.take() else { return };
+    match action {
+      DFSPending::Expand(next) => {
+        self.visited[next.0] = true;
+        self.path.push(next);
+        self.exit_idx.push(0);
+      }
+      DFSPending::Backtrack => {
+        let node = self.path.pop().unwrap();
+        self.exit_idx.pop();
+        self.visited[node.0] = false;
+      }
+    }
   }
 
   fn path(&self) -> &[ElemId] {
     &self.path
   }
 
-  fn next(&mut self) -> DFSAction {
+  fn next(&mut self) -> DFSAction<'_> {
     self.apply_pending();
 
     if self.path.len() == 0 {
@@ -195,10 +259,8 @@ impl<'a> DFS<'a> {
     self.exit_idx[idx] += 1;
 
     let Some(next) = self.body.exit(node, exit_idx, self.all_elems) else {
-      self.visited[node.0] = false;
-      self.path.pop();
-      self.exit_idx.pop();
-      return self.next();
+      self.pending = Some(DFSPending::Backtrack);
+      return DFSAction::Backtrack(&self.path);
     };
 
     if self.body.elems.get(&next).is_none() {
@@ -210,7 +272,7 @@ impl<'a> DFS<'a> {
     }
 
 
-    self.pending = Some(next);
+    self.pending = Some(DFSPending::Expand(next));
     DFSAction::Next(next)
   }
 }
@@ -228,11 +290,11 @@ fn find_exits(entry: ElemId, body: &Body, all_elems: &[Elem]) -> Vec<ElemId> {
   exits.into_iter().collect()
 }
 
-fn infer_loop(f: &mut Function) -> bool {
-  println!("Starting loop infer");
-  println!("  Body: {:?}", f.body);
+fn infer_loop(entry: ElemId, body: &mut Body, all_elems: &mut Vec<Elem>) -> bool {
+  // println!("Starting loop infer");
+  // println!("  Body: {:?}", f.body);
 
-  let mut dfs = DFS::new(f.entry, &f.body, &f.all_elems);
+  let mut dfs = DFS::new(entry, body, all_elems);
   let mut lp: Option<Loop> = None;
   loop {
     match dfs.next() {
@@ -255,8 +317,6 @@ fn infer_loop(f: &mut Function) -> bool {
           if elem == lp.entry { break; }
         }
       }
-      DFSAction::Next(id) => println!("next: {}", id.0),
-      DFSAction::Exit(id) => println!("exit: {}", id.0),
       _ => (),
     }
   }
@@ -267,22 +327,105 @@ fn infer_loop(f: &mut Function) -> bool {
   // a proper elem and then insert it into the structure.
 
   // Step 1: We need to find the exits
-  lp.exits = find_exits(lp.entry, &lp.body, &f.all_elems);
+  lp.exits = find_exits(lp.entry, &lp.body, all_elems);
 
-  // Step 2: Wrap up into a proper elem
-  let loop_elem = Elem {
-    entry: lp.entry,
-    exits: lp.exits.clone(),
-    detail: Detail::Loop(lp),
-  };
-
-  // Step 3: Insert it into the body, replacing the old elems
-  let id = ElemId(f.all_elems.len());
-  f.all_elems.push(loop_elem);
-  let elem = &f.all_elems[id.0];
-  let body = elem.body().unwrap();
-  f.body.insert_sub(id, elem.entry, body);
-  //println!("{:#?}", loop_elem);
+  // Step 2: Insert it
+  body.insert_loop(lp, all_elems);
 
   true
+}
+
+fn infer_if(body: &mut Body, all_elems: &mut Vec<Elem>) -> bool {
+  // Consider each basic block as an if-stmt header
+  let mut found: Option<(ElemId, ElemId, ElemId)> = None;
+  for id in &body.elems {
+    let elem = &all_elems[id.0];
+
+    // If-stmt header needs to be a basic block
+    if !matches!(elem.detail, Detail::BasicBlock(_)) { continue; }
+
+    // If-stmt header needs to have exactly two exits
+    let exits = body.exits(*id, &all_elems);
+    if exits.len() != 2 { continue; }
+
+    //println!("Candidate Block: {} => {:?}", id.0, exits);
+
+    // Check for: {A, B}, A -> B
+    {
+      let (a, b) = (exits[0], exits[1]);
+      let a_exits = body.exits(a, &all_elems);
+      //println!("a_exits: {:?}", a_exits);
+      if a_exits.len() == 1 && a_exits[0] == b {
+        //println!("Found case 1");
+        found = Some((*id, a, b));
+        break;
+      }
+    }
+
+    // Check for: {A, B}, B -> A
+    {
+      let (a, b) = (exits[0], exits[1]);
+      let b_exits = body.exits(b, &all_elems);
+      //println!("b_exits: {:?}", b_exits);
+      if b_exits.len() == 1 && b_exits[0] == a {
+        //println!("Found case 2");
+        found = Some((*id, b, a));
+        break;
+      }
+    }
+  }
+
+  let Some((entry, then, join)) = found else { return false };
+
+  // Successfully inferred an if-stmt, we just need to finalize it up into
+  // a proper elem and then insert it into the structure.
+
+  // Step 1: Build If struct
+  let mut ifstmt = If {
+    entry,
+    exit: join,
+    then_body: Body::new(),
+  };
+  ifstmt.then_body.elems.insert(then);
+
+  // Step 2: Insert it
+  body.insert_ifstmt(ifstmt, all_elems);
+
+  true
+}
+
+fn infer_structure(entry: ElemId, body: &mut Body, all_elems: &mut Vec<Elem>) {
+  // infer at the top-level
+  while infer_loop(entry, body, all_elems) {}
+  while infer_if(body, all_elems) {}
+
+  // TODO!
+  // // recurse and infer at lower-levels
+  // for id in &body.elems {
+
+  // }
+}
+
+pub fn print(func: &Function) {
+  print_recurse(&func.body, &func.all_elems, 0)
+}
+
+fn print_recurse(body: &Body, all_elems: &[Elem], indent_level: usize) {
+  for id in itertools::sorted(body.elems.iter().cloned()) {
+    print!("{:indent$}{:?} | ", "", id, indent=2*indent_level);
+    let elem = &all_elems[id.0];
+    let exits: Vec<_> = elem.exits.iter().map(|x| x.0).collect();
+    match &elem.detail {
+      Detail::BasicBlock(b) => println!("BasicBlock({})", b.blkref.0),
+      Detail::Loop(lp) => {
+        let backedges: Vec<_> = lp.backedges.iter().cloned().map(|x| x.0).collect();
+        println!("Loop [entry={}, exits={:?}, backedges={:?}]", elem.entry.0, exits, backedges);
+        print_recurse(&lp.body, all_elems, indent_level+1);
+      }
+      Detail::If(i) => {
+        println!("If [entry={}, exits={:?}]", elem.entry.0, exits);
+        print_recurse(&i.then_body, all_elems, indent_level+1);
+      }
+    }
+  }
 }
