@@ -2,53 +2,54 @@ use crate::decomp::ir;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct ElemId(usize);
+pub struct ElemId(pub usize);
 
 #[derive(Debug)]
-struct Elem {
-  entry: ElemId,
-  exits: Vec<ElemId>,
-  detail: Detail,
+pub struct Elem {
+  pub entry: ElemId,
+  pub exits: Vec<ElemId>,
+  pub detail: Detail,
 }
 
 #[derive(Debug)]
-enum Detail {
+pub enum Detail {
   BasicBlock(BasicBlock),
   Loop(Loop),
   If(If),
 }
 
 #[derive(Debug)]
-struct BasicBlock {
-  blkref: ir::BlockRef,
+pub struct BasicBlock {
+  pub blkref: ir::BlockRef,
 }
 
 #[derive(Debug)]
-struct Loop {
-  entry: ElemId,
-  exits: Vec<ElemId>,
-  backedges: HashSet<ElemId>,
-  body: Body,
+pub struct Loop {
+  pub entry: ElemId,
+  pub exits: Vec<ElemId>,
+  pub backedges: HashSet<ElemId>,
+  pub body: Body,
 }
 
 #[derive(Debug)]
-struct If {
-  entry: ElemId,
-  exit: ElemId,
-  then_body: Body,
-  else_body: Body,
+pub struct If {
+  pub entry: ElemId,
+  pub exit: ElemId,
+  pub then_body: Body,
+  pub else_body: Body,
 }
 
 #[derive(Debug)]
-struct Body {
-  elems: HashSet<ElemId>,
+pub struct Body {
+  pub elems: HashSet<ElemId>,
+  pub remap: HashMap<ElemId, ElemId>,
 }
 
 #[derive(Debug)]
 pub struct Function {
-  all_elems: Vec<Elem>,
-  entry: ElemId,
-  body: Body,
+  pub all_elems: Vec<Elem>,
+  pub entry: ElemId,
+  pub body: Body,
 }
 
 impl Loop {
@@ -75,16 +76,25 @@ impl Elem {
 
 impl Body {
   fn new() -> Self {
-    Self { elems: HashSet::new() }
+    Self {
+      elems: HashSet::new(),
+      remap: HashMap::new(),
+    }
   }
 
   // Insert sub-elem, removing any elems it's captured
-  fn insert_sub(&mut self, sub: ElemId, sub_body: &Body) {
+  fn insert_sub(&mut self, sub: ElemId, entry: ElemId, sub_body: &Body) {
     if !sub_body.elems.is_subset(&self.elems) {
       panic!("An inserted sub-elem must only use a subset of elems");
     }
     self.elems = self.elems.difference(&sub_body.elems).cloned().collect();
     self.elems.insert(sub);
+    self.remap.insert(entry, sub);
+  }
+
+  fn exit(&self, node: ElemId, exit_idx: usize, all_elems: &[Elem]) -> Option<ElemId> {
+    let next = *all_elems[node.0].exits.get(exit_idx)?;
+    self.remap.get(&next).cloned().or(Some(next))
   }
 }
 
@@ -124,7 +134,7 @@ impl Function {
 
   pub fn from_ir(ir: &ir::IR) -> Self {
     let mut func = Self::from_ir_naive(ir);
-    infer_loop(&mut func);
+    while infer_loop(&mut func) {}
     func
   }
 }
@@ -184,22 +194,21 @@ impl<'a> DFS<'a> {
     let exit_idx = self.exit_idx[idx];
     self.exit_idx[idx] += 1;
 
-    let exits = &self.all_elems[node.0].exits;
-    if exit_idx >= exits.len() {
+    let Some(next) = self.body.exit(node, exit_idx, self.all_elems) else {
       self.visited[node.0] = false;
       self.path.pop();
       self.exit_idx.pop();
       return self.next();
-    }
-
-    let next = exits[exit_idx];
-    if self.visited[next.0] {
-      return DFSAction::Cycle { from: node, to: next };
-    }
+    };
 
     if self.body.elems.get(&next).is_none() {
       return DFSAction::Exit(next);
     }
+
+    if self.visited[next.0] {
+      return DFSAction::Cycle { from: node, to: next };
+    }
+
 
     self.pending = Some(next);
     DFSAction::Next(next)
@@ -220,6 +229,9 @@ fn find_exits(entry: ElemId, body: &Body, all_elems: &[Elem]) -> Vec<ElemId> {
 }
 
 fn infer_loop(f: &mut Function) -> bool {
+  println!("Starting loop infer");
+  println!("  Body: {:?}", f.body);
+
   let mut dfs = DFS::new(f.entry, &f.body, &f.all_elems);
   let mut lp: Option<Loop> = None;
   loop {
@@ -243,8 +255,9 @@ fn infer_loop(f: &mut Function) -> bool {
           if elem == lp.entry { break; }
         }
       }
-      DFSAction::Exit(exit) => panic!("EXIT UMIMPL: {:?}", exit),
-      DFSAction::Next(_) => (),
+      DFSAction::Next(id) => println!("next: {}", id.0),
+      DFSAction::Exit(id) => println!("exit: {}", id.0),
+      _ => (),
     }
   }
 
@@ -266,8 +279,9 @@ fn infer_loop(f: &mut Function) -> bool {
   // Step 3: Insert it into the body, replacing the old elems
   let id = ElemId(f.all_elems.len());
   f.all_elems.push(loop_elem);
-  let body = f.all_elems[id.0].body().unwrap();
-  f.body.insert_sub(id, body);
+  let elem = &f.all_elems[id.0];
+  let body = elem.body().unwrap();
+  f.body.insert_sub(id, elem.entry, body);
   //println!("{:#?}", loop_elem);
 
   true
