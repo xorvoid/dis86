@@ -95,10 +95,10 @@ pub fn run(appname: &str) {
   gen::generate(&f, &mut buf).unwrap();
   println!("{}", buf);
 
-  let ctrlflow = crate::decomp::control_flow::Structure::infer_from_ir(&ir);
+  let ctrlflow = crate::decomp::control_flow::Function::from_ir(&ir);
   println!("{:#?}", ctrlflow);
 
-  crate::decomp::control_flow::gen_graphviz_dotfile("ctrlflow.dot", &ir).unwrap();
+  //crate::decomp::control_flow::gen_graphviz_dotfile("ctrlflow.dot", &ir).unwrap();
 
   //println!("{:#?}", ir.symbols);
 }
