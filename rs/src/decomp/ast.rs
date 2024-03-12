@@ -1,4 +1,5 @@
 use crate::decomp::ir;
+use crate::decomp::control_flow::{self, ControlFlow, Detail};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Write;
 
@@ -63,6 +64,17 @@ pub struct Goto {
 }
 
 #[derive(Debug)]
+pub struct Loop {
+  pub body: Block,
+}
+
+#[derive(Debug)]
+pub struct If {
+  pub cond: Expr,
+  pub then_body: Block,
+}
+
+#[derive(Debug)]
 pub enum Stmt {
   None,
   Label(Label),
@@ -72,14 +84,19 @@ pub enum Stmt {
   CondGoto(CondGoto),
   Goto(Goto),
   Return,
+  Loop(Loop),
+  If(If),
 }
 
 #[derive(Debug)]
 pub struct Function {
   pub name: String,
   //vars: // todo
-  pub body: Vec<Stmt>,
+  pub body: Block,
 }
+
+#[derive(Debug, Default)]
+pub struct Block(pub Vec<Stmt>);
 
 enum Next {
   Return,
@@ -89,20 +106,19 @@ enum Next {
 
 struct Builder<'a> {
   ir: &'a ir::IR,
-  func: Function,
+  blkstack: Vec<Block>,
+  //curblk: Block,
   n_uses: HashMap<ir::Ref, usize>,
   temp_names: HashMap<ir::Ref, String>,
   temp_count: usize,
 }
 
 impl<'a> Builder<'a> {
-  fn new(name: &str, ir: &'a ir::IR) -> Self {
+  fn new(ir: &'a ir::IR) -> Self {
     Self {
       ir,
-      func: Function {
-        name: name.to_string(),
-        body: vec![],
-      },
+      blkstack: vec![],
+      //curblk: Block::default(),
       n_uses: HashMap::new(),
       temp_names: HashMap::new(),
       temp_count: 0,
@@ -124,18 +140,6 @@ impl<'a> Builder<'a> {
     self.temp_count += 1;
     self.temp_names.insert(r, name.clone());
     name
-  }
-
-  fn compute_uses(&mut self) {
-    for b in 0..self.ir.blocks.len() {
-      for i in self.ir.blocks[b].instrs.range() {
-        let r = ir::Ref::Instr(ir::BlockRef(b), i);
-        let instr = self.ir.instr(r).unwrap();
-        for oper in &instr.operands {
-          *self.n_uses.entry(*oper).or_insert(0) += 1;
-        }
-      }
-    }
   }
 
   fn ref_to_binary_expr(&mut self, r: ir::Ref, depth: usize) -> Option<Expr> {
@@ -254,11 +258,24 @@ impl<'a> Builder<'a> {
     Label(self.ir.blocks[bref.0].name.clone())
   }
 
+  fn push_stmt(&mut self, stmt: Stmt) {
+    self.blkstack.as_mut_slice().last_mut().unwrap().0.push(stmt);
+  }
+
+  fn block_enter(&mut self) {
+    self.blkstack.push(Block::default());
+  }
+
+  #[must_use]
+  fn block_leave(&mut self) -> Block {
+    self.blkstack.pop().unwrap()
+  }
+
   fn convert_blk(&mut self, bref: ir::BlockRef) -> Next {
     let blk = &self.ir.blocks[bref.0];
     if bref.0 != 0 { // for all except the entry block
       let label = self.blockref_to_label(bref);
-      self.func.body.push(Stmt::Label(label));
+      self.push_stmt(Stmt::Label(label));
     }
 
     for i in blk.instrs.range() {
@@ -267,14 +284,14 @@ impl<'a> Builder<'a> {
       match instr.opcode {
         ir::Opcode::Nop => continue,
         ir::Opcode::Ret => {
-          self.func.body.push(Stmt::Return);
+          self.push_stmt(Stmt::Return);
           return Next::Return;
         }
         ir::Opcode::Jmp => {
           // TODO: Handle phis!!
           let passive = instr.operands[0].unwrap_block();
           let tgt = self.blockref_to_label(passive);
-          self.func.body.push(Stmt::Goto(Goto {
+          self.push_stmt(Stmt::Goto(Goto {
             tgt,
           }));
           return Next::Fallthrough(passive);
@@ -290,20 +307,20 @@ impl<'a> Builder<'a> {
             tgt_true,
             tgt_false,
           });
-          self.func.body.push(s);
+          self.push_stmt(s);
           return Next::Branch(active, passive);
         }
         ir::Opcode::WriteVar16 => {
           let lhs = self.symbol_to_expr(instr.operands[0].unwrap_symbol());
           let rhs = self.ref_to_expr(instr.operands[1], 0);
-          self.func.body.push(Stmt::Assign(Assign { lhs, rhs }));
+          self.push_stmt(Stmt::Assign(Assign { lhs, rhs }));
         }
         ir::Opcode::Store16 => {
           let seg = self.ref_to_expr(instr.operands[0], 1);
           let off = self.ref_to_expr(instr.operands[1], 1);
           let lhs = Expr::Deref(Box::new(Expr::Ptr16(Box::new(seg), Box::new(off))));
           let rhs = self.ref_to_expr(instr.operands[2], 0);
-          self.func.body.push(Stmt::Assign(Assign { lhs, rhs }));
+          self.push_stmt(Stmt::Assign(Assign { lhs, rhs }));
         }
         _ => {
           if self.n_uses.get(&r).unwrap_or(&0) == &1 { continue; }
@@ -311,7 +328,7 @@ impl<'a> Builder<'a> {
           let name = self.ref_name(r);
           let rvalue = self.ref_to_expr(r, 0);
 
-          self.func.body.push(Stmt::Assign(Assign {
+          self.push_stmt(Stmt::Assign(Assign {
             lhs: Expr::Name(name),
             rhs: rvalue,
           }));
@@ -321,49 +338,109 @@ impl<'a> Builder<'a> {
     unreachable!("IR Block Should End With A Branching Instr");
   }
 
-  fn build(&mut self) {
-    self.compute_uses();
-    // let mut converted = HashSet::new();
-    // let mut queue = VecDeque::new();
-    // queue.push_back(ir::BlockRef(0));
+  fn convert_body(&mut self, entry: control_flow::ElemId, body: &control_flow::Body, cf: &ControlFlow) {
+    // HAX HAX HAX
+    let mut ids: Vec<_> = body.elems.iter().cloned().collect();
+    ids.sort();
+    //if ids.len() == 0 { return self.block_leave(); }
+    //assert!(ids[0] == entry); // HAX
 
-    // while queue.len() > 0 {
-    //   let bref = queue.pop_front().unwrap();
-    //   if converted.get(&bref).is_some() {
-    //     continue;
-    //   }
-    //   converted.insert(bref);
-    //   let next = self.convert_blk(bref);
-    //   match next {
-    //     Next::Return => continue,
-    //     Next::Fallthrough(passive) => queue.push_back(passive),
-    //     Next::Branch(active, passive) => {
-    //       queue.push_back(active);
-    //       queue.push_back(passive);
-    //     }
-    //   }
-    // }
+    //  HAX HAX HAX to jam entry into the front!
+    for idx in -1..(ids.len() as i64) {
+      // HAX HAX
+      let id = if idx == -1 {
+        entry
+      } else {
+        let i = ids[idx as usize];
+        if i == entry { continue; }
+        i
+      };
 
-    for b in 0..self.ir.blocks.len() {
-      self.convert_blk(ir::BlockRef(b));
+      let elem = cf.elem(id);
+      match &elem.detail {
+        Detail::BasicBlock(bb) => { self.convert_blk(bb.blkref); }
+        Detail::Loop(lp) => { self.convert_loop(lp, cf); }
+        Detail::If(ifstmt) => { self.convert_ifstmt(ifstmt, cf); }
+      }
+      //println!("{:?}", elem);
     }
+  }
+
+  fn convert_loop(&mut self, lp: &control_flow::Loop, cf: &ControlFlow) {
+    self.block_enter();
+    self.convert_body(lp.entry, &lp.body, cf);
+    let body = self.block_leave();
+
+    self.push_stmt(Stmt::Loop(Loop { body }));
+  }
+
+  fn convert_ifstmt(&mut self, ifstmt: &control_flow::If, cf: &ControlFlow) {
+    let entry = cf.elem(ifstmt.entry);
+    let Detail::BasicBlock(bb) = &entry.detail else { panic!("Expected entry block to be basic") };
+
+    self.convert_blk(bb.blkref);
+
+    self.block_enter();
+    // HAX HAX HAX NASTY
+    let b = &ifstmt.then_body;
+    let e = *b.elems.iter().next().unwrap();
+    self.convert_body(e, b, cf);
+    let body = self.block_leave();
+
+    self.push_stmt(Stmt::If(If { cond: Expr::None, then_body: body }));
+  }
+
+  fn convert_func(&mut self, name: &str, func: &control_flow::Function, cf: &ControlFlow) -> Function {
+    self.block_enter();
+    self.convert_body(func.entry, &func.body, cf);
+    let body = self.block_leave();
+
+    Function {
+      name: name.to_string(),
+      body,
+    }
+  }
+
+  fn build(&mut self, name: &str, cf: &ControlFlow) -> Function {
+    self.n_uses = compute_uses(self.ir);
+    self.convert_func(name, &cf.func, &cf)
+
+    // for id in self.
+    // for b in 0..self.ir.blocks.len() {
+    //   self.convert_blk(ir::BlockRef(b));
+    // }
   }
 }
 
 impl Function {
   pub fn from_ir(name: &str, ir: &ir::IR) -> Self {
-    let mut bld = Builder::new(name, ir);
-    bld.build();
-
-    let s = display_ir_with_uses(ir, &bld.n_uses).unwrap();
+    let s = display_ir_with_uses(ir).unwrap();
     println!("{}", s);
 
-    bld.func
+    let ctrlflow = ControlFlow::from_ir(&ir);
+    control_flow::print(&ctrlflow);
+
+    Builder::new(ir).build(name, &ctrlflow)
   }
 }
 
 
-fn display_ir_with_uses(ir: &ir::IR, n_uses: &HashMap<ir::Ref, usize>) -> Result<String, std::fmt::Error> {
+fn compute_uses(ir: &ir::IR) -> HashMap<ir::Ref, usize> {
+  let mut n_uses = HashMap::new();
+  for b in 0..ir.blocks.len() {
+    for i in ir.blocks[b].instrs.range() {
+      let r = ir::Ref::Instr(ir::BlockRef(b), i);
+      let instr = ir.instr(r).unwrap();
+      for oper in &instr.operands {
+        *n_uses.entry(*oper).or_insert(0) += 1;
+      }
+    }
+  }
+  n_uses
+}
+
+fn display_ir_with_uses(ir: &ir::IR) -> Result<String, std::fmt::Error> {
+  let n_uses = compute_uses(ir);
   let mut r = crate::decomp::ir::display::Formatter::new();
   for (i, blk) in ir.blocks.iter().enumerate() {
     let bref = ir::BlockRef(i);

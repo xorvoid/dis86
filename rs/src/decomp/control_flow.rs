@@ -61,9 +61,13 @@ impl AllElements {
 
 #[derive(Debug)]
 pub struct Function {
-  pub all_elems: AllElements,
   pub entry: ElemId,
   pub body: Body,
+}
+
+pub struct ControlFlow {
+  all_elems: AllElements,
+  pub func: Function,
 }
 
 impl Loop {
@@ -163,12 +167,14 @@ impl Body {
   }
 }
 
-impl Function {
+impl ControlFlow {
   fn from_ir_naive(ir: &ir::IR) -> Self {
-    let mut func = Function {
+    let mut cf = ControlFlow {
       all_elems: AllElements::new(),
-      entry: ElemId(0),
-      body: Body::new(),
+      func: Function {
+        entry: ElemId(0),
+        body: Body::new(),
+      }
     };
 
     for b in 0..ir.blocks.len() {
@@ -186,21 +192,25 @@ impl Function {
         _ => panic!("Expected last instruction to be a branching instruction: {:?}", instr),
       }
 
-      func.all_elems.append(Elem {
+      cf.all_elems.append(Elem {
         entry: ElemId(b),
         exits,
         detail: Detail::BasicBlock(BasicBlock { blkref: ir::BlockRef(b) }),
       });
-      func.body.elems.insert(ElemId(b));
+      cf.func.body.elems.insert(ElemId(b));
     }
 
-    func
+    cf
   }
 
   pub fn from_ir(ir: &ir::IR) -> Self {
-    let mut func = Self::from_ir_naive(ir);
-    infer_structure(func.entry, &mut func.body, None, &mut func.all_elems);
-    func
+    let mut cf = Self::from_ir_naive(ir);
+    infer_structure(cf.func.entry, &mut cf.func.body, None, &mut cf.all_elems);
+    cf
+  }
+
+  pub fn elem(&self, id: ElemId) -> &Elem {
+    self.all_elems.get(id)
   }
 }
 
@@ -441,13 +451,8 @@ fn infer_structure(entry: ElemId, body: &mut Body, exclude: Option<&HashSet<Elem
   }
 }
 
-fn infer_structure_2(entry: ElemId, body: &mut Body, exclude: Option<&HashSet<ElemId>>, all_elems: &mut AllElements) {
-  infer_if(body, all_elems);
-}
-
-
-pub fn print(func: &Function) {
-  print_recurse(&func.body, &func.all_elems, 0)
+pub fn print(cf: &ControlFlow) {
+  print_recurse(&cf.func.body, &cf.all_elems, 0)
 }
 
 fn print_recurse(body: &Body, all_elems: &AllElements, indent_level: usize) {

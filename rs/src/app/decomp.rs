@@ -5,7 +5,6 @@ use crate::decomp::ir::{build, opt, sym};
 use crate::decomp::config::Config;
 use crate::decomp::gen;
 use crate::decomp::ast;
-use crate::decomp::control_flow;
 
 fn print_help(appname: &str) {
   println!("usage: {} dis OPTIONS", appname);
@@ -88,17 +87,17 @@ pub fn run(appname: &str) {
   //println!("{}", ir);
   //println!("===========================================================================");
 
-  let f = ast::Function::from_ir("my_function", &ir);
+  //let ctrlflow = control_flow::Function::from_ir(&ir);
+  //println!("{:#?}", func);
+  //control_flow::print(&ctrlflow);
+
+  let ast = ast::Function::from_ir("my_function", &ir);
   //println!("{:#?}", f);
 
-
   let mut buf = String::new();
-  gen::generate(&f, &mut buf).unwrap();
+  gen::generate(&ast, &mut buf).unwrap();
   println!("{}", buf);
 
-  let func = control_flow::Function::from_ir(&ir);
-  //println!("{:#?}", func);
-  control_flow::print(&func);
 
 
 

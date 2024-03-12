@@ -168,6 +168,24 @@ impl<'a> Gen<'a> {
         self.endline()?;
         self.endline()?;
       }
+      Stmt::Loop(lp) => {
+        self.text("while (1) ")?;
+        self.enter_block()?;
+        self.endline()?;
+        self.block(&lp.body)?;
+        self.leave_block()?;
+        self.endline()?;
+      }
+      Stmt::If(ifstmt) => {
+        self.text("if (")?;
+        self.expr(&ifstmt.cond)?;
+        self.text(") ")?;
+        self.enter_block()?;
+        self.endline()?;
+        self.block(&ifstmt.then_body)?;
+        self.leave_block()?;
+        self.endline()?;
+      }
       _ => {
         self.text(&format!("UNIMPL_STMT; /* {:?} */", stmt))?;
         self.endline()?;
@@ -176,14 +194,19 @@ impl<'a> Gen<'a> {
     Ok(())
   }
 
-  fn gen(&mut self, func: &Function) -> fmt::Result {
+  fn block(&mut self, blk: &Block) -> fmt::Result {
+    for stmt in &blk.0 {
+      self.stmt(stmt)?;
+    }
+    Ok(())
+  }
+
+  fn func(&mut self, func: &Function) -> fmt::Result {
     self.text(&format!("void {}()", func.name))?;
     self.endline()?;
     self.enter_block()?;
     self.endline()?;
-    for stmt in &func.body {
-      self.stmt(stmt)?;
-    }
+    self.block(&func.body)?;
     self.leave_block()?;
     Ok(())
   }
@@ -191,5 +214,5 @@ impl<'a> Gen<'a> {
 
 pub fn generate(func: &Function, f: &mut dyn fmt::Write) -> fmt::Result {
   let mut g = Gen::new(f);
-  g.gen(func)
+  g.func(func)
 }
