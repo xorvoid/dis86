@@ -41,8 +41,10 @@ pub struct If {
 
 #[derive(Debug, Clone)]
 pub struct Body {
+  pub entry: ElemId,
   pub elems: HashSet<ElemId>,
   pub remap: HashMap<ElemId, ElemId>,
+  pub layout: Vec<ElemId>,
 }
 
 // Option needed so we can deal with a mut overlap by temporarily take'ing an element
@@ -55,7 +57,7 @@ impl AllElements {
   fn len(&self) -> usize { self.0.len() }
   fn append(&mut self, elem: Elem) -> ElemId { let id = ElemId(self.len()); self.0.push(Some(elem)); id }
   fn get(&self, id: ElemId) -> &Elem { self.0[id.0].as_ref().unwrap() }
-  //fn get_mut(&mut self, id: ElemId) -> &mut Elem { self.0[id.0].as_mut().unwrap() }
+  fn get_mut(&mut self, id: ElemId) -> &mut Elem { self.0[id.0].as_mut().unwrap() }
   fn checkout(&mut self, id: ElemId) -> Elem { self.0[id.0].take().unwrap() }
   fn release(&mut self, id: ElemId, elem: Elem) { assert!(self.0[id.0].is_none()); self.0[id.0] = Some(elem); }
 }
@@ -77,16 +79,18 @@ impl Loop {
       entry,
       exits: vec![],
       backedges: HashSet::new(),
-      body: Body::new(),
+      body: Body::new(entry),
     }
   }
 }
 
 impl Body {
-  fn new() -> Self {
+  fn new(entry: ElemId) -> Self {
     Self {
+      entry,
       elems: HashSet::new(),
       remap: HashMap::new(),
+      layout: vec![],
     }
   }
 
@@ -181,11 +185,13 @@ impl Body {
 
 impl ControlFlow {
   fn from_ir_naive(ir: &ir::IR) -> Self {
+    let entry = ElemId(0);
+
     let mut cf = ControlFlow {
       all_elems: AllElements::new(),
       func: Function {
-        entry: ElemId(0),
-        body: Body::new(),
+        entry,
+        body: Body::new(entry),
       }
     };
 
@@ -217,12 +223,63 @@ impl ControlFlow {
 
   pub fn from_ir(ir: &ir::IR) -> Self {
     let mut cf = Self::from_ir_naive(ir);
-    infer_structure(cf.func.entry, &mut cf.func.body, None, &mut cf.all_elems);
+    infer_structure(&mut cf.func.body, None, &mut cf.all_elems);
+    schedule_layout(&mut cf.func.body, &mut cf.all_elems);
     cf
   }
 
   pub fn elem(&self, id: ElemId) -> &Elem {
     self.all_elems.get(id)
+  }
+
+  fn iter(&self) -> ControlFlowIter<'_> {
+    ControlFlowIter::new(self)
+  }
+}
+
+pub struct ControlFlowIter<'a> {
+  cf: &'a ControlFlow,
+  state: Vec<(&'a Body, usize)>
+}
+
+pub struct ControlFlowIterElem<'a> {
+  pub id: ElemId,
+  pub elem: &'a Elem,
+  pub depth: usize,
+}
+
+impl<'a> ControlFlowIter<'a> {
+  fn new(cf: &'a ControlFlow) -> Self {
+    Self { cf, state: vec![(&cf.func.body, 0)] }
+  }
+}
+
+impl<'a> Iterator for ControlFlowIter<'a> {
+  type Item = ControlFlowIterElem<'a>; //(ElemId, &'a Elem, usize);
+  fn next(&mut self) -> Option<Self::Item> {
+    loop {
+      if self.state.len() == 0 {
+        return None;
+      }
+      let (body, idx) = self.state.as_mut_slice().last_mut().unwrap();
+      let Some(id) = body.layout.get(*idx) else {
+        self.state.pop();
+        continue;
+      };
+      *idx += 1;
+      let elem = self.cf.all_elems.get(*id);
+      let depth = self.state.len() - 1;
+      match &elem.detail {
+        Detail::BasicBlock(_) => (),
+        Detail::Loop(lp) => self.state.push((&lp.body, 0)),
+        Detail::If(ifstmt) => self.state.push((&ifstmt.then_body, 0)),
+      }
+      return Some(ControlFlowIterElem {
+        id: *id,
+        elem,
+        depth,
+      });
+    }
   }
 }
 
@@ -324,7 +381,7 @@ impl<'a> DFS<'a> {
   }
 }
 
-fn find_exits(entry: ElemId, body: &Body, all_elems: &AllElements) -> Vec<ElemId> {
+fn find_loop_exits(entry: ElemId, body: &Body, all_elems: &AllElements) -> Vec<ElemId> {
   let mut dfs = DFS::new(entry, body, None, all_elems);
   let mut exits = HashSet::new();
   loop {
@@ -337,11 +394,11 @@ fn find_exits(entry: ElemId, body: &Body, all_elems: &AllElements) -> Vec<ElemId
   exits.into_iter().collect()
 }
 
-fn infer_loop(entry: ElemId, body: &mut Body, exclude: Option<&HashSet<ElemId>>, all_elems: &mut AllElements) -> bool {
+fn infer_loop(body: &mut Body, exclude: Option<&HashSet<ElemId>>, all_elems: &mut AllElements) -> bool {
   // println!("Starting loop infer");
   // println!("  Body: {:?}", f.body);
 
-  let mut dfs = DFS::new(entry, body, exclude, all_elems);
+  let mut dfs = DFS::new(body.entry, body, exclude, all_elems);
   let mut lp: Option<Loop> = None;
   loop {
     match dfs.next() {
@@ -375,7 +432,7 @@ fn infer_loop(entry: ElemId, body: &mut Body, exclude: Option<&HashSet<ElemId>>,
   // a proper elem and then insert it into the structure.
 
   // Step 1: We need to find the exits
-  lp.exits = find_exits(lp.entry, &lp.body, all_elems);
+  lp.exits = find_loop_exits(lp.entry, &lp.body, all_elems);
 
   // Step 2: Insert it
   body.insert_loop(lp, all_elems);
@@ -435,7 +492,7 @@ fn infer_if(body: &mut Body, all_elems: &mut AllElements) -> bool {
     entry,
     exit: join,
     inverted,
-    then_body: Body::new(),
+    then_body: Body::new(then),
   };
   ifstmt.then_body.elems.insert(then);
 
@@ -445,9 +502,9 @@ fn infer_if(body: &mut Body, all_elems: &mut AllElements) -> bool {
   true
 }
 
-fn infer_structure(entry: ElemId, body: &mut Body, exclude: Option<&HashSet<ElemId>>, all_elems: &mut AllElements) {
+fn infer_structure(body: &mut Body, exclude: Option<&HashSet<ElemId>>, all_elems: &mut AllElements) {
   // infer at the top-level
-  while infer_loop(entry, body, exclude, all_elems) {}
+  while infer_loop(body, exclude, all_elems) {}
   while infer_if(body, all_elems) {}
 
   //print_recurse(body, all_elems, 0);
@@ -457,33 +514,113 @@ fn infer_structure(entry: ElemId, body: &mut Body, exclude: Option<&HashSet<Elem
     let mut elem = all_elems.checkout(*id);
     match &mut elem.detail {
       Detail::BasicBlock(_) => (),
-      Detail::Loop(lp) => infer_structure(elem.entry, &mut lp.body, Some(&lp.backedges), all_elems),
+      Detail::Loop(lp) => infer_structure(&mut lp.body, Some(&lp.backedges), all_elems),
       Detail::If(ifstmt) => (), // TODO!!!
     }
     all_elems.release(*id, elem);
   }
 }
 
-pub fn print(cf: &ControlFlow) {
-  print_recurse(&cf.func.body, &cf.all_elems, 0)
+fn schedule_layout(body: &mut Body, all_elems: &mut AllElements) {
+  if true {
+    schedule_layout_new(body, all_elems)
+  } else {
+    schedule_layout_old(body, all_elems)
+  }
 }
 
-fn print_recurse(body: &Body, all_elems: &AllElements, indent_level: usize) {
-  for id in itertools::sorted(body.elems.iter().cloned()) {
-    print!("{:indent$}{:?} | ", "", id, indent=2*indent_level);
-    let elem = all_elems.get(id);
-    let exits: Vec<_> = elem.exits.iter().map(|x| x.0).collect();
-    match &elem.detail {
+fn select_next(exits: &[ElemId], body: &Body, remaining: &HashSet<ElemId>, all_elems: &AllElements) -> ElemId {
+  //println!("exits: {:?}", exits);
+  for next in exits {
+    if remaining.get(next).is_some() {
+      return *next;
+    }
+  }
+
+  // FIXME!!!
+  panic!("Failed to select a next element");
+}
+
+fn schedule_layout_new(body: &mut Body, all_elems: &mut AllElements) {
+  //println!("\nSchedule: {:?}", body);
+  //println!("entry: {:?}", body.entry);
+
+  let mut remaining = body.elems.clone();
+  let mut exits = vec![body.entry];
+  while remaining.len() > 0 {
+    let cur = select_next(&exits, body, &remaining, all_elems);
+    if !remaining.remove(&cur) { panic!("tried to schedule an unavailable block"); }
+
+    body.layout.push(cur);
+
+    let elem = all_elems.get(cur);
+    exits = body.exits(cur, all_elems).unwrap();
+    //println!("{:?} -> {:?}", cur, exits);
+  }
+
+  // Recurse into sub-elements and schedule them
+  for id in &body.layout {
+    let mut elem = all_elems.checkout(*id);
+    match &mut elem.detail {
+      Detail::BasicBlock(_) => (),
+      Detail::Loop(lp) => schedule_layout(&mut lp.body, all_elems),
+      Detail::If(ifstmt) => schedule_layout(&mut ifstmt.then_body, all_elems),
+    }
+    all_elems.release(*id, elem);
+  }
+}
+
+fn schedule_layout_old(body: &mut Body, all_elems: &mut AllElements) {
+  body.layout = itertools::sorted(body.elems.iter().cloned()).collect();
+  for id in &body.layout {
+    let mut elem = all_elems.checkout(*id);
+    match &mut elem.detail {
+      Detail::BasicBlock(_) => (),
+      Detail::Loop(lp) => schedule_layout(&mut lp.body, all_elems),
+      Detail::If(ifstmt) => schedule_layout(&mut ifstmt.then_body, all_elems),
+    }
+    all_elems.release(*id, elem);
+  }
+}
+
+
+pub fn print(cf: &ControlFlow) {
+  for elt in cf.iter() {
+    print!("{:indent$}{:?} | ", "", elt.id, indent=2*elt.depth);
+    let exits: Vec<_> = elt.elem.exits.iter().map(|x| x.0).collect();
+    match &elt.elem.detail {
       Detail::BasicBlock(b) => println!("BasicBlock({})", b.blkref.0),
       Detail::Loop(lp) => {
         let backedges: Vec<_> = lp.backedges.iter().cloned().map(|x| x.0).collect();
-        println!("Loop [entry={}, exits={:?}, backedges={:?}]", elem.entry.0, exits, backedges);
-        print_recurse(&lp.body, all_elems, indent_level+1);
+        println!("Loop [entry={}, exits={:?}, backedges={:?}]", elt.elem.entry.0, exits, backedges);
       }
       Detail::If(i) => {
-        println!("If [entry={}, exits={:?}]", elem.entry.0, exits);
-        print_recurse(&i.then_body, all_elems, indent_level+1);
+        println!("If [entry={}, exits={:?}]", elt.elem.entry.0, exits);
       }
     }
   }
 }
+
+// pub fn print(cf: &ControlFlow) {
+//   print_recurse(&cf.func.body, &cf.all_elems, 0)
+// }
+
+// fn print_recurse(body: &Body, all_elems: &AllElements, indent_level: usize) {
+//   for id in &body.layout {
+//     print!("{:indent$}{:?} | ", "", id, indent=2*indent_level);
+//     let elem = all_elems.get(*id);
+//     let exits: Vec<_> = elem.exits.iter().map(|x| x.0).collect();
+//     match &elem.detail {
+//       Detail::BasicBlock(b) => println!("BasicBlock({})", b.blkref.0),
+//       Detail::Loop(lp) => {
+//         let backedges: Vec<_> = lp.backedges.iter().cloned().map(|x| x.0).collect();
+//         println!("Loop [entry={}, exits={:?}, backedges={:?}]", elem.entry.0, exits, backedges);
+//         print_recurse(&lp.body, all_elems, indent_level+1);
+//       }
+//       Detail::If(i) => {
+//         println!("If [entry={}, exits={:?}]", elem.entry.0, exits);
+//         print_recurse(&i.then_body, all_elems, indent_level+1);
+//       }
+//     }
+//   }
+// }

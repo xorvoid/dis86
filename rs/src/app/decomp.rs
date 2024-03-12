@@ -94,9 +94,9 @@ pub fn run(appname: &str) {
   let ast = ast::Function::from_ir("my_function", &ir);
   //println!("{:#?}", f);
 
-  let mut buf = String::new();
-  gen::generate(&ast, &mut buf).unwrap();
-  println!("{}", buf);
+  // let mut buf = String::new();
+  // gen::generate(&ast, &mut buf).unwrap();
+  // println!("{}", buf);
 
 
 
