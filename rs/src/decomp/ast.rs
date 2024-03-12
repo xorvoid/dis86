@@ -1,6 +1,6 @@
 use crate::decomp::ir;
 use crate::decomp::control_flow::{self, ControlFlow, Detail, ElemId};
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
 #[derive(Debug)]

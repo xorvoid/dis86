@@ -57,7 +57,7 @@ impl AllElements {
   fn len(&self) -> usize { self.0.len() }
   fn append(&mut self, elem: Elem) -> ElemId { let id = ElemId(self.len()); self.0.push(Some(elem)); id }
   fn get(&self, id: ElemId) -> &Elem { self.0[id.0].as_ref().unwrap() }
-  fn get_mut(&mut self, id: ElemId) -> &mut Elem { self.0[id.0].as_mut().unwrap() }
+  //fn get_mut(&mut self, id: ElemId) -> &mut Elem { self.0[id.0].as_mut().unwrap() }
   fn checkout(&mut self, id: ElemId) -> Elem { self.0[id.0].take().unwrap() }
   fn release(&mut self, id: ElemId, elem: Elem) { assert!(self.0[id.0].is_none()); self.0[id.0] = Some(elem); }
 }
@@ -515,7 +515,7 @@ fn infer_structure(body: &mut Body, exclude: Option<&HashSet<ElemId>>, all_elems
     match &mut elem.detail {
       Detail::BasicBlock(_) => (),
       Detail::Loop(lp) => infer_structure(&mut lp.body, Some(&lp.backedges), all_elems),
-      Detail::If(ifstmt) => (), // TODO!!!
+      Detail::If(_ifstmt) => (), // TODO!!!
     }
     all_elems.release(*id, elem);
   }
@@ -529,7 +529,7 @@ fn schedule_layout(body: &mut Body, all_elems: &mut AllElements) {
   }
 }
 
-fn select_next(exits: &[ElemId], body: &Body, remaining: &HashSet<ElemId>, all_elems: &AllElements) -> ElemId {
+fn select_next(exits: &[ElemId], _body: &Body, remaining: &HashSet<ElemId>, _all_elems: &AllElements) -> ElemId {
   //println!("exits: {:?}", exits);
   for next in exits {
     if remaining.get(next).is_some() {
@@ -553,7 +553,7 @@ fn schedule_layout_new(body: &mut Body, all_elems: &mut AllElements) {
 
     body.layout.push(cur);
 
-    let elem = all_elems.get(cur);
+    //let elem = all_elems.get(cur);
     exits = body.exits(cur, all_elems).unwrap();
     //println!("{:?} -> {:?}", cur, exits);
   }
@@ -594,7 +594,7 @@ pub fn print(cf: &ControlFlow) {
         let backedges: Vec<_> = lp.backedges.iter().cloned().map(|x| x.0).collect();
         println!("Loop [entry={}, exits={:?}, backedges={:?}]", elt.elem.entry.0, exits, backedges);
       }
-      Detail::If(i) => {
+      Detail::If(_) => {
         println!("If [entry={}, exits={:?}]", elt.elem.entry.0, exits);
       }
     }
