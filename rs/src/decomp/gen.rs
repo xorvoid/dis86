@@ -45,6 +45,7 @@ impl<'a> Gen<'a> {
   fn unary_oper(&mut self, oper: &UnaryOperator) -> fmt::Result {
     let s = match oper {
       UnaryOperator::Addr => "(u8*)&",
+      UnaryOperator::Not => "!",
     };
     self.text(s)
   }
@@ -151,16 +152,16 @@ impl<'a> Gen<'a> {
         self.endline()?;
       }
       Stmt::Goto(g) => {
-        self.goto(&g.tgt)?;
+        self.goto(&g.label)?;
         self.endline()?;
       }
       Stmt::CondGoto(g) => {
         self.text("if (")?;
         self.expr(&g.cond)?;
         self.text(") ")?;
-        self.goto(&g.tgt_true)?;
+        self.goto(&g.label_true)?;
         self.text("else ")?;
-        self.goto(&g.tgt_false)?;
+        self.goto(&g.label_false)?;
         self.endline()?;
       }
       Stmt::Return => {

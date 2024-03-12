@@ -35,6 +35,7 @@ pub struct Loop {
 pub struct If {
   pub entry: ElemId,
   pub exit: ElemId,
+  pub inverted: bool,
   pub then_body: Body,
 }
 
@@ -164,6 +165,17 @@ impl Body {
       }
     }
     Some(exits)
+  }
+
+  pub fn lookup_from_blkref(&self, blkref: ir::BlockRef) -> Option<ElemId> {
+    let bb_id = ElemId(blkref.0);
+    let id = self.remap.get(&bb_id).unwrap_or(&bb_id);
+    self.elems.get(id).cloned()
+  }
+
+  pub fn lookup_from_id(&self, id: ElemId) -> Option<ElemId> {
+    let id = self.remap.get(&id).unwrap_or(&id);
+    self.elems.get(id).cloned()
   }
 }
 
@@ -373,7 +385,7 @@ fn infer_loop(entry: ElemId, body: &mut Body, exclude: Option<&HashSet<ElemId>>,
 
 fn infer_if(body: &mut Body, all_elems: &mut AllElements) -> bool {
   // Consider each basic block as an if-stmt header
-  let mut found: Option<(ElemId, ElemId, ElemId)> = None;
+  let mut found: Option<(ElemId, ElemId, ElemId, bool)> = None;
   for id in itertools::sorted(body.elems.iter()) {
     let elem = all_elems.get(*id);
 
@@ -393,7 +405,7 @@ fn infer_if(body: &mut Body, all_elems: &mut AllElements) -> bool {
         //println!("a_exits: {:?}", a_exits);
         if a_exits.len() == 1 && a_exits[0] == b {
           //println!("Found case 1");
-          found = Some((*id, a, b));
+          found = Some((*id, a, b, false));
           break;
         }
       }
@@ -406,14 +418,14 @@ fn infer_if(body: &mut Body, all_elems: &mut AllElements) -> bool {
         //println!("b_exits: {:?}", b_exits);
         if b_exits.len() == 1 && b_exits[0] == a {
           //println!("Found case 2");
-          found = Some((*id, b, a));
+          found = Some((*id, b, a, true));
           break;
         }
       }
     }
   }
 
-  let Some((entry, then, join)) = found else { return false };
+  let Some((entry, then, join, inverted)) = found else { return false };
 
   // Successfully inferred an if-stmt, we just need to finalize it up into
   // a proper elem and then insert it into the structure.
@@ -422,6 +434,7 @@ fn infer_if(body: &mut Body, all_elems: &mut AllElements) -> bool {
   let mut ifstmt = If {
     entry,
     exit: join,
+    inverted,
     then_body: Body::new(),
   };
   ifstmt.then_body.elems.insert(then);
