@@ -213,7 +213,13 @@ impl<'a> Gen<'a> {
   }
 }
 
-pub fn generate(func: &Function, f: &mut dyn fmt::Write) -> fmt::Result {
+pub fn generate_generic(func: &Function, f: &mut dyn fmt::Write) -> fmt::Result {
   let mut g = Gen::new(f);
   g.func(func)
+}
+
+pub fn generate(func: &Function) -> Result<String, fmt::Error> {
+  let mut buf = String::new();
+  generate_generic(func, &mut buf)?;
+  Ok(buf)
 }

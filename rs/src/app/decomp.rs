@@ -80,28 +80,12 @@ pub fn run(appname: &str) {
   sym::symbolize(&mut ir, &cfg);
   // opt::forward_store_to_load(&mut ir);
   opt::optimize(&mut ir);
-
   opt::mem_symbol_to_ref(&mut ir);
   opt::optimize(&mut ir);
 
-  //println!("{}", ir);
-  //println!("===========================================================================");
-
-  //let ctrlflow = control_flow::Function::from_ir(&ir);
-  //println!("{:#?}", func);
-  //control_flow::print(&ctrlflow);
-
   let ast = ast::Function::from_ir("my_function", &ir);
-  //println!("{:#?}", f);
-
-  // let mut buf = String::new();
-  // gen::generate(&ast, &mut buf).unwrap();
-  // println!("{}", buf);
-
-
-
+  let text = gen::generate(&ast).unwrap();
+  println!("{}", text);
 
   //crate::decomp::control_flow::gen_graphviz_dotfile("ctrlflow.dot", &ir).unwrap();
-
-  //println!("{:#?}", ir.symbols);
 }

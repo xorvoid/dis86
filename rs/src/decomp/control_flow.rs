@@ -232,14 +232,14 @@ impl ControlFlow {
     self.all_elems.get(id)
   }
 
-  fn iter(&self) -> ControlFlowIter<'_> {
+  pub fn iter(&self) -> ControlFlowIter<'_> {
     ControlFlowIter::new(self)
   }
 }
 
 pub struct ControlFlowIter<'a> {
   cf: &'a ControlFlow,
-  state: Vec<(&'a Body, usize)>
+  state: Vec<(&'a Body, usize)>,
 }
 
 pub struct ControlFlowIterElem<'a> {
@@ -255,7 +255,8 @@ impl<'a> ControlFlowIter<'a> {
 }
 
 impl<'a> Iterator for ControlFlowIter<'a> {
-  type Item = ControlFlowIterElem<'a>; //(ElemId, &'a Elem, usize);
+  type Item = ControlFlowIterElem<'a>;
+
   fn next(&mut self) -> Option<Self::Item> {
     loop {
       if self.state.len() == 0 {
@@ -274,6 +275,7 @@ impl<'a> Iterator for ControlFlowIter<'a> {
         Detail::Loop(lp) => self.state.push((&lp.body, 0)),
         Detail::If(ifstmt) => self.state.push((&ifstmt.then_body, 0)),
       }
+
       return Some(ControlFlowIterElem {
         id: *id,
         elem,
