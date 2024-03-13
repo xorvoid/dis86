@@ -5,4 +5,4 @@ pub mod display;
 pub mod build;
 pub mod opt;
 pub mod sym;
-pub mod uses;
+pub mod util;

@@ -115,7 +115,7 @@ impl Block {
 
 impl<'a> Builder<'a> {
   fn new(ir: &'a ir::IR, cf: &'a ControlFlow) -> Self {
-    let n_uses = crate::decomp::ir::uses::compute_uses(ir);
+    let n_uses = ir::util::compute_uses(ir);
     Self {
       ir,
       cf,
