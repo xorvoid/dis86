@@ -99,13 +99,6 @@ pub struct Function {
 #[derive(Debug, Default)]
 pub struct Block(pub Vec<Stmt>);
 
-enum Next {
-  None,
-  Return,
-  UncondJump,
-  CondJump(Expr),
-}
-
 struct Builder<'a> {
   ir: &'a ir::IR,
   cf: &'a ControlFlow,
@@ -273,8 +266,9 @@ impl<'a> Builder<'a> {
     self.blkstack.pop().unwrap()
   }
 
+  // Returns a jump condition expr if the block ends in a conditional branch
   #[must_use]
-  fn convert_blk(&mut self, bref: ir::BlockRef) -> Next {
+  fn convert_blk(&mut self, bref: ir::BlockRef) -> Option<Expr> {
     let blk = &self.ir.blocks[bref.0];
     for i in blk.instrs.range() {
       let r = ir::Ref::Instr(bref, i);
@@ -283,16 +277,16 @@ impl<'a> Builder<'a> {
         ir::Opcode::Nop => continue,
         ir::Opcode::Ret => {
           self.push_stmt(Stmt::Return);
-          return Next::Return;
+          return None;
         }
         ir::Opcode::Jmp => {
           // TODO: Handle phis!!
-          return Next::UncondJump;
+          return None;
         }
         ir::Opcode::Jne => {
           // TODO: Handle phis!!
           let cond = self.ref_to_expr(instr.operands[0], 0);
-          return Next::CondJump(cond);
+          return Some(cond);
         }
         ir::Opcode::WriteVar16 => {
           let lhs = self.symbol_to_expr(instr.operands[0].unwrap_symbol());
@@ -369,11 +363,7 @@ impl<'a> Builder<'a> {
       self.push_stmt(Stmt::Label(label));
     }
 
-    let next = self.convert_blk(bb.blkref);
-    let cond = match next {
-      Next::CondJump(cond) => Some(cond),
-      _ => None,
-    };
+    let cond = self.convert_blk(bb.blkref);
     self.generate_jump(bb_elt.elem.jump.unwrap(), cond);
   }
 
@@ -395,8 +385,9 @@ impl<'a> Builder<'a> {
       let label = self.elemid_to_label(ifstmt.entry);
       self.push_stmt(Stmt::Label(label));
     }
-    let n = self.convert_blk(bb.blkref);
-    let Next::CondJump(cond) = n else { panic!("expected ifstmt entry to end in a conditional jump") };
+    let Some(cond) = self.convert_blk(bb.blkref) else {
+      panic!("expected ifstmt entry to end in a conditional jump");
+    };
 
     let then_body = self.convert_body(iter, depth+1);
     self.push_stmt(Stmt::If(If { cond, then_body }));
