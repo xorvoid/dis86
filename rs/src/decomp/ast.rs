@@ -63,7 +63,6 @@ pub struct CondGoto {
 #[derive(Debug)]
 pub struct Goto {
   pub label: Label,
-  pub hidden: bool,
 }
 
 #[derive(Debug)]
@@ -104,9 +103,8 @@ pub struct Block(pub Vec<Stmt>);
 enum Next {
   None,
   Return,
-  LoopExitElem(control_flow::ElemId), // HAX??
-  UncondJump(ir::BlockRef),
-  CondJump(Expr, ir::BlockRef /* true */, ir::BlockRef /* false */),
+  UncondJump,
+  CondJump(Expr),
 }
 
 struct Builder<'a> {
@@ -297,8 +295,8 @@ impl<'a> Builder<'a> {
         }
         ir::Opcode::Jmp => {
           // TODO: Handle phis!!
-          let tgt = instr.operands[0].unwrap_block();
-          return Next::UncondJump(tgt);
+          //let tgt = instr.operands[0].unwrap_block();
+          return Next::UncondJump;
           //let tgt = self.blockref_to_label(passive);
           // self.push_stmt(Stmt::Goto(Goto {
           //   tgt,
@@ -308,9 +306,9 @@ impl<'a> Builder<'a> {
         ir::Opcode::Jne => {
           // TODO: Handle phis!!
           let cond = self.ref_to_expr(instr.operands[0], 0);
-          let tgt_true = instr.operands[1].unwrap_block();
-          let tgt_false = instr.operands[2].unwrap_block();
-          return Next::CondJump(cond, tgt_true, tgt_false);
+          //let tgt_true = instr.operands[1].unwrap_block();
+          //let tgt_false = instr.operands[2].unwrap_block();
+          return Next::CondJump(cond); //, tgt_true, tgt_false);
           // let active = instr.operands[1].unwrap_block();
           // let passive = instr.operands[2].unwrap_block();
           // let tgt_true = self.blockref_to_label(active);
@@ -357,12 +355,63 @@ impl<'a> Builder<'a> {
   ////////////////////////////////////////////////////////////////////////////////////
   // NEW
 
+  fn elemid_to_label(&self, id: ElemId) -> Label {
+    let elem = self.cf.elem(id);
+    let Detail::BasicBlock(bb) = &elem.detail else { panic!("Expected basic block") };
+    self.blockref_to_label(bb.blkref)
+  }
+
+  fn generate_jump(&mut self, jump: control_flow::Jump, cond: Option<Expr>) {
+    match jump {
+      control_flow::Jump::None => (),
+      control_flow::Jump::UncondFallthrough => (),
+      control_flow::Jump::UncondTarget(tgt) => {
+        let label = self.elemid_to_label(tgt);
+        self.push_stmt(Stmt::Goto(Goto { label }));
+      }
+      control_flow::Jump::CondTargetTrue(tgt) => {
+        let cond = cond.unwrap();
+        let label = self.elemid_to_label(tgt);
+        let goto = Stmt::Goto(Goto{label});
+        let then_body = Block(vec![goto]);
+        self.push_stmt(Stmt::If(If {cond, then_body }));
+      }
+      control_flow::Jump::CondTargetFalse(tgt) => {
+        let cond = cond.unwrap();
+        let label = self.elemid_to_label(tgt);
+        let goto = Stmt::Goto(Goto{label});
+        let then_body = Block(vec![goto]);
+        let cond_inv = Expr::Unary(Box::new(UnaryExpr{op: UnaryOperator::Not, rhs: cond}));
+        self.push_stmt(Stmt::If(If {cond: cond_inv, then_body }));
+      }
+      control_flow::Jump::CondTargetBoth(tgt_true, tgt_false) => {
+        let cond = cond.unwrap();
+        let label_true = self.elemid_to_label(tgt_true);
+        let label_false = self.elemid_to_label(tgt_false);
+        self.push_stmt(Stmt::CondGoto(CondGoto { cond, label_true, label_false }));
+      }
+    }
+  }
+
+  fn convert_basic_block(&mut self, iter: &mut FlowIter, depth: usize) {
+    let Some(bb_elt) = iter.next() else { panic!("expected basic block element") };
+    let Detail::BasicBlock(bb) = &bb_elt.elem.detail else { panic!("expected basic block element") };
+
+    let next = self.convert_blk(bb.blkref);
+    let cond = match next {
+      Next::CondJump(cond) => Some(cond),
+      _ => None,
+    };
+    self.generate_jump(bb_elt.elem.jump.unwrap(), cond);
+  }
+
   fn convert_loop(&mut self, iter: &mut FlowIter, depth: usize) {
     let Some(loop_elt) = iter.next() else { panic!("expected loop element") };
     let Detail::Loop(lp) = &loop_elt.elem.detail else { panic!("expected loop element") };
 
     let body = self.convert_body(iter, depth+1);
     self.push_stmt(Stmt::Loop(Loop { body }));
+    self.generate_jump(loop_elt.elem.jump.unwrap(), None);
   }
 
   fn convert_ifstmt(&mut self, iter: &mut FlowIter, depth: usize) {
@@ -371,18 +420,11 @@ impl<'a> Builder<'a> {
 
     let Detail::BasicBlock(bb) = &self.cf.elem(ifstmt.entry).detail else { panic!("expected ifstmt entry to be a basic-block") };
     let n = self.convert_blk(bb.blkref);
-    let Next::CondJump(cond, true_tgt, false_tgt) = n else { panic!("expected ifstmt entry to end in a conditional jump") };
+    let Next::CondJump(cond) = n else { panic!("expected ifstmt entry to end in a conditional jump") };
 
     let then_body = self.convert_body(iter, depth+1);
     self.push_stmt(Stmt::If(If { cond, then_body }));
-
-
-    while let Some(elt) = iter.peek() {
-      if elt.depth <= depth {
-        return;
-      }
-      iter.next();
-    }
+    self.generate_jump(ifstmt_elt.elem.jump.unwrap(), None);
   }
 
   fn convert_body(&mut self, iter: &mut FlowIter, depth: usize) -> Block {
@@ -394,10 +436,7 @@ impl<'a> Builder<'a> {
         break;
       }
       match &elt.elem.detail {
-        Detail::BasicBlock(bb) => {
-          self.convert_blk(bb.blkref);
-          iter.next();
-        }
+        Detail::BasicBlock(_) => self.convert_basic_block(iter, depth),
         Detail::Loop(_) => self.convert_loop(iter, depth),
         Detail::If(_) => self.convert_ifstmt(iter, depth),
       };

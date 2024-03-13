@@ -84,8 +84,8 @@ pub fn run(appname: &str) {
   opt::optimize(&mut ir);
 
   let ast = ast::Function::from_ir("my_function", &ir);
-  //let text = gen::generate(&ast).unwrap();
-  //println!("{}", text);
+  let text = gen::generate(&ast).unwrap();
+  println!("{}", text);
 
   //crate::decomp::control_flow::gen_graphviz_dotfile("ctrlflow.dot", &ir).unwrap();
 }

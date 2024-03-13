@@ -6,8 +6,7 @@ pub struct ElemId(pub usize);
 
 #[derive(Debug, Clone, Copy)]
 pub enum Jump {
-  None,                           // jump doesn't make sense (e.g. after an infinite-loop)
-  Return,                         // ret
+  None,                           // no jump, e.g. infinite loop, return, etc
   UncondFallthrough,              // jmp elided, fallthrough
   UncondTarget(ElemId),           // jmp not elided
   CondTargetTrue(ElemId),         // jne true tgt needed, false elided, fallthrough
@@ -565,7 +564,7 @@ fn schedule_layout_basic_block(elem: &mut Elem, parent: &Parent, _data: &mut Con
   let exits = &elem.exits;
 
   let (next, jump) = if exits.len() == 0 {
-    (None, Jump::Return)
+    (None, Jump::None)
   } else if exits.len() == 1 {
     let tgt = exits[0];
     if let Some(tgt) = parent.elem_avail(tgt) {
