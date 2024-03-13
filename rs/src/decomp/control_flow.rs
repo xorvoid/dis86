@@ -173,8 +173,6 @@ impl Body {
 
   // returns None if some of the exits would escape the body
   fn exits(&self, node: ElemId, data: &ControlFlowData) -> Option<Vec<ElemId>> {
-    //println!("node: {}", node.0);
-    //println!("elems: {:?}", self.elems);
     _ = self.elems.get(&node)?;
     let mut exits = data.get(node).exits.clone();
     for exit in &mut exits {
@@ -413,9 +411,6 @@ fn find_loop_exits(entry: ElemId, body: &Body, data: &ControlFlowData) -> Vec<El
 }
 
 fn infer_loop(body: &mut Body, exclude: Option<&HashSet<ElemId>>, data: &mut ControlFlowData) -> bool {
-  // println!("Starting loop infer");
-  // println!("  Body: {:?}", f.body);
-
   let mut dfs = DFS::new(body.entry, body, exclude, data);
   let mut lp: Option<Loop> = None;
   loop {
@@ -435,7 +430,6 @@ fn infer_loop(body: &mut Body, exclude: Option<&HashSet<ElemId>>, data: &mut Con
         // Update this loop and add all blocks in the loop body path
         lp.backedges.insert(from);
         for elem in dfs.path().iter().cloned().rev() {
-          //if lp.backedges.get(&elem).is_some() { continue; }
           lp.body.elems.insert(elem);
           if elem == lp.entry { break; }
         }
@@ -477,9 +471,7 @@ fn infer_if(body: &mut Body, data: &mut ControlFlowData) -> bool {
     {
       let (a, b) = (exits[0], exits[1]);
       if let Some(a_exits) = body.exits(a, data) {
-        //println!("a_exits: {:?}", a_exits);
         if a_exits.len() == 1 && a_exits[0] == b {
-          //println!("Found case 1");
           found = Some((*id, a, b, false));
           break;
         }
@@ -490,9 +482,7 @@ fn infer_if(body: &mut Body, data: &mut ControlFlowData) -> bool {
     {
       let (a, b) = (exits[0], exits[1]);
       if let Some(b_exits) = body.exits(b, data) {
-        //println!("b_exits: {:?}", b_exits);
         if b_exits.len() == 1 && b_exits[0] == a {
-          //println!("Found case 2");
           found = Some((*id, b, a, true));
           break;
         }
@@ -525,8 +515,6 @@ fn infer_structure(body: &mut Body, exclude: Option<&HashSet<ElemId>>, data: &mu
   while infer_loop(body, exclude, data) {}
   while infer_if(body, data) {}
 
-  //print_recurse(body, data, 0);
-
   // recurse and infer at lower-levels
   for id in &body.elems {
     let mut elem = data.checkout(*id);
@@ -558,7 +546,6 @@ impl<'a> Parent<'a> {
 
 #[must_use]
 fn schedule_layout_basic_block(elem: &mut Elem, parent: &Parent, data: &mut ControlFlowData) -> Option<ElemId> {
-  //println!("Layout basic block: {:?}", id);
   let Detail::BasicBlock(_) = &elem.detail else { panic!("Expected basic block") };
   let exits = &elem.exits;
 
@@ -591,7 +578,6 @@ fn schedule_layout_basic_block(elem: &mut Elem, parent: &Parent, data: &mut Cont
 
 #[must_use]
 fn schedule_layout_loop(elem: &mut Elem, parent: &Parent, data: &mut ControlFlowData) -> Option<ElemId> {
-  //println!("Layout loop: {:?}", id);
   let Detail::Loop(lp) = &mut elem.detail else { panic!("Expected basic block") };
   schedule_layout_body(&mut lp.body, data);
   elem.jump = Some(Jump::None);
@@ -605,7 +591,6 @@ fn schedule_layout_loop(elem: &mut Elem, parent: &Parent, data: &mut ControlFlow
 
 #[must_use]
 fn schedule_layout_ifstmt(elem: &mut Elem, parent: &Parent, data: &mut ControlFlowData) -> Option<ElemId> {
-  //println!("Layout ifstmt: {:?}", id);
   let Detail::If(ifstmt) = &mut elem.detail else { panic!("Expected basic block") };
 
   // schedule then-body
@@ -650,8 +635,6 @@ fn schedule_layout_body(body: &mut Body, data: &mut ControlFlowData) {
 
     if !remaining.remove(&cur) { panic!("tried to schedule an unavailable block"); }
     body.layout.push(cur);
-
-    //println!("cur: {:?}", cur);
 
     let parent = Parent {
       body, remain: &remaining,

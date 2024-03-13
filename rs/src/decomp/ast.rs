@@ -292,7 +292,7 @@ impl<'a> Builder<'a> {
         ir::Opcode::Jne => {
           // TODO: Handle phis!!
           let cond = self.ref_to_expr(instr.operands[0], 0);
-          return Next::CondJump(cond); //, tgt_true, tgt_false);
+          return Next::CondJump(cond);
         }
         ir::Opcode::WriteVar16 => {
           let lhs = self.symbol_to_expr(instr.operands[0].unwrap_symbol());
@@ -321,12 +321,6 @@ impl<'a> Builder<'a> {
     }
     unreachable!("IR Block Should End With A Branching Instr");
   }
-
-
-
-
-  ////////////////////////////////////////////////////////////////////////////////////
-  // NEW
 
   fn elemid_to_label(&self, id: ElemId) -> Label {
     let elem = self.cf.elem(id);
