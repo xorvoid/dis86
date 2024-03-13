@@ -279,11 +279,6 @@ impl<'a> Builder<'a> {
   #[must_use]
   fn convert_blk(&mut self, bref: ir::BlockRef) -> Next {
     let blk = &self.ir.blocks[bref.0];
-    if bref.0 != 0 { // for all except the entry block
-      let label = self.blockref_to_label(bref);
-      self.push_stmt(Stmt::Label(label));
-    }
-
     for i in blk.instrs.range() {
       let r = ir::Ref::Instr(bref, i);
       let instr = self.ir.instr(r).unwrap();
@@ -397,6 +392,11 @@ impl<'a> Builder<'a> {
     let Some(bb_elt) = iter.next() else { panic!("expected basic block element") };
     let Detail::BasicBlock(bb) = &bb_elt.elem.detail else { panic!("expected basic block element") };
 
+    if bb.labeled {
+      let label = self.elemid_to_label(bb_elt.id);
+      self.push_stmt(Stmt::Label(label));
+    }
+
     let next = self.convert_blk(bb.blkref);
     let cond = match next {
       Next::CondJump(cond) => Some(cond),
@@ -419,6 +419,10 @@ impl<'a> Builder<'a> {
     let Detail::If(ifstmt) = &ifstmt_elt.elem.detail else { panic!("expected ifstmt element") };
 
     let Detail::BasicBlock(bb) = &self.cf.elem(ifstmt.entry).detail else { panic!("expected ifstmt entry to be a basic-block") };
+    if bb.labeled {
+      let label = self.elemid_to_label(ifstmt.entry);
+      self.push_stmt(Stmt::Label(label));
+    }
     let n = self.convert_blk(bb.blkref);
     let Next::CondJump(cond) = n else { panic!("expected ifstmt entry to end in a conditional jump") };
 
@@ -619,8 +623,8 @@ impl Function {
     //println!("{}", s);
 
     let ctrlflow = ControlFlow::from_ir(&ir);
-    println!("+=======================");
-    control_flow::print(&ctrlflow);
+    //println!("+=======================");
+    //control_flow::print(&ctrlflow);
 
     Builder::new(ir, &ctrlflow).build(name)
   }

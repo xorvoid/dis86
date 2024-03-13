@@ -31,6 +31,7 @@ pub enum Detail {
 
 #[derive(Debug)]
 pub struct BasicBlock {
+  pub labeled: bool,
   pub blkref: ir::BlockRef,
 }
 
@@ -68,6 +69,7 @@ impl ControlFlowData {
   fn len(&self) -> usize { self.0.len() }
   fn append(&mut self, elem: Elem) -> ElemId { let id = ElemId(self.len()); self.0.push(Some(elem)); id }
   fn get(&self, id: ElemId) -> &Elem { self.0[id.0].as_ref().unwrap() }
+  fn get_mut(&mut self, id: ElemId) -> &mut Elem { self.0[id.0].as_mut().unwrap() }
   fn checkout(&mut self, id: ElemId) -> Elem { self.0[id.0].take().unwrap() }
   fn release(&mut self, id: ElemId, elem: Elem) { assert!(self.0[id.0].is_none()); self.0[id.0] = Some(elem); }
 }
@@ -226,7 +228,7 @@ impl ControlFlow {
         entry: ElemId(b),
         exits,
         jump: None,
-        detail: Detail::BasicBlock(BasicBlock { blkref: ir::BlockRef(b) }),
+        detail: Detail::BasicBlock(BasicBlock { blkref: ir::BlockRef(b), labeled: false }),
       });
       cf.func.body.elems.insert(ElemId(b));
     }
@@ -238,6 +240,7 @@ impl ControlFlow {
     let mut cf = Self::from_ir_naive(ir);
     infer_structure(&mut cf.func.body, None, &mut cf.data);
     schedule_layout(&mut cf.func.body, &mut cf.data);
+    label_blocks(&mut cf);
     cf
   }
 
@@ -558,7 +561,7 @@ impl<'a> Parent<'a> {
 }
 
 #[must_use]
-fn schedule_layout_basic_block(elem: &mut Elem, parent: &Parent, _data: &mut ControlFlowData) -> Option<ElemId> {
+fn schedule_layout_basic_block(elem: &mut Elem, parent: &Parent, data: &mut ControlFlowData) -> Option<ElemId> {
   //println!("Layout basic block: {:?}", id);
   let Detail::BasicBlock(_) = &elem.detail else { panic!("Expected basic block") };
   let exits = &elem.exits;
@@ -595,10 +598,7 @@ fn schedule_layout_loop(elem: &mut Elem, parent: &Parent, data: &mut ControlFlow
   //println!("Layout loop: {:?}", id);
   let Detail::Loop(lp) = &mut elem.detail else { panic!("Expected basic block") };
   schedule_layout_body(&mut lp.body, data);
-
   elem.jump = Some(Jump::None);
-  //println!("Layout loop - DONE: {:?}", id);
-
   for exit in elem.exits.iter().cloned() {
     if let Some(exit) = parent.elem_avail(exit) {
       return Some(exit);
@@ -713,6 +713,33 @@ fn schedule_layout_old(body: &mut Body, data: &mut ControlFlowData) {
       Detail::If(ifstmt) => schedule_layout(&mut ifstmt.then_body, data),
     }
     data.release(*id, elem);
+  }
+}
+
+fn label_blocks(cf: &mut ControlFlow) {
+  // Two phase to avoid an immutable ref <=> mutable ref collision
+
+  // Phase 1: Iterate the full controlflow, collecting all jump targets
+  let mut targets =  HashSet::new();
+  for elt in cf.iter() {
+    match elt.elem.jump.unwrap() {
+      Jump::None => (),
+      Jump::UncondFallthrough => (),
+      Jump::UncondTarget(tgt) => { targets.insert(tgt); }
+      Jump::CondTargetTrue(tgt) => { targets.insert(tgt); }
+      Jump::CondTargetFalse(tgt) => { targets.insert(tgt); }
+      Jump::CondTargetBoth(tgt_true, tgt_false) => {
+        targets.insert(tgt_true);
+        targets.insert(tgt_false);
+      }
+    }
+  }
+
+  // Phase 2: Label all targetted blocks
+  for tgt in targets {
+    let elem = cf.data.get_mut(tgt);
+    let Detail::BasicBlock(bb) = &mut elem.detail else { panic!("Expected basic block for labeling") };
+    bb.labeled = true;
   }
 }
 
