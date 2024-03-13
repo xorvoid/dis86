@@ -1,4 +1,4 @@
-use dis::app;
+use dis86::app;
 
 fn print_help(appname: &str) {
   eprintln!("usage: {} <mode> [<MODE-SPECIFIC-OPTIONS>]", appname);
