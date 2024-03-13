@@ -132,8 +132,7 @@ impl<'a> Gen<'a> {
   fn goto(&mut self, label: &Label) -> fmt::Result {
     self.text("goto ")?;
     self.text(&label.0)?;
-    self.text(";")?;
-    self.endline()
+    self.text(";")
   }
 
   fn stmt(&mut self, stmt: &Stmt) -> fmt::Result {

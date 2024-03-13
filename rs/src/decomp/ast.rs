@@ -110,11 +110,12 @@ struct Builder<'a> {
 
 impl<'a> Builder<'a> {
   fn new(ir: &'a ir::IR, cf: &'a ControlFlow) -> Self {
+    let n_uses = crate::decomp::ir::uses::compute_uses(ir);
     Self {
       ir,
       cf,
       blkstack: vec![],
-      n_uses: HashMap::new(),
+      n_uses,
       temp_names: HashMap::new(),
       temp_count: 0,
     }
@@ -249,10 +250,6 @@ impl<'a> Builder<'a> {
     expr
   }
 
-  fn blockref_to_label(&self, bref: ir::BlockRef) -> Label {
-    Label(format!("{}_b{}", self.ir.blocks[bref.0].name, bref.0))
-  }
-
   fn push_stmt(&mut self, stmt: Stmt) {
     self.blkstack.as_mut_slice().last_mut().unwrap().0.push(stmt);
   }
@@ -266,9 +263,15 @@ impl<'a> Builder<'a> {
     self.blkstack.pop().unwrap()
   }
 
+  fn make_label(&self, id: ElemId) -> Label {
+    let elem = self.cf.elem(id);
+    let Detail::BasicBlock(bb) = &elem.detail else { panic!("Expected basic block") };
+    Label(format!("{}", self.ir.blocks[bb.blkref.0].name))
+  }
+
   // Returns a jump condition expr if the block ends in a conditional branch
   #[must_use]
-  fn convert_blk(&mut self, bref: ir::BlockRef) -> Option<Expr> {
+  fn emit_blk(&mut self, bref: ir::BlockRef) -> Option<Expr> {
     let blk = &self.ir.blocks[bref.0];
     for i in blk.instrs.range() {
       let r = ir::Ref::Instr(bref, i);
@@ -316,30 +319,24 @@ impl<'a> Builder<'a> {
     unreachable!("IR Block Should End With A Branching Instr");
   }
 
-  fn elemid_to_label(&self, id: ElemId) -> Label {
-    let elem = self.cf.elem(id);
-    let Detail::BasicBlock(bb) = &elem.detail else { panic!("Expected basic block") };
-    self.blockref_to_label(bb.blkref)
-  }
-
-  fn generate_jump(&mut self, jump: control_flow::Jump, cond: Option<Expr>) {
+  fn emit_jump(&mut self, jump: control_flow::Jump, cond: Option<Expr>) {
     match jump {
       control_flow::Jump::None => (),
       control_flow::Jump::UncondFallthrough => (),
       control_flow::Jump::UncondTarget(tgt) => {
-        let label = self.elemid_to_label(tgt);
+        let label = self.make_label(tgt);
         self.push_stmt(Stmt::Goto(Goto { label }));
       }
       control_flow::Jump::CondTargetTrue(tgt) => {
         let cond = cond.unwrap();
-        let label = self.elemid_to_label(tgt);
+        let label = self.make_label(tgt);
         let goto = Stmt::Goto(Goto{label});
         let then_body = Block(vec![goto]);
         self.push_stmt(Stmt::If(If {cond, then_body }));
       }
       control_flow::Jump::CondTargetFalse(tgt) => {
         let cond = cond.unwrap();
-        let label = self.elemid_to_label(tgt);
+        let label = self.make_label(tgt);
         let goto = Stmt::Goto(Goto{label});
         let then_body = Block(vec![goto]);
         let cond_inv = Expr::Unary(Box::new(UnaryExpr{op: UnaryOperator::Not, rhs: cond}));
@@ -347,8 +344,8 @@ impl<'a> Builder<'a> {
       }
       control_flow::Jump::CondTargetBoth(tgt_true, tgt_false) => {
         let cond = cond.unwrap();
-        let label_true = self.elemid_to_label(tgt_true);
-        let label_false = self.elemid_to_label(tgt_false);
+        let label_true = self.make_label(tgt_true);
+        let label_false = self.make_label(tgt_false);
         self.push_stmt(Stmt::CondGoto(CondGoto { cond, label_true, label_false }));
       }
     }
@@ -359,12 +356,12 @@ impl<'a> Builder<'a> {
     let Detail::BasicBlock(bb) = &bb_elt.elem.detail else { panic!("expected basic block element") };
 
     if bb.labeled {
-      let label = self.elemid_to_label(bb_elt.id);
+      let label = self.make_label(bb_elt.id);
       self.push_stmt(Stmt::Label(label));
     }
 
-    let cond = self.convert_blk(bb.blkref);
-    self.generate_jump(bb_elt.elem.jump.unwrap(), cond);
+    let cond = self.emit_blk(bb.blkref);
+    self.emit_jump(bb_elt.elem.jump.unwrap(), cond);
   }
 
   fn convert_loop(&mut self, iter: &mut FlowIter, depth: usize) {
@@ -373,7 +370,7 @@ impl<'a> Builder<'a> {
 
     let body = self.convert_body(iter, depth+1);
     self.push_stmt(Stmt::Loop(Loop { body }));
-    self.generate_jump(loop_elt.elem.jump.unwrap(), None);
+    self.emit_jump(loop_elt.elem.jump.unwrap(), None);
   }
 
   fn convert_ifstmt(&mut self, iter: &mut FlowIter, depth: usize) {
@@ -382,16 +379,16 @@ impl<'a> Builder<'a> {
 
     let Detail::BasicBlock(bb) = &self.cf.elem(ifstmt.entry).detail else { panic!("expected ifstmt entry to be a basic-block") };
     if bb.labeled {
-      let label = self.elemid_to_label(ifstmt.entry);
+      let label = self.make_label(ifstmt.entry);
       self.push_stmt(Stmt::Label(label));
     }
-    let Some(cond) = self.convert_blk(bb.blkref) else {
+    let Some(cond) = self.emit_blk(bb.blkref) else {
       panic!("expected ifstmt entry to end in a conditional jump");
     };
 
     let then_body = self.convert_body(iter, depth+1);
     self.push_stmt(Stmt::If(If { cond, then_body }));
-    self.generate_jump(ifstmt_elt.elem.jump.unwrap(), None);
+    self.emit_jump(ifstmt_elt.elem.jump.unwrap(), None);
   }
 
   fn convert_body(&mut self, iter: &mut FlowIter, depth: usize) -> Block {
@@ -413,8 +410,6 @@ impl<'a> Builder<'a> {
   }
 
   fn build(&mut self, name: &str) -> Function {
-    self.n_uses = compute_uses(self.ir);
-
     let mut iter = self.cf.iter().peekable();
     let body = self.convert_body(&mut iter, 0);
     assert!(iter.next().is_none());
@@ -424,52 +419,10 @@ impl<'a> Builder<'a> {
       body,
     }
   }
-
 }
 
 impl Function {
-  pub fn from_ir(name: &str, ir: &ir::IR) -> Self {
-    //let s = display_ir_with_uses(ir).unwrap();
-    //println!("{}", s);
-
-    let ctrlflow = ControlFlow::from_ir(&ir);
-    //println!("+=======================");
-    //control_flow::print(&ctrlflow);
-
-    Builder::new(ir, &ctrlflow).build(name)
+  pub fn from_ir(name: &str, ir: &ir::IR, ctrlflow: &ControlFlow) -> Self {
+    Builder::new(ir, ctrlflow).build(name)
   }
-}
-
-
-fn compute_uses(ir: &ir::IR) -> HashMap<ir::Ref, usize> {
-  let mut n_uses = HashMap::new();
-  for b in 0..ir.blocks.len() {
-    for i in ir.blocks[b].instrs.range() {
-      let r = ir::Ref::Instr(ir::BlockRef(b), i);
-      let instr = ir.instr(r).unwrap();
-      for oper in &instr.operands {
-        *n_uses.entry(*oper).or_insert(0) += 1;
-      }
-    }
-  }
-  n_uses
-}
-
-fn display_ir_with_uses(ir: &ir::IR) -> Result<String, std::fmt::Error> {
-  let n_uses = compute_uses(ir);
-  let mut r = crate::decomp::ir::display::Formatter::new();
-  for (i, blk) in ir.blocks.iter().enumerate() {
-    let bref = ir::BlockRef(i);
-    r.fmt_blkhdr(bref, blk)?;
-    for idx in blk.instrs.range() {
-      let iref = ir::Ref::Instr(bref, idx);
-      let instr = &blk.instrs[idx];
-      if instr.opcode == ir::Opcode::Nop { continue; }
-
-      let n = n_uses.get(&iref).unwrap_or(&0);
-      write!(&mut r.out, "{} | ", n)?;
-      r.fmt_instr(ir, iref, instr)?;
-    }
-  }
-  Ok(r.finish())
 }

@@ -1,10 +1,11 @@
 use pico_args;
 use crate::segoff::SegOff;
 use crate::decode::Decoder;
-use crate::decomp::ir::{build, opt, sym};
+use crate::decomp::ir::{build, opt, sym, display};
 use crate::decomp::config::Config;
 use crate::decomp::gen;
 use crate::decomp::ast;
+use crate::decomp::control_flow;
 
 fn print_help(appname: &str) {
   println!("usage: {} dis OPTIONS", appname);
@@ -83,7 +84,14 @@ pub fn run(appname: &str) {
   opt::mem_symbol_to_ref(&mut ir);
   opt::optimize(&mut ir);
 
-  let ast = ast::Function::from_ir("my_function", &ir);
+  // let s = display::display_ir_with_uses(&ir).unwrap();
+  // println!("{}", s);
+
+  let ctrlflow = control_flow::ControlFlow::from_ir(&ir);
+  //println!("+=======================");
+  //control_flow::print(&ctrlflow);
+
+  let ast = ast::Function::from_ir("my_function", &ir, &ctrlflow);
   let text = gen::generate(&ast).unwrap();
   println!("{}", text);
 

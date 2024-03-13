@@ -162,3 +162,22 @@ impl fmt::Display for IR {
     write!(f, "{}", r.finish())
   }
 }
+
+pub fn display_ir_with_uses(ir: &IR) -> Result<String, std::fmt::Error> {
+  let n_uses = uses::compute_uses(ir);
+  let mut r = Formatter::new();
+  for (i, blk) in ir.blocks.iter().enumerate() {
+    let bref = BlockRef(i);
+    r.fmt_blkhdr(bref, blk)?;
+    for idx in blk.instrs.range() {
+      let iref = Ref::Instr(bref, idx);
+      let instr = &blk.instrs[idx];
+      if instr.opcode == Opcode::Nop { continue; }
+
+      let n = n_uses.get(&iref).unwrap_or(&0);
+      write!(&mut r.out, "{} | ", n)?;
+      r.fmt_instr(ir, iref, instr)?;
+    }
+  }
+  Ok(r.finish())
+}
