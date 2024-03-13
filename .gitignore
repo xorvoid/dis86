@@ -1,8 +1,6 @@
 *~
 \#*#
 *.dSYM/
-dis86
-dis86_c
-test
-datamap_test
 old/v1
+/target
+/Cargo.lock
