@@ -580,6 +580,7 @@ impl Function {
     //println!("{}", s);
 
     let ctrlflow = ControlFlow::from_ir(&ir);
+    println!("+=======================");
     control_flow::print(&ctrlflow);
 
     Builder::new(ir, &ctrlflow).build(name)
