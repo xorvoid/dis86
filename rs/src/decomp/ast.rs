@@ -93,7 +93,6 @@ pub enum Stmt {
 #[derive(Debug)]
 pub struct Function {
   pub name: String,
-  //vars: // todo
   pub body: Block,
 }
 
@@ -111,7 +110,6 @@ struct Builder<'a> {
   ir: &'a ir::IR,
   cf: &'a ControlFlow,
   blkstack: Vec<Block>,
-  //curblk: Block,
   n_uses: HashMap<ir::Ref, usize>,
   temp_names: HashMap<ir::Ref, String>,
   temp_count: usize,
@@ -123,7 +121,6 @@ impl<'a> Builder<'a> {
       ir,
       cf,
       blkstack: vec![],
-      //curblk: Block::default(),
       n_uses: HashMap::new(),
       temp_names: HashMap::new(),
       temp_count: 0,
@@ -290,31 +287,12 @@ impl<'a> Builder<'a> {
         }
         ir::Opcode::Jmp => {
           // TODO: Handle phis!!
-          //let tgt = instr.operands[0].unwrap_block();
           return Next::UncondJump;
-          //let tgt = self.blockref_to_label(passive);
-          // self.push_stmt(Stmt::Goto(Goto {
-          //   tgt,
-          // }));
-          //return Next::Fallthrough(passive);
         }
         ir::Opcode::Jne => {
           // TODO: Handle phis!!
           let cond = self.ref_to_expr(instr.operands[0], 0);
-          //let tgt_true = instr.operands[1].unwrap_block();
-          //let tgt_false = instr.operands[2].unwrap_block();
           return Next::CondJump(cond); //, tgt_true, tgt_false);
-          // let active = instr.operands[1].unwrap_block();
-          // let passive = instr.operands[2].unwrap_block();
-          // let tgt_true = self.blockref_to_label(active);
-          // let tgt_false = self.blockref_to_label(passive);
-          // let s = Stmt::CondGoto(CondGoto {
-          //   cond: self.ref_to_expr(instr.operands[0], 0),
-          //   tgt_true,
-          //   tgt_false,
-          // });
-          // self.push_stmt(s);
-          // return Next::Branch(active, passive);
         }
         ir::Opcode::WriteVar16 => {
           let lhs = self.symbol_to_expr(instr.operands[0].unwrap_symbol());
@@ -446,7 +424,6 @@ impl<'a> Builder<'a> {
       };
     }
 
-    //self.convert_func(name, &cf.func, &cf)
     self.block_leave()
   }
 
@@ -463,158 +440,6 @@ impl<'a> Builder<'a> {
     }
   }
 
-
-
-
-
-  ////////////////////////////////////////////////////////////////////////////////////
-  // OLD
-
-  // fn schedule_layout(&mut self, next: Next, body: &control_flow::Body, avail: &mut HashSet<ElemId>) -> Option<ElemId> {
-  //   // TODO: CLEANUP ... THIS IS SO SO SO CRAZY MESSY
-  //   match next {
-  //     Next::UncondJump(tgt) => {
-  //       // Try to avoid generating a goto by block layout
-  //       let tgt_id = body.lookup_from_blkref(tgt);
-  //       if tgt_id.is_some() && avail.get(&tgt_id.unwrap()).is_some() {
-  //         return tgt_id;
-  //       }
-  //       // Too bad.. we need the jump
-  //       let label = self.blockref_to_label(tgt);
-  //       self.push_stmt(Stmt::Goto(Goto { label, hidden: false }));
-  //       None
-  //     }
-  //     Next::CondJump(cond, tgt_true, tgt_false) => {
-  //       // Try to avoid generating a goto by block layout
-  //       let mut ret = None;
-  //       let tgt_true_id = body.lookup_from_blkref(tgt_true);
-  //       let tgt_false_id = body.lookup_from_blkref(tgt_false);
-  //       let mut inverted = false;
-  //       let mut fallthrough = false;
-  //       if tgt_false_id.is_some() && avail.get(&tgt_false_id.unwrap()).is_some() {
-  //         ret = tgt_false_id;
-  //         fallthrough = true;
-  //       } else if tgt_true_id.is_some() && avail.get(&tgt_true_id.unwrap()).is_some() {
-  //         ret = tgt_true_id;
-  //         inverted = true;
-  //         fallthrough = true;
-  //       }
-
-  //       if fallthrough {
-  //         let cond = if inverted {
-  //           Expr::Unary(Box::new(UnaryExpr{op: UnaryOperator::Not, rhs: cond}))
-  //         } else {
-  //           cond
-  //         };
-
-  //         let label = if inverted {
-  //           self.blockref_to_label(tgt_false)
-  //         } else {
-  //           self.blockref_to_label(tgt_true)
-  //         };
-
-  //         let goto = Stmt::Goto(Goto{label, hidden: false});
-  //         let then_body = Block(vec![goto]);
-  //         let ifstmt = Stmt::If(If {cond, then_body });
-  //         self.push_stmt(ifstmt);
-  //       }
-  //       else {
-  //         // Too bad.. we need the jump
-  //         let label_true = self.blockref_to_label(tgt_true);
-  //         let label_false = self.blockref_to_label(tgt_false);
-  //         self.push_stmt(Stmt::CondGoto(CondGoto { cond, label_true, label_false }));
-  //       }
-  //       ret
-  //     }
-  //     Next::LoopExitElem(id) => {
-  //       let id = body.lookup_from_id(id)?;
-  //       if avail.get(&id).is_some() {
-  //         Some(id)
-  //       } else {
-  //         None
-  //       }
-  //     }
-  //     _ => None,
-  //   }
-  // }
-
-  // #[must_use]
-  // fn convert_body(&mut self, entry: ElemId, body: &control_flow::Body, cf: &ControlFlow) -> Block {
-  //   self.block_enter();
-
-  //   let mut avail = body.elems.clone();
-  //   //let mut queue = VecDeque::new();
-  //   //queue.push_back(entry);
-  //   let mut next = Some(entry);
-
-  //   while avail.len() > 0 {
-  //     // Get the next elem to emit.. prefer the queue
-  //     let mut cur;
-  //     loop {
-  //       cur = match next.take() {
-  //         Some(cur) => cur,
-  //         None => {
-  //           // Nothing in queue, pick an arbitrary elem that hasn't yet been emitted
-  //           // HAX HAX HAX
-  //           *itertools::sorted(avail.iter()).next().unwrap()
-  //         }
-  //       };
-  //       if avail.remove(&cur) { break; }
-  //     }
-
-  //     let elem = cf.elem(cur);
-  //     let n = match &elem.detail {
-  //       Detail::BasicBlock(bb) => self.convert_blk(bb.blkref),
-  //       Detail::Loop(lp) => self.convert_loop(lp, cf),
-  //       Detail::If(ifstmt) => self.convert_ifstmt(ifstmt, cf),
-  //     };
-
-  //     next = self.schedule_layout(n, body, &mut avail);
-  //   }
-
-  //   self.block_leave()
-  // }
-
-  // fn convert_loop(&mut self, lp: &control_flow::Loop, cf: &ControlFlow) -> Next {
-  //   let body = self.convert_body(lp.entry, &lp.body, cf);
-  //   self.push_stmt(Stmt::Loop(Loop { body }));
-  //   Next::LoopExitElem(lp.exits[0])
-  // }
-
-  // fn convert_ifstmt(&mut self, ifstmt: &control_flow::If, cf: &ControlFlow) -> Next {
-  //   let entry = cf.elem(ifstmt.entry);
-  //   let Detail::BasicBlock(bb) = &entry.detail else { panic!("Expected entry block to be basic") };
-
-  //   let next = self.convert_blk(bb.blkref);
-  //   let Next::CondJump(cond, tgt_true, tgt_false) = next else { panic!("Expected conditional branch") };
-  //   let join_tgt = if ifstmt.inverted { tgt_true } else { tgt_false };
-
-  //   // HAX HAX HAX NASTY
-  //   let b = &ifstmt.then_body;
-  //   let e = *b.elems.iter().next().unwrap();
-  //   let body = self.convert_body(e, b, cf);
-
-  //   self.push_stmt(Stmt::If(If { cond, then_body: body }));
-  //   Next::UncondJump(join_tgt)
-  // }
-
-  // fn convert_func(&mut self, name: &str, func: &control_flow::Function, cf: &ControlFlow) -> Function {
-  //   let body = self.convert_body(func.entry, &func.body, cf);
-  //   Function {
-  //     name: name.to_string(),
-  //     body,
-  //   }
-  // }
-
-  // fn build(&mut self, name: &str, cf: &ControlFlow) -> Function {
-  //   self.n_uses = compute_uses(self.ir);
-  //   self.convert_func(name, &cf.func, &cf)
-
-  //   // for id in self.
-  //   // for b in 0..self.ir.blocks.len() {
-  //   //   self.convert_blk(ir::BlockRef(b));
-  //   // }
-  // }
 }
 
 impl Function {

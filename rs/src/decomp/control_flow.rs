@@ -540,11 +540,7 @@ fn infer_structure(body: &mut Body, exclude: Option<&HashSet<ElemId>>, data: &mu
 }
 
 fn schedule_layout(body: &mut Body, data: &mut ControlFlowData) {
-  if true {
-    schedule_layout_body(body, data)
-  } else {
-    schedule_layout_new(body, data)
-  }
+  schedule_layout_body(body, data)
 }
 
 struct Parent<'a> {
@@ -664,58 +660,6 @@ fn schedule_layout_body(body: &mut Body, data: &mut ControlFlowData) {
   }
 }
 
-
-fn select_next(exits: &[ElemId], _body: &Body, remaining: &HashSet<ElemId>, _data: &ControlFlowData) -> ElemId {
-  //println!("exits: {:?}", exits);
-  for next in exits {
-    if remaining.get(next).is_some() {
-      return *next;
-    }
-  }
-
-  // FIXME!!!
-  panic!("Failed to select a next element");
-}
-
-fn schedule_layout_new(body: &mut Body, data: &mut ControlFlowData) {
-  //println!("\nSchedule: {:?}", body);
-  //println!("entry: {:?}", body.entry);
-
-  let mut remaining = body.elems.clone();
-  let mut exits = vec![body.entry];
-  while remaining.len() > 0 {
-    let cur = select_next(&exits, body, &remaining, data);
-    if !remaining.remove(&cur) { panic!("tried to schedule an unavailable block"); }
-
-    body.layout.push(cur);
-    exits = body.exits(cur, data).unwrap();
-  }
-
-  // Recurse into sub-elements and schedule them
-  for id in &body.layout {
-    let mut elem = data.checkout(*id);
-    match &mut elem.detail {
-      Detail::BasicBlock(_) => (),
-      Detail::Loop(lp) => schedule_layout(&mut lp.body, data),
-      Detail::If(ifstmt) => schedule_layout(&mut ifstmt.then_body, data),
-    }
-    data.release(*id, elem);
-  }
-}
-
-fn schedule_layout_old(body: &mut Body, data: &mut ControlFlowData) {
-  body.layout = itertools::sorted(body.elems.iter().cloned()).collect();
-  for id in &body.layout {
-    let mut elem = data.checkout(*id);
-    match &mut elem.detail {
-      Detail::BasicBlock(_) => (),
-      Detail::Loop(lp) => schedule_layout(&mut lp.body, data),
-      Detail::If(ifstmt) => schedule_layout(&mut ifstmt.then_body, data),
-    }
-    data.release(*id, elem);
-  }
-}
-
 fn label_blocks(cf: &mut ControlFlow) {
   // Two phase to avoid an immutable ref <=> mutable ref collision
 
@@ -760,27 +704,3 @@ pub fn print(cf: &ControlFlow) {
     }
   }
 }
-
-// pub fn print(cf: &ControlFlow) {
-//   print_recurse(&cf.func.body, &cf.data, 0)
-// }
-
-// fn print_recurse(body: &Body, data: &ControlFlowData, indent_level: usize) {
-//   for id in &body.layout {
-//     print!("{:indent$}{:?} | ", "", id, indent=2*indent_level);
-//     let elem = data.get(*id);
-//     let exits: Vec<_> = elem.exits.iter().map(|x| x.0).collect();
-//     match &elem.detail {
-//       Detail::BasicBlock(b) => println!("BasicBlock({})", b.blkref.0),
-//       Detail::Loop(lp) => {
-//         let backedges: Vec<_> = lp.backedges.iter().cloned().map(|x| x.0).collect();
-//         println!("Loop [entry={}, exits={:?}, backedges={:?}]", elem.entry.0, exits, backedges);
-//         print_recurse(&lp.body, data, indent_level+1);
-//       }
-//       Detail::If(i) => {
-//         println!("If [entry={}, exits={:?}]", elem.entry.0, exits);
-//         print_recurse(&i.then_body, data, indent_level+1);
-//       }
-//     }
-//   }
-// }
