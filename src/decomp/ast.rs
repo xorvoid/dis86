@@ -224,7 +224,11 @@ impl<'a> Builder<'a> {
         }
         Expr::Call(Box::new(Expr::Name(funcname)), args)
       }
-      ir::Opcode::Phi => Expr::UnimplPhi,
+      ir::Opcode::Phi => {
+        // generally handled by jmp, but other expressions that use a phi might end up here
+        // so, we can simply return our refname
+        Expr::Name(self.ref_name(r))
+      }
       ir::Opcode::Pin => Expr::UnimplPin,
       _ => {
         Expr::None
@@ -259,6 +263,32 @@ impl<'a> Builder<'a> {
     Label(format!("{}", self.ir.blocks[bb.blkref.0].name))
   }
 
+  fn emit_phis(&mut self, blk: &mut Block, src: ir::BlockRef, dst: ir::BlockRef) {
+    // first, which pred is the src block?
+    let mut idx = None;
+    for (i, pred) in self.ir.blocks[dst.0].preds.iter().enumerate() {
+      if *pred == src {
+        idx = Some(i);
+        break;
+      }
+    }
+    let idx = idx.unwrap();
+
+    // next, for each phi, generate code for the pred idx
+    for i in self.ir.blocks[dst.0].instrs.range() {
+      let r = ir::Ref::Instr(dst, i);
+      let instr = self.ir.instr(r).unwrap();
+      if instr.opcode != ir::Opcode::Phi { continue };
+
+      let name = self.ref_name(r);
+      let rvalue = self.ref_to_expr(instr.operands[idx], 1);
+      blk.push_stmt(Stmt::Assign(Assign {
+        lhs: Expr::Name(name),
+        rhs: rvalue,
+      }));
+    }
+  }
+
   // Returns a jump condition expr if the block ends in a conditional branch
   #[must_use]
   fn emit_blk(&mut self, blk: &mut Block, bref: ir::BlockRef) -> Option<Expr> {
@@ -267,16 +297,19 @@ impl<'a> Builder<'a> {
       let instr = self.ir.instr(r).unwrap();
       match instr.opcode {
         ir::Opcode::Nop => continue,
+        ir::Opcode::Phi => continue, // handled by jmp
         ir::Opcode::Ret => {
           blk.push_stmt(Stmt::Return);
           return None;
         }
         ir::Opcode::Jmp => {
-          // TODO: Handle phis!!
+          let ir::Ref::Block(dst) = instr.operands[0] else { panic!("Expected block ref for jmp instr") };
+          self.emit_phis(blk, bref, dst);
           return None;
         }
         ir::Opcode::Jne => {
-          // TODO: Handle phis!!
+          // TODO: Maybe verify that there are no phis in the target block? This should be gaurenteed by
+          // the ir finalize, but it's probably good to do sanity checks
           let cond = self.ref_to_expr(instr.operands[0], 0);
           return Some(cond);
         }
