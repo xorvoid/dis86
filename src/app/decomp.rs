@@ -18,8 +18,9 @@ fn print_help(appname: &str) {
   println!("  --end-addr        end seg:off address (required)");
   println!("");
   println!("EMIT MODES:");
-  println!("  --emit-ir-unopt   path to emit unoptimized SSA IR (optional)");
-  println!("  --emit-ir         path to emit optimized SSA IR (optional)");
+  println!("  --emit-ir-initial path to emit initial unoptimized SSA IR (optional)");
+  println!("  --emit-ir-opt     path to emit optimized SSA IR (optional)");
+  println!("  --emit-ir-final   path to emit final SSA IR before control-flow analysis (optional)");
   println!("  --emit-graph      path to emit a control-flow-graph dot file (optional)");
   println!("  --emit-ctrlflow   path to emit the inferred control-flow structure (optional)");
   println!("  --emit-ast        path to emit the constructed AST (optional)");
@@ -42,8 +43,9 @@ struct Args {
   start_addr: SegOff,
   end_addr: SegOff,
 
-  emit_ir_unopt: Option<String>,
-  emit_ir: Option<String>,
+  emit_ir_initial: Option<String>,
+  emit_ir_opt: Option<String>,
+  emit_ir_final: Option<String>,
   emit_graph: Option<String>,
   emit_ctrlflow: Option<String>,
   emit_ast: Option<String>,
@@ -61,16 +63,17 @@ fn parse_args(appname: &str) -> Result<Args, pico_args::Error> {
 
   // Parse out all args
   let args = Args {
-    config: pargs.value_from_str("--config")?,
-    binary: pargs.value_from_str("--binary")?,
-    start_addr: pargs.value_from_str("--start-addr")?,
-    end_addr: pargs.value_from_str("--end-addr")?,
-    emit_ir_unopt: pargs.opt_value_from_str("--emit-ir-unopt")?,
-    emit_ir: pargs.opt_value_from_str("--emit-ir")?,
-    emit_graph: pargs.opt_value_from_str("--emit-graph")?,
-    emit_ctrlflow: pargs.opt_value_from_str("--emit-ctrlflow")?,
-    emit_ast: pargs.opt_value_from_str("--emit-ast")?,
-    emit_code: pargs.opt_value_from_str("--emit-code")?,
+    config:          pargs.value_from_str("--config")?,
+    binary:          pargs.value_from_str("--binary")?,
+    start_addr:      pargs.value_from_str("--start-addr")?,
+    end_addr:        pargs.value_from_str("--end-addr")?,
+    emit_ir_initial: pargs.opt_value_from_str("--emit-ir-initial")?,
+    emit_ir_opt:     pargs.opt_value_from_str("--emit-ir-opt")?,
+    emit_ir_final:   pargs.opt_value_from_str("--emit-ir-final")?,
+    emit_graph:      pargs.opt_value_from_str("--emit-graph")?,
+    emit_ctrlflow:   pargs.opt_value_from_str("--emit-ctrlflow")?,
+    emit_ast:        pargs.opt_value_from_str("--emit-ast")?,
+    emit_code:       pargs.opt_value_from_str("--emit-code")?,
   };
 
   // It's up to the caller what to do with the remaining arguments.
@@ -109,7 +112,7 @@ pub fn run(appname: &str) {
   }
 
   let mut ir = build::from_instrs(&instr_list, &cfg);
-  if let Some(path) = args.emit_ir_unopt.as_ref() {
+  if let Some(path) = args.emit_ir_initial.as_ref() {
     write_to_path(path, &format!("{}", ir));
   }
 
@@ -120,7 +123,12 @@ pub fn run(appname: &str) {
   opt::mem_symbol_to_ref(&mut ir);
   opt::optimize(&mut ir);
 
-  if let Some(path) = args.emit_ir.as_ref() {
+  if let Some(path) = args.emit_ir_opt.as_ref() {
+    let text = ir::display::display_ir_with_uses(&ir).unwrap();
+    write_to_path(path, &format!("{}", &text));
+  }
+
+  if let Some(path) = args.emit_ir_final.as_ref() {
     let text = ir::display::display_ir_with_uses(&ir).unwrap();
     write_to_path(path, &format!("{}", &text));
   }
