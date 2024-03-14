@@ -2,6 +2,8 @@ use crate::decomp::ir;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
+// FIXME: THE 'remap' HERE IS REALLY CLUNKY AND FRAGILE: IT NEEDS TO BE COMPLETELY RETHOUGHT
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ElemId(pub usize);
 
@@ -552,19 +554,30 @@ fn infer_structure(body: &mut Body, exclude: Option<&HashSet<ElemId>>, data: &mu
 }
 
 fn schedule_layout(body: &mut Body, data: &mut ControlFlowData) {
-  schedule_layout_body(body, data)
+  let _ = schedule_layout_body(body, None, data);
 }
 
 struct Parent<'a> {
   body: &'a Body,
   remain: &'a HashSet<ElemId>,
+  next: Box<Option<&'a Parent<'a>>>,
 }
 
 impl<'a> Parent<'a> {
   fn elem_avail(&self, id: ElemId) -> Option<ElemId> {
-    let id = self.body.lookup_from_id(id)?;
-    self.remain.get(&id)?;
-    Some(id)
+    // Search immediate parent
+    if self.remain.len() > 0 {
+      if let Some(id) = self.body.lookup_from_id(id) {
+        if self.remain.get(&id).is_some() { return Some(id); }
+      }
+    }
+
+    // No blocks remaining immediate parent, search parent's parent (if possible)
+    if let Some(next) = self.next.as_ref() {
+      next.elem_avail(id)
+    } else {
+      None
+    }
   }
 }
 
@@ -603,7 +616,7 @@ fn schedule_layout_basic_block(elem: &mut Elem, parent: &Parent, _data: &mut Con
 #[must_use]
 fn schedule_layout_loop(elem: &mut Elem, parent: &Parent, data: &mut ControlFlowData) -> Option<ElemId> {
   let Detail::Loop(lp) = &mut elem.detail else { panic!("Expected basic block") };
-  schedule_layout_body(&mut lp.body, data);
+  let _ = schedule_layout_body(&mut lp.body, None, data);
   elem.jump = Some(Jump::None);
   for exit in elem.exits.iter().cloned() {
     if let Some(exit) = parent.elem_avail(exit) {
@@ -618,7 +631,7 @@ fn schedule_layout_ifstmt(elem: &mut Elem, parent: &Parent, data: &mut ControlFl
   let Detail::If(ifstmt) = &mut elem.detail else { panic!("Expected basic block") };
 
   // schedule then-body
-  schedule_layout_body(&mut ifstmt.then_body, data);
+  let then_next = schedule_layout_body(&mut ifstmt.then_body, Some(parent), data);
 
   // figure out next for the exit/join-block
   let (next, jump) = if let Some(exit) = parent.elem_avail(ifstmt.exit) {
@@ -626,6 +639,9 @@ fn schedule_layout_ifstmt(elem: &mut Elem, parent: &Parent, data: &mut ControlFl
   } else {
     (None, Jump::UncondTarget(ifstmt.exit))
   };
+
+  // By construction.. then-body and ifstmt should have made the same conclusion on "next"
+  assert!(then_next == next);
 
   elem.jump = Some(jump);
   next
@@ -643,7 +659,8 @@ fn schedule_layout_elem(id: ElemId, parent: &Parent, data: &mut ControlFlowData)
   next
 }
 
-fn schedule_layout_body(body: &mut Body, data: &mut ControlFlowData)  {
+#[must_use]
+fn schedule_layout_body(body: &mut Body, parent: Option<&Parent>, data: &mut ControlFlowData)  -> Option<ElemId> {
   let mut remaining = body.elems.clone();
   let mut next = Some(body.entry);
   while remaining.len() > 0 {
@@ -653,10 +670,11 @@ fn schedule_layout_body(body: &mut Body, data: &mut ControlFlowData)  {
     body.layout.push(cur);
 
     let parent = Parent {
-      body, remain: &remaining,
+      body, remain: &remaining, next: Box::new(parent),
     };
     next = schedule_layout_elem(cur, &parent, data);
   }
+  next
 }
 
 fn label_blocks(cf: &mut ControlFlow) {
