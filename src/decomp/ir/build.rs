@@ -1,6 +1,6 @@
 use crate::instr;
 use crate::segoff::SegOff;
-use crate::decomp::config::Config;
+use crate::decomp::config::{self, Config};
 use crate::decomp::ir::*;
 use crate::decomp::types::Type;
 use std::collections::{HashSet, HashMap};
@@ -340,56 +340,65 @@ impl IRBuilder<'_> {
     self.append_instr(Opcode::CallPtr, vec![addr]);
   }
 
+  fn process_callf_known(&mut self, func: &config::Func) {
+    let idx = self.ir.funcs.len();
+    self.ir.funcs.push(func.name.to_string());
+
+    let ret;
+    if let Some(nargs) = &func.args {
+      // Known args
+      let mut operands = vec![Ref::Func(idx)];
+      let ss = self.ir.get_var(instr::Reg::SS, self.cur);
+      let sp = self.ir.get_var(instr::Reg::SP, self.cur);
+      for i in 0..(*nargs as i32) {
+        let mut off = sp;
+        if i != 0 {
+          let k = self.ir.append_const(2*i);
+          off = self.append_instr(Opcode::Add, vec![sp, k]);
+        }
+        let val = self.append_instr(Opcode::Load16, vec![ss, off]);
+        operands.push(val);
+      }
+      ret = self.append_instr(Opcode::CallArgs, operands);
+    } else {
+      // Unknown args
+      ret = self.append_instr(Opcode::CallFar, vec![Ref::Func(idx)]);
+    }
+    match &func.ret {
+      Type::Void => (), // nothing to do
+      Type::U16 => {
+        self.ir.set_var(instr::Reg::AX, self.cur, ret);
+      }
+      Type::U32 => {
+        let upper = self.append_instr(Opcode::Upper16, vec![ret]);
+        self.ir.set_var(instr::Reg::DX, self.cur, upper);
+
+        let lower = self.append_instr(Opcode::Lower16, vec![ret]);
+        self.ir.set_var(instr::Reg::AX, self.cur, lower);
+      }
+      _ => panic!("Unsupported function return type: {}", func.ret),
+    }
+  }
+
+  fn process_callf_segoff(&mut self, addr: SegOff) {
+    if let Some(func) = self.cfg.func_lookup(addr) {
+      // Known function
+      self.process_callf_known(func);
+    } else {
+      // Unknown function
+      let seg = self.ir.append_const(addr.seg.into());
+      let off = self.ir.append_const(addr.off.into());
+      let ret = self.append_instr(Opcode::CallFar, vec![seg, off]);
+      self.ir.set_var(instr::Reg::AX, self.cur, ret);
+    }
+  }
+
   fn process_callf(&mut self, ins: &instr::Instr) {
     let instr::Operand::Far(far) = &ins.operands[0] else {
       return self.process_callf_indirect(ins);
     };
     let addr = SegOff { seg: far.seg, off: far.off };
-    if let Some(func) = self.cfg.func_lookup(addr) {
-      // Known function
-      let idx = self.ir.funcs.len();
-      self.ir.funcs.push(func.name.to_string());
-      let ret;
-      if let Some(nargs) = &func.args {
-        // Known args
-        let mut operands = vec![Ref::Func(idx)];
-        let ss = self.ir.get_var(instr::Reg::SS, self.cur);
-            let sp = self.ir.get_var(instr::Reg::SP, self.cur);
-        for i in 0..(*nargs as i32) {
-          let mut off = sp;
-          if i != 0 {
-            let k = self.ir.append_const(2*i);
-            off = self.append_instr(Opcode::Add, vec![sp, k]);
-          }
-          let val = self.append_instr(Opcode::Load16, vec![ss, off]);
-          operands.push(val);
-        }
-        ret = self.append_instr(Opcode::CallArgs, operands);
-      } else {
-        // Unknown args
-        ret = self.append_instr(Opcode::CallFar, vec![Ref::Func(idx)]);
-      }
-      match &func.ret {
-        Type::Void => (), // nothing to do
-        Type::U16 => {
-          self.ir.set_var(instr::Reg::AX, self.cur, ret);
-        }
-        Type::U32 => {
-          let upper = self.append_instr(Opcode::Upper16, vec![ret]);
-          self.ir.set_var(instr::Reg::DX, self.cur, upper);
-
-          let lower = self.append_instr(Opcode::Lower16, vec![ret]);
-          self.ir.set_var(instr::Reg::AX, self.cur, lower);
-        }
-        _ => panic!("Unsupported function return type: {}", func.ret),
-      }
-    } else {
-      // Unknown function
-          let seg = self.ir.append_const(far.seg.into());
-      let off = self.ir.append_const(far.off.into());
-      let ret = self.append_instr(Opcode::CallFar, vec![seg, off]);
-      self.ir.set_var(instr::Reg::AX, self.cur, ret);
-    }
+    self.process_callf_segoff(addr);
   }
 
   fn process_call(&mut self, ins: &instr::Instr, cs_pushed: bool) {
@@ -397,15 +406,21 @@ impl IRBuilder<'_> {
     let instr::Operand::Rel(rel) = &ins.operands[0] else {
       panic!("Expected near call to have relative operand");
     };
+    let effective = ins.rel_addr(rel);
     if cs_pushed {
-      // pop CS back off and use it to do a far call
+      // If CS was previously pushed, then the function returns
+      // via "retf", which means its juat a far-call in disguise.
+      // So, POP CS back off the stack and let's pretend it's a normal
+      // far call
       self.append_pop();
-      // TODO: IMPL FAR CALL
-    }
-    // FIXME: THIS IS DEFINITELY BROKEN
-    let k = self.ir.append_const(rel.val.into());
-    let ret = self.append_instr(Opcode::CallNear, vec![k]);
-    self.ir.set_var(instr::Reg::AX, self.cur, ret);
+      self.process_callf_segoff(effective);
+    } else {
+      // Otherwise, we assume it's actually a near call
+      let seg = self.ir.append_const(effective.seg.into());
+      let off = self.ir.append_const(effective.off.into());
+      let ret = self.append_instr(Opcode::CallNear, vec![seg, off]);
+      self.ir.set_var(instr::Reg::AX, self.cur, ret);
+    };
   }
 
   fn append_asm_instr(&mut self, ins: &instr::Instr) {
@@ -467,12 +482,14 @@ impl IRBuilder<'_> {
         let vref = self.append_asm_src_operand(&ins.operands[0]);
         let vref = self.append_instr(Opcode::Add, vec![vref, one]);
         self.append_asm_dst_operand(&ins.operands[0], vref);
+        self.append_update_flags(vref);
       }
       instr::Opcode::OP_DEC => {
         let one = self.ir.append_const(1);
         let vref = self.append_asm_src_operand(&ins.operands[0]);
         let vref = self.append_instr(Opcode::Sub, vec![vref, one]);
         self.append_asm_dst_operand(&ins.operands[0], vref);
+        self.append_update_flags(vref);
       }
       instr::Opcode::OP_JMP => {
         let instr::Operand::Rel(rel) = &ins.operands[0] else { panic!("Expected relative offset operand for JMP") };
