@@ -91,23 +91,23 @@ impl<'a> IRBuilder<'a> {
     this.ir.seal_block(entry);
 
     // Set initial register values
-    this.ir.set_var(instr::Reg::AX, this.cur, Ref::Init("ax"));
-    this.ir.set_var(instr::Reg::CX, this.cur, Ref::Init("cx"));
-    this.ir.set_var(instr::Reg::DX, this.cur, Ref::Init("dx"));
-    this.ir.set_var(instr::Reg::BX, this.cur, Ref::Init("bx"));
+    this.ir.set_var(instr::Reg::AX, this.cur, Ref::Init("AX"));
+    this.ir.set_var(instr::Reg::CX, this.cur, Ref::Init("CX"));
+    this.ir.set_var(instr::Reg::DX, this.cur, Ref::Init("DX"));
+    this.ir.set_var(instr::Reg::BX, this.cur, Ref::Init("BX"));
 
-    this.ir.set_var(instr::Reg::SP, this.cur, Ref::Init("sp"));
-    this.ir.set_var(instr::Reg::BP, this.cur, Ref::Init("bp"));
-    this.ir.set_var(instr::Reg::SI, this.cur, Ref::Init("si"));
-    this.ir.set_var(instr::Reg::DI, this.cur, Ref::Init("di"));
+    this.ir.set_var(instr::Reg::SP, this.cur, Ref::Init("SP"));
+    this.ir.set_var(instr::Reg::BP, this.cur, Ref::Init("BP"));
+    this.ir.set_var(instr::Reg::SI, this.cur, Ref::Init("SI"));
+    this.ir.set_var(instr::Reg::DI, this.cur, Ref::Init("DI"));
 
-    this.ir.set_var(instr::Reg::ES, this.cur, Ref::Init("es"));
-    this.ir.set_var(instr::Reg::CS, this.cur, Ref::Init("cs"));
-    this.ir.set_var(instr::Reg::SS, this.cur, Ref::Init("ss"));
-    this.ir.set_var(instr::Reg::DS, this.cur, Ref::Init("ds"));
+    this.ir.set_var(instr::Reg::ES, this.cur, Ref::Init("ES"));
+    this.ir.set_var(instr::Reg::CS, this.cur, Ref::Init("CS"));
+    this.ir.set_var(instr::Reg::SS, this.cur, Ref::Init("SS"));
+    this.ir.set_var(instr::Reg::DS, this.cur, Ref::Init("DS"));
 
-    this.ir.set_var(instr::Reg::IP, this.cur, Ref::Init("ip"));
-    this.ir.set_var(instr::Reg::FLAGS, this.cur, Ref::Init("flags"));
+    this.ir.set_var(instr::Reg::IP, this.cur, Ref::Init("IP"));
+    this.ir.set_var(instr::Reg::FLAGS, this.cur, Ref::Init("FLAGS"));
 
     this
   }
@@ -402,7 +402,6 @@ impl IRBuilder<'_> {
   }
 
   fn process_call(&mut self, ins: &instr::Instr, cs_pushed: bool) {
-    println!("cs_pushed: {}", cs_pushed);
     let instr::Operand::Rel(rel) = &ins.operands[0] else {
       panic!("Expected near call to have relative operand");
     };

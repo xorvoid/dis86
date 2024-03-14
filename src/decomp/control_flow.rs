@@ -100,6 +100,14 @@ pub struct ControlFlow {
   pub func: Function,
 }
 
+impl ControlFlow {
+  #[allow(unused)]
+  fn debug_dump(&self) {
+    self.data.debug_dump();
+    println!("{:?}", self.func.body);
+  }
+}
+
 impl Loop {
   fn new(entry: ElemId) -> Self {
     Self {
@@ -252,6 +260,7 @@ impl ControlFlow {
   pub fn from_ir(ir: &ir::IR) -> Self {
     let mut cf = Self::from_ir_naive(ir);
     infer_structure(&mut cf.func.body, None, &mut cf.data);
+    //cf.debug_dump();
     schedule_layout(&mut cf.func.body, &mut cf.data);
     label_blocks(&mut cf);
     cf
@@ -666,7 +675,7 @@ fn schedule_layout_elem(id: ElemId, parent: &Parent, data: &mut ControlFlowData)
 #[must_use]
 fn schedule_layout_body(body: &mut Body, parent: Option<&Parent>, data: &mut ControlFlowData)  -> Option<ElemId> {
   let mut remaining = body.elems.clone();
-  let mut next = Some(body.entry);
+  let mut next = Some(body.lookup_from_id(body.entry).unwrap());
   while remaining.len() > 0 {
     let cur = next.unwrap();
 

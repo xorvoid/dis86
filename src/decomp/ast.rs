@@ -240,11 +240,15 @@ impl<'a> Builder<'a> {
       Some(k) => return Expr::Const(k as i64),
       None => (),
     }
+    if let ir::Ref::Init(name) = r {
+      return Expr::Name(name.to_string());
+    }
     if depth != 0 && self.lookup_uses(r) != 1 {
       let name = self.ref_name(r);
       return Expr::Name(name);
     }
 
+    assert!(matches!(r, ir::Ref::Instr(_, _)));
     if let Some(expr) = self.ref_to_binary_expr(r, depth, inverted) {
       return expr;
     }
@@ -287,6 +291,18 @@ impl<'a> Builder<'a> {
           args.push(self.ref_to_expr(*a, depth+1));
         }
         Expr::Call(Box::new(Expr::Name(funcname)), args)
+      }
+      ir::Opcode::CallFar => {
+        let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, depth+1)).collect();
+        Expr::Abstract("CALL_FAR", exprs)
+      }
+      ir::Opcode::CallNear => {
+        let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, depth+1)).collect();
+        Expr::Abstract("CALL_NEAR", exprs)
+      }
+      ir::Opcode::CallPtr => {
+        let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, depth+1)).collect();
+        Expr::Abstract("CALL_PTR", exprs)
       }
       ir::Opcode::Phi => {
         // generally handled by jmp, but other expressions that use a phi might end up here
