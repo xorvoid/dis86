@@ -229,7 +229,6 @@ impl<'a> Builder<'a> {
         // so, we can simply return our refname
         Expr::Name(self.ref_name(r))
       }
-      ir::Opcode::Pin => Expr::UnimplPin,
       ir::Opcode::Make32 => {
         let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, depth+1)).collect();
         Expr::Abstract("MAKE_32", exprs)
@@ -306,6 +305,7 @@ impl<'a> Builder<'a> {
       match instr.opcode {
         ir::Opcode::Nop => continue,
         ir::Opcode::Phi => continue, // handled by jmp
+        ir::Opcode::Pin => continue, // ignored
         ir::Opcode::Ret => {
           blk.push_stmt(Stmt::Return);
           return None;

@@ -167,7 +167,6 @@ impl<'a> Gen<'a> {
       Stmt::Return => {
         self.text("return;")?;
         self.endline()?;
-        self.endline()?;
       }
       Stmt::Loop(lp) => {
         self.text("while (1) ")?;
