@@ -70,18 +70,24 @@ impl<'a> Gen<'a> {
     self.text(s)
   }
 
-  fn expr(&mut self, expr: &Expr) -> fmt::Result {
+  fn expr(&mut self, expr: &Expr, level: usize) -> fmt::Result {
     match expr {
       Expr::Unary(u) => {
         self.unary_oper(&u.op)?;
-        self.expr(&u.rhs)?;
+        self.expr(&u.rhs, level+1)?;
       }
       Expr::Binary(b) => {
-        self.text("(")?;
-        self.expr(&b.lhs)?;
+        if level > 0 {
+          self.text("(")?;
+        }
+        self.expr(&b.lhs, level+1)?;
+        self.text(" ")?;
         self.binary_oper(&b.op)?;
-        self.expr(&b.rhs)?;
-        self.text(")")?;
+        self.text(" ")?;
+        self.expr(&b.rhs, level+1)?;
+        if level > 0 {
+          self.text(")")?;
+        }
       }
       Expr::Const(k) => {
         let s = if *k > 128 {
@@ -94,34 +100,20 @@ impl<'a> Gen<'a> {
       Expr::Name(n) => {
         self.text(n)?;
       }
-      Expr::Ptr16(seg, off) => {
-        self.text("PTR_16(")?;
-        self.expr(seg)?;
-        self.text(", ")?;
-        self.expr(off)?;
-        self.text(")")?;
-      }
-      Expr::Ptr32(seg, off) => {
-        self.text("PTR_32(")?;
-        self.expr(seg)?;
-        self.text(", ")?;
-        self.expr(off)?;
-        self.text(")")?;
-      }
       Expr::Cast(typ, expr) => {
         self.text(&format!("({})", typ))?;
-        self.expr(expr)?;
+        self.expr(expr, level+1)?;
       }
       Expr::Deref(expr) => {
         self.text("*")?;
-        self.expr(expr)?;
+        self.expr(expr, level+1)?;
       }
       Expr::Call(name, args) => {
-        self.expr(name)?;
+        self.expr(name, level+1)?;
         self.text("(")?;
         for (i, arg) in args.iter().enumerate() {
           if i != 0 { self.text(", ")?; }
-          self.expr(arg)?;
+          self.expr(arg, 0)?;
         }
         self.text(")")?;
       }
@@ -129,7 +121,7 @@ impl<'a> Gen<'a> {
         self.text(&format!("{}(", name))?;
         for (i, arg) in args.iter().enumerate() {
           if i != 0 { self.text(", ")?; }
-          self.expr(arg)?;
+          self.expr(arg, 0)?;
         }
         self.text(")")?;
       }
@@ -152,9 +144,9 @@ impl<'a> Gen<'a> {
         self.endline()?;
       }
       Stmt::Assign(s) => {
-        self.expr(&s.lhs)?;
+        self.expr(&s.lhs, 0)?;
         self.text(" = ")?;
-        self.expr(&s.rhs)?;
+        self.expr(&s.rhs, 0)?;
         self.text(";")?;
         self.endline()?;
       }
@@ -164,7 +156,7 @@ impl<'a> Gen<'a> {
       }
       Stmt::CondGoto(g) => {
         self.text("if (")?;
-        self.expr(&g.cond)?;
+        self.expr(&g.cond, 0)?;
         self.text(") ")?;
         self.goto(&g.label_true)?;
         self.text("else ")?;
@@ -186,7 +178,7 @@ impl<'a> Gen<'a> {
       }
       Stmt::If(ifstmt) => {
         self.text("if (")?;
-        self.expr(&ifstmt.cond)?;
+        self.expr(&ifstmt.cond, 0)?;
         self.text(") ")?;
         self.enter_block()?;
         self.endline()?;

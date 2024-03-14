@@ -17,16 +17,8 @@ vis name:
      just run {{name}} --emit-graph /tmp/ctrlflow.dot && dot -Tpng /tmp/ctrlflow.dot > /tmp/control_flow_graph.png && open /tmp/control_flow_graph.png
 
 # A temporary command for dev build-test-cycle
-run-dis: build
-     ./target/debug/dis86 dis --binary ../gizmo/dis/exe.bin --start-addr 0622:0922 --end-addr 0622:09e5
-
-# A temporary command for dev build-test-cycle
 run name *opts: build
      ./target/debug/dis86 decomp --config ../gizmo/build/src/hooklib/dis86_config.bsl --binary ../gizmo/dis/exe.bin --name {{name}} {{opts}}
-
-# A temporary command for dev build-test-cycle
-run-decomp *opts: build
-     ./target/debug/dis86 decomp --config ../gizmo/build/src/hooklib/dis86_config.bsl --binary ../gizmo/dis/exe.bin --start-addr 0622:0922 --end-addr 0622:09e5 --emit-code -
 
 # A temporary command for dev build-test-cycle
 run-old:

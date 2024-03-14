@@ -14,8 +14,6 @@ pub enum Expr {
   Abstract(&'static str, Vec<Expr>),
   Deref(Box<Expr>),
   Cast(&'static str, Box<Expr>),
-  Ptr16(Box<Expr>, Box<Expr>),
-  Ptr32(Box<Expr>, Box<Expr>),
   UnimplPhi,
   UnimplPin,
 }
@@ -190,12 +188,12 @@ impl<'a> Builder<'a> {
       ir::Opcode::Load16 => {
         let seg = self.ref_to_expr(instr.operands[0], depth+1);
         let off = self.ref_to_expr(instr.operands[1], depth+1);
-        Expr::Deref(Box::new(Expr::Ptr16(Box::new(seg), Box::new(off))))
+        Expr::Deref(Box::new(Expr::Abstract("PTR_16", vec![seg, off])))
       }
       ir::Opcode::Load32 => {
         let seg = self.ref_to_expr(instr.operands[0], depth+1);
         let off = self.ref_to_expr(instr.operands[1], depth+1);
-        Expr::Deref(Box::new(Expr::Ptr32(Box::new(seg), Box::new(off))))
+        Expr::Deref(Box::new(Expr::Abstract("PTR_32", vec![seg, off])))
       }
       ir::Opcode::Upper16 => {
         let lhs = self.ref_to_expr(instr.operands[0], depth+1);
@@ -329,7 +327,7 @@ impl<'a> Builder<'a> {
         ir::Opcode::Store16 => {
           let seg = self.ref_to_expr(instr.operands[0], 1);
           let off = self.ref_to_expr(instr.operands[1], 1);
-          let lhs = Expr::Deref(Box::new(Expr::Ptr16(Box::new(seg), Box::new(off))));
+          let lhs = Expr::Deref(Box::new(Expr::Abstract("PTR_16", vec![seg, off])));
           let rhs = self.ref_to_expr(instr.operands[2], 0);
           blk.push_stmt(Stmt::Assign(Assign { lhs, rhs }));
         }
