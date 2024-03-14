@@ -1,4 +1,5 @@
 use pico_args;
+use crate::intel_syntax;
 use crate::segoff::SegOff;
 use crate::decode::Decoder;
 use crate::decomp::ir::{self, build, opt, sym};
@@ -13,11 +14,18 @@ fn print_help(appname: &str) {
   println!("usage: {} dis OPTIONS", appname);
   println!("");
   println!("REQUIRED OPTIONS:");
+  println!("  --config          path to binary configuration file (required)");
   println!("  --binary          path to binary on the filesystem (required)");
-  println!("  --start-addr      start seg:off address (required)");
-  println!("  --end-addr        end seg:off address (required)");
+  println!("");
+  println!("MODE: ADDRESS RANGE");
+  println!("  --start-addr      start seg:off address (maybe required)");
+  println!("  --end-addr        end seg:off address (maybe required)");
+  println!("");
+  println!("MODE: FUNCTION NAME");
+  println!("  --name            lookup address range by name in config (maybe required)");
   println!("");
   println!("EMIT MODES:");
+  println!("  --emit-dis        path to emit disassembly (optional)");
   println!("  --emit-ir-initial path to emit initial unoptimized SSA IR (optional)");
   println!("  --emit-ir-sym     path to emit symbolized SSA IR (optional)");
   println!("  --emit-ir-opt     path to emit optimized SSA IR (optional)");
@@ -41,9 +49,12 @@ fn write_to_path(path: &str, data: &str) {
 struct Args {
   binary: String,
   config: String,
-  start_addr: SegOff,
-  end_addr: SegOff,
 
+  start_addr: Option<SegOff>,
+  end_addr: Option<SegOff>,
+  name: Option<String>,
+
+  emit_dis: Option<String>,
   emit_ir_initial: Option<String>,
   emit_ir_sym: Option<String>,
   emit_ir_opt: Option<String>,
@@ -67,8 +78,10 @@ fn parse_args(appname: &str) -> Result<Args, pico_args::Error> {
   let args = Args {
     config:          pargs.value_from_str("--config")?,
     binary:          pargs.value_from_str("--binary")?,
-    start_addr:      pargs.value_from_str("--start-addr")?,
-    end_addr:        pargs.value_from_str("--end-addr")?,
+    start_addr:      pargs.opt_value_from_str("--start-addr")?,
+    end_addr:        pargs.opt_value_from_str("--end-addr")?,
+    name:            pargs.opt_value_from_str("--name")?,
+    emit_dis:        pargs.opt_value_from_str("--emit-dis")?,
     emit_ir_initial: pargs.opt_value_from_str("--emit-ir-initial")?,
     emit_ir_opt:     pargs.opt_value_from_str("--emit-ir-opt")?,
     emit_ir_sym:     pargs.opt_value_from_str("--emit-ir-sym")?,
@@ -89,6 +102,35 @@ fn parse_args(appname: &str) -> Result<Args, pico_args::Error> {
   Ok(args)
 }
 
+struct Func {
+  name: String,
+  start: SegOff,
+  end: SegOff,
+}
+
+impl Func {
+  fn from_config_name(cfg: &Config, name: &str) -> Func {
+    let Some(func) = cfg.func_lookup_by_name(name) else {
+      panic!("Failed to lookup function named: {}", name);
+    };
+    let Some(end) = func.end else {
+      panic!("Function has no 'end' addr defined in config");
+    };
+    Func {
+      name: name.to_string(),
+      start: func.start,
+      end,
+    }
+  }
+
+  fn from_start_and_end(start: Option<SegOff>, end: Option<SegOff>) -> Func {
+    let Some(start) = start else { panic!("No start address provided") };
+    let Some(end) = end else { panic!("No end address provided") };
+    let name = format!("func_{:08x}__{:04x}_{:04x}", start.abs(), start.seg, start.off);
+    Func { name, start, end }
+  }
+}
+
 pub fn run(appname: &str) {
   let args = match parse_args(appname) {
     Ok(v) => v,
@@ -100,8 +142,13 @@ pub fn run(appname: &str) {
 
   let cfg = Config::from_path(&args.config).unwrap();
 
-  let start_idx = args.start_addr.abs();
-  let end_idx = args.end_addr.abs();
+  let f = if let Some(name) = args.name.as_ref() {
+    Func::from_config_name(&cfg, name)
+  } else {
+    Func::from_start_and_end(args.start_addr, args.end_addr)
+  };
+  let start_idx = f.start.abs();
+  let end_idx = f.end.abs();
 
   let dat = match std::fs::read(&args.binary) {
     Ok(dat) => dat,
@@ -110,7 +157,11 @@ pub fn run(appname: &str) {
 
   let decoder = Decoder::new(&dat[start_idx..end_idx], start_idx);
   let mut instr_list = vec![];
-  for (instr, _raw) in decoder {
+  for (instr, raw) in decoder {
+    // HAX WRONG
+    if args.emit_dis.is_some() {
+      println!("{}", intel_syntax::format(&instr, raw, true).unwrap());
+    }
     instr_list.push(instr);
   }
 
@@ -153,7 +204,7 @@ pub fn run(appname: &str) {
     write_to_path(path, &text);
   }
 
-  let ast = ast::Function::from_ir("my_function", &ir, &ctrlflow);
+  let ast = ast::Function::from_ir(&f.name, &ir, &ctrlflow);
   if let Some(path) = args.emit_ast.as_ref() {
     let text = format!("{:#?}", ast);
     write_to_path(path, &text);

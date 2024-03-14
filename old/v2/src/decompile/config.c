@@ -32,7 +32,7 @@ config_t * config_read_new(const char *path)
     if (type != BSL_TYPE_NODE) FAIL("Expected function properties");
     bsl_t *f = (bsl_t*)val;
 
-    const char *addr_str = bsl_get_str(f, "addr");
+    const char *addr_str = bsl_get_str(f, "start");
     if (!addr_str) FAIL("No function addr property for '%s'", key);
 
     const char *ret_str = bsl_get_str(f, "ret");

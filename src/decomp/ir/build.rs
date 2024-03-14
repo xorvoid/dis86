@@ -532,6 +532,23 @@ impl IRBuilder<'_> {
         let vref = self.append_instr(Opcode::Sub, vec![a, b]);
         self.append_update_flags(vref);
       }
+      instr::Opcode::OP_CWD => {
+        let src = self.append_asm_src_operand(&ins.operands[1]);
+        let vref = self.append_instr(Opcode::SignExtTo32, vec![src]);
+        let upper = self.append_instr(Opcode::Upper16, vec![vref]);
+        self.append_asm_dst_operand(&ins.operands[0], upper);
+      }
+      instr::Opcode::OP_DIV => {
+        let upper_in = self.append_asm_src_operand(&ins.operands[0]);
+        let lower_in = self.append_asm_src_operand(&ins.operands[1]);
+        let divisor = self.append_asm_src_operand(&ins.operands[2]);
+        let dividend = self.append_instr(Opcode::Make32, vec![upper_in, lower_in]);
+        let quotient = self.append_instr(Opcode::UDiv, vec![dividend, divisor]);
+        let upper_out = self.append_instr(Opcode::Upper16, vec![quotient]);
+        let lower_out = self.append_instr(Opcode::Lower16, vec![quotient]);
+        self.append_asm_dst_operand(&ins.operands[0], upper_out);
+        self.append_asm_dst_operand(&ins.operands[1], lower_out);
+      }
       _ => panic!("Unimpl opcode: {:?}", ins.opcode),
     }
   }

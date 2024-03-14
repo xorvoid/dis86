@@ -6,12 +6,12 @@ type FlowIter<'a> = std::iter::Peekable<control_flow::ControlFlowIter<'a>>;
 
 #[derive(Debug)]
 pub enum Expr {
-  None,
   Unary(Box<UnaryExpr>),
   Binary(Box<BinaryExpr>),
   Const(i64),
   Name(String),
   Call(Box<Expr>, Vec<Expr>),
+  Abstract(&'static str, Vec<Expr>),
   Deref(Box<Expr>),
   Cast(&'static str, Box<Expr>),
   Ptr16(Box<Expr>, Box<Expr>),
@@ -33,7 +33,7 @@ pub struct UnaryExpr {
 
 #[derive(Debug)]
 pub enum BinaryOperator {
-  Add, Sub, And, Or, Xor, Shl, Shr, Eq, Neq, Gt, Geq, Lt, Leq,
+  Add, Sub, UDiv, And, Or, Xor, Shl, Shr, Eq, Neq, Gt, Geq, Lt, Leq,
 }
 
 #[derive(Debug)]
@@ -77,7 +77,6 @@ pub struct If {
 
 #[derive(Debug)]
 pub enum Stmt {
-  None,
   Label(Label),
   Instr(ir::Ref),
   Expr(Expr),
@@ -147,6 +146,7 @@ impl<'a> Builder<'a> {
     let ast_op = match instr.opcode {
       ir::Opcode::Add => BinaryOperator::Add,
       ir::Opcode::Sub => BinaryOperator::Sub,
+      ir::Opcode::UDiv => BinaryOperator::UDiv,
       ir::Opcode::And => BinaryOperator::And,
       ir::Opcode::Or => BinaryOperator::Or,
       ir::Opcode::Xor => BinaryOperator::Xor,
@@ -230,8 +230,16 @@ impl<'a> Builder<'a> {
         Expr::Name(self.ref_name(r))
       }
       ir::Opcode::Pin => Expr::UnimplPin,
-      _ => {
-        Expr::None
+      ir::Opcode::Make32 => {
+        let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, depth+1)).collect();
+        Expr::Abstract("MAKE_32", exprs)
+      }
+      ir::Opcode::SignExtTo32 => {
+        let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, depth+1)).collect();
+        Expr::Abstract("SIGNEXT_32", exprs)
+      }
+      opcode @ _ => {
+        panic!("Unimplemented {:?} in ast converter", opcode);
       }
     }
   }

@@ -76,6 +76,8 @@ pub enum Opcode {
   And,
   Or,
   Xor,
+  UDiv,
+  SignExtTo32,
   Load8,
   Load16,
   Load32,
@@ -93,6 +95,7 @@ pub enum Opcode {
   WriteArr16,
   Lower16,     // |n: u32| => n as u16
   Upper16,     // |n: u32| => (n >> 16) as u16
+  Make32,      // |high: u16, low: u16| => (high as u32) << 16 | (low as u32)
   UpdateFlags,
   EqFlags,
   NeqFlags,
@@ -128,6 +131,8 @@ impl Opcode {
       Opcode::And         => "and",
       Opcode::Or          => "or",
       Opcode::Xor         => "xor",
+      Opcode::UDiv        => "udiv",
+      Opcode::SignExtTo32 => "signext32",
       //Opcode::AddrOf      => "addrof",
       Opcode::Load8       => "load8",
       Opcode::Load16      => "load16",
@@ -146,6 +151,7 @@ impl Opcode {
       Opcode::WriteArr16  => "writearr16",
       Opcode::Lower16     => "lower16",
       Opcode::Upper16     => "upper16",
+      Opcode::Make32      => "make32",
       Opcode::UpdateFlags => "updf",
       Opcode::EqFlags     => "eqf",
       Opcode::NeqFlags    => "neqf",

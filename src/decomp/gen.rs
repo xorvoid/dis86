@@ -54,6 +54,7 @@ impl<'a> Gen<'a> {
     let s = match oper {
       BinaryOperator::Add => "+",
       BinaryOperator::Sub => "-",
+      BinaryOperator::UDiv => "/",
       BinaryOperator::And => "&",
       BinaryOperator::Or  => "|",
       BinaryOperator::Xor => "^",
@@ -124,6 +125,14 @@ impl<'a> Gen<'a> {
         }
         self.text(")")?;
       }
+      Expr::Abstract(name, args) => {
+        self.text(&format!("{}(", name))?;
+        for (i, arg) in args.iter().enumerate() {
+          if i != 0 { self.text(", ")?; }
+          self.expr(arg)?;
+        }
+        self.text(")")?;
+      }
       _ => self.text(&format!("UNIMPL_EXPR /* {:?} */", expr))?,
     }
     Ok(())
@@ -137,7 +146,6 @@ impl<'a> Gen<'a> {
 
   fn stmt(&mut self, stmt: &Stmt) -> fmt::Result {
     match stmt {
-      Stmt::None => (),
       Stmt::Label(l) => {
         self.suppress_indent();
         self.text(&format!("{}:;", l.0))?;
@@ -202,7 +210,7 @@ impl<'a> Gen<'a> {
   }
 
   fn func(&mut self, func: &Function) -> fmt::Result {
-    self.text(&format!("void {}()", func.name))?;
+    self.text(&format!("void {}(void)", func.name))?;
     self.endline()?;
     self.enter_block()?;
     self.endline()?;

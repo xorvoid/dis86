@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SegOff {
   pub seg: u16,
   pub off: u16,

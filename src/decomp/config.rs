@@ -4,7 +4,8 @@ use crate::bsl;
 #[derive(Debug)]
 pub struct Func {
   pub name: String,
-  pub addr: SegOff,
+  pub start: SegOff,
+  pub end: Option<SegOff>,
   pub ret:  String,
   pub args: Option<u16>,  // None means "unknown", Some(0) means "no args"
   pub pop_args_after_call: bool,
@@ -35,7 +36,17 @@ impl Config {
   pub fn func_lookup(&self, addr: SegOff) -> Option<&Func> {
     // TODO: Consider something better than linear search
     for f in &self.funcs {
-      if addr == f.addr {
+      if addr == f.start {
+        return Some(f)
+      }
+    }
+    None
+  }
+
+  pub fn func_lookup_by_name(&self, name: &str) -> Option<&Func> {
+    // TODO: Consider something better than linear search
+    for f in &self.funcs {
+      if name == f.name.as_str() {
         return Some(f)
       }
     }
@@ -64,8 +75,10 @@ impl Config {
       let f = val.as_node()
         .ok_or_else(|| format!("Expected function properties"))?;
 
-      let addr_str = f.get_str("addr")
-        .ok_or_else(|| format!("No function 'addr' property for '{}'", key))?;
+      let start_str = f.get_str("start")
+        .ok_or_else(|| format!("No function 'start' property for '{}'", key))?;
+      let end_str = f.get_str("end")
+        .ok_or_else(|| format!("No function 'end' property for '{}'", key))?;
       let ret_str = f.get_str("ret")
         .ok_or_else(|| format!("No function 'ret' property for '{}'", key))?;
       let args_str = f.get_str("args")
@@ -73,14 +86,19 @@ impl Config {
 
       let pop_args_after_call = !f.get_str("dont_pop_args").is_some();
 
-      let addr: SegOff = addr_str.parse()
-        .map_err(|_| format!("Expected segoff for '{}.addr', got '{}'", key, addr_str))?;
+      let start: SegOff = start_str.parse()
+        .map_err(|_| format!("Expected segoff for '{}.start', got '{}'", key, start_str))?;
+      let end: Option<SegOff> = if end_str.len() == 0 { None } else {
+        Some(end_str.parse()
+             .map_err(|_| format!("Expected segoff for '{}.end', got '{}'", key, end_str))?)
+      };
       let args: i16 = args_str.parse()
         .map_err(|_| format!("Expected u16 for '{}.args', got '{}'", key, args_str))?;
 
       cfg.funcs.push(Func {
         name: key.to_string(),
-        addr,
+        start,
+        end,
         ret: ret_str.to_string(),
         args: if args >= 0 { Some(args as u16) } else { None },
         pop_args_after_call,

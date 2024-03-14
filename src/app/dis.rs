@@ -6,10 +6,18 @@ use crate::intel_syntax;
 fn print_help(appname: &str) {
   println!("usage: {} dis OPTIONS", appname);
   println!("");
-  println!("OPTIONS:");
-  println!("  --binary       path to binary on the filesystem (required)");
-  println!("  --start-addr   start seg:off address (required)");
-  println!("  --end-addr     end seg:off address (required)");
+  println!("REQUIRED OPTIONS:");
+  println!("  --binary          path to binary on the filesystem (required)");
+  println!("");
+  println!("MODE: ADDRESS RANGE");
+  println!("  --start-addr      start seg:off address (maybe required)");
+  println!("  --end-addr        end seg:off address (maybe required)");
+  println!("");
+  println!("MODE: FUNCTION NAME");
+  println!("  --name            lookup address range by name in config (maybe required)");
+  println!("");
+  println!("OPTIONAL");
+  println!("  --config          path to binary configuration file (required)");
 }
 
 #[derive(Debug)]
