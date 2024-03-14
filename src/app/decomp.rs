@@ -19,6 +19,7 @@ fn print_help(appname: &str) {
   println!("");
   println!("EMIT MODES:");
   println!("  --emit-ir-initial path to emit initial unoptimized SSA IR (optional)");
+  println!("  --emit-ir-sym     path to emit symbolized SSA IR (optional)");
   println!("  --emit-ir-opt     path to emit optimized SSA IR (optional)");
   println!("  --emit-ir-final   path to emit final SSA IR before control-flow analysis (optional)");
   println!("  --emit-graph      path to emit a control-flow-graph dot file (optional)");
@@ -44,6 +45,7 @@ struct Args {
   end_addr: SegOff,
 
   emit_ir_initial: Option<String>,
+  emit_ir_sym: Option<String>,
   emit_ir_opt: Option<String>,
   emit_ir_final: Option<String>,
   emit_graph: Option<String>,
@@ -69,6 +71,7 @@ fn parse_args(appname: &str) -> Result<Args, pico_args::Error> {
     end_addr:        pargs.value_from_str("--end-addr")?,
     emit_ir_initial: pargs.opt_value_from_str("--emit-ir-initial")?,
     emit_ir_opt:     pargs.opt_value_from_str("--emit-ir-opt")?,
+    emit_ir_sym:     pargs.opt_value_from_str("--emit-ir-sym")?,
     emit_ir_final:   pargs.opt_value_from_str("--emit-ir-final")?,
     emit_graph:      pargs.opt_value_from_str("--emit-graph")?,
     emit_ctrlflow:   pargs.opt_value_from_str("--emit-ctrlflow")?,
@@ -118,6 +121,11 @@ pub fn run(appname: &str) {
 
   opt::optimize(&mut ir);
   sym::symbolize(&mut ir, &cfg);
+
+  if let Some(path) = args.emit_ir_sym.as_ref() {
+    write_to_path(path, &format!("{}", ir));
+  }
+
   opt::forward_store_to_load(&mut ir);
   opt::optimize(&mut ir);
   opt::mem_symbol_to_ref(&mut ir);
