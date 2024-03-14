@@ -73,6 +73,13 @@ impl ControlFlowData {
   fn get_mut(&mut self, id: ElemId) -> &mut Elem { self.0[id.0].as_mut().unwrap() }
   fn checkout(&mut self, id: ElemId) -> Elem { self.0[id.0].take().unwrap() }
   fn release(&mut self, id: ElemId, elem: Elem) { assert!(self.0[id.0].is_none()); self.0[id.0] = Some(elem); }
+
+  #[allow(unused)]
+  fn debug_dump(&self) {
+    for (i, elem) in self.0.iter().enumerate() {
+      println!("{:3} | {:?}", i, elem.as_ref().unwrap());
+    }
+  }
 }
 
 #[derive(Debug)]
@@ -81,6 +88,7 @@ pub struct Function {
   pub body: Body,
 }
 
+#[derive(Debug)]
 pub struct ControlFlow {
   data: ControlFlowData,
   pub func: Function,
@@ -453,9 +461,22 @@ fn infer_loop(body: &mut Body, exclude: Option<&HashSet<ElemId>>, data: &mut Con
   true
 }
 
+// src -> ... -> dst (sequentially via single exits)
+fn sequentially_reaching(src: ElemId, dst: ElemId, body: &Body, data: &ControlFlowData) -> Option<Vec<ElemId>> {
+  let mut cur = src;
+  let mut blks = vec![];
+  loop {
+    blks.push(cur);
+    let exits = body.exits(cur, data)?;
+    if exits.len() != 1 { return None; }
+    if exits[0] == dst { return Some(blks); }
+    cur = exits[0];
+  }
+}
+
 fn infer_if(body: &mut Body, data: &mut ControlFlowData) -> bool {
   // Consider each basic block as an if-stmt header
-  let mut found: Option<(ElemId, ElemId, ElemId, bool)> = None;
+  let mut found: Option<(ElemId, Vec<ElemId>, ElemId, bool)> = None;
   for id in itertools::sorted(body.elems.iter()) {
     let elem = data.get(*id);
 
@@ -468,30 +489,26 @@ fn infer_if(body: &mut Body, data: &mut ControlFlowData) -> bool {
 
     //println!("Candidate Block: {} => {:?}", id.0, exits);
 
-    // Check for: {A, B}, A -> B
+    // Check for: {A, B}, A -> ... -> B
     {
       let (a, b) = (exits[0], exits[1]);
-      if let Some(a_exits) = body.exits(a, data) {
-        if a_exits.len() == 1 && a_exits[0] == b {
-          found = Some((*id, a, b, false));
-          break;
-        }
+      if let Some(blks) = sequentially_reaching(a, b, body, data) {
+        found = Some((*id, blks, b, false));
+        break;
       }
     }
 
-    // Check for: {A, B}, B -> A
+    // Check for: {A, B}, B -> ... -> A
     {
       let (a, b) = (exits[0], exits[1]);
-      if let Some(b_exits) = body.exits(b, data) {
-        if b_exits.len() == 1 && b_exits[0] == a {
-          found = Some((*id, b, a, true));
-          break;
-        }
+      if let Some(blks) = sequentially_reaching(b, a, body, data) {
+        found = Some((*id, blks, a, true));
+        break;
       }
     }
   }
 
-  let Some((entry, then, join, inverted)) = found else { return false };
+  let Some((entry, then_blks, join, inverted)) = found else { return false };
 
   // Successfully inferred an if-stmt, we just need to finalize it up into
   // a proper elem and then insert it into the structure.
@@ -501,9 +518,15 @@ fn infer_if(body: &mut Body, data: &mut ControlFlowData) -> bool {
     entry,
     exit: join,
     inverted,
-    then_body: Body::new(then),
+    then_body: Body::new(then_blks[0]),
   };
-  ifstmt.then_body.elems.insert(then);
+  for id in then_blks {
+    ifstmt.then_body.elems.insert(id);
+    let elem = data.get(id);
+    if elem.entry != id {
+      ifstmt.then_body.remap.insert(elem.entry, id);
+    }
+  }
 
   // Step 2: Insert it
   body.insert_ifstmt(ifstmt, data);
@@ -595,12 +618,7 @@ fn schedule_layout_ifstmt(elem: &mut Elem, parent: &Parent, data: &mut ControlFl
   let Detail::If(ifstmt) = &mut elem.detail else { panic!("Expected basic block") };
 
   // schedule then-body
-  let then_body = &mut ifstmt.then_body;
-  assert!(then_body.elems.len() == 1);
-  let then_elem_id = then_body.elems.iter().next().unwrap().clone();
-
-  then_body.layout.push(then_elem_id);
-  let then_next = schedule_layout_elem(then_elem_id, parent, data);
+  schedule_layout_body(&mut ifstmt.then_body, data);
 
   // figure out next for the exit/join-block
   let (next, jump) = if let Some(exit) = parent.elem_avail(ifstmt.exit) {
@@ -608,9 +626,6 @@ fn schedule_layout_ifstmt(elem: &mut Elem, parent: &Parent, data: &mut ControlFl
   } else {
     (None, Jump::UncondTarget(ifstmt.exit))
   };
-
-  // By construction.. then-body and ifstmt should have made the same conclusion on "next"
-  assert!(then_next == next);
 
   elem.jump = Some(jump);
   next
@@ -628,7 +643,7 @@ fn schedule_layout_elem(id: ElemId, parent: &Parent, data: &mut ControlFlowData)
   next
 }
 
-fn schedule_layout_body(body: &mut Body, data: &mut ControlFlowData) {
+fn schedule_layout_body(body: &mut Body, data: &mut ControlFlowData)  {
   let mut remaining = body.elems.clone();
   let mut next = Some(body.entry);
   while remaining.len() > 0 {

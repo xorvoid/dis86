@@ -11,11 +11,9 @@ fn insert_intermediate_phi_blocks(ir: &mut IR) {
     let instr = ir.instr(r).unwrap().clone();
     if instr.opcode != Opcode::Jne { continue; }
     if target_has_phis(ir, instr.operands[1].unwrap_block()) {
-      println!("Target has phis: {:?}", instr.operands[1]);
       insert_block(ir, blkref, r, 1);
     }
     if target_has_phis(ir, instr.operands[2].unwrap_block()) {
-      println!("Target has phis: {:?}", instr.operands[2]);
       insert_block(ir, blkref, r, 2);
     }
   }
