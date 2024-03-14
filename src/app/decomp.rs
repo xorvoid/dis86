@@ -157,12 +157,21 @@ pub fn run(appname: &str) {
 
   let decoder = Decoder::new(&dat[start_idx..end_idx], start_idx);
   let mut instr_list = vec![];
+  let mut raw_list = vec![];
   for (instr, raw) in decoder {
-    // HAX WRONG
-    if args.emit_dis.is_some() {
-      println!("{}", intel_syntax::format(&instr, raw, true).unwrap());
-    }
     instr_list.push(instr);
+    raw_list.push(raw);
+  }
+  // FIXME: SIMPLIFY!!
+  if let Some(path) = args.emit_dis.as_ref() {
+    let mut buf = String::new();
+    for i in 0..instr_list.len() {
+      let instr = &instr_list[i];
+      let raw = &raw_list[i];
+      buf += &intel_syntax::format(&instr, raw, true).unwrap();
+      buf += "\n";
+    }
+    write_to_path(path, &buf);
   }
 
   let mut ir = build::from_instrs(&instr_list, &cfg);

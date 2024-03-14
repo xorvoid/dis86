@@ -90,7 +90,8 @@ impl<'a> Gen<'a> {
         }
       }
       Expr::Const(k) => {
-        let s = if *k > 128 {
+        let s = if *k > 128 || *k < -128 {
+          let k = *k as u32;
           format!("0x{:x}", k)
         } else {
           format!("{}", k)
