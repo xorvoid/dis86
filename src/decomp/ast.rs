@@ -440,6 +440,12 @@ impl<'a> Builder<'a> {
       panic!("expected ifstmt entry to end in a conditional jump");
     };
 
+    let cond = if ifstmt.inverted {
+      Expr::Unary(Box::new(UnaryExpr{op: UnaryOperator::Not, rhs: cond}))
+    } else {
+      cond
+    };
+
     let then_body = self.convert_body(iter, depth+1);
     blk.push_stmt(Stmt::If(If { cond, then_body }));
     self.emit_jump(blk, ifstmt_elt.elem.jump.unwrap(), None);
