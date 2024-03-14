@@ -446,8 +446,9 @@ impl<'a> Builder<'a> {
         let label = self.make_label(tgt);
         let goto = Stmt::Goto(Goto{label});
         let then_body = Block(vec![goto]);
-        let cond_inv = Expr::Unary(Box::new(UnaryExpr{op: UnaryOperator::Not, rhs: cond}));
-        blk.push_stmt(Stmt::If(If {cond: cond_inv, then_body }));
+        // NOTE: cond already inverted befroe call!
+        //let cond_inv = Expr::Unary(Box::new(UnaryExpr{op: UnaryOperator::Not, rhs: cond}));
+        blk.push_stmt(Stmt::If(If {cond: cond, then_body }));
       }
       control_flow::Jump::CondTargetBoth(tgt_true, tgt_false) => {
         let cond = cond.unwrap();
@@ -467,8 +468,9 @@ impl<'a> Builder<'a> {
       blk.push_stmt(Stmt::Label(label));
     }
 
-    let cond = self.emit_blk(blk, bb.blkref, false);
-    self.emit_jump(blk, bb_elt.elem.jump.unwrap(), cond);
+    let jump = bb_elt.elem.jump.unwrap();
+    let cond = self.emit_blk(blk, bb.blkref, jump.cond_inverted());
+    self.emit_jump(blk, jump, cond);
   }
 
   fn convert_loop(&mut self, blk: &mut Block, iter: &mut FlowIter, depth: usize) {

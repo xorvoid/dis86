@@ -17,6 +17,10 @@ pub enum Jump {
   CondTargetBoth(ElemId, ElemId), // jne not elided
 }
 
+impl Jump {
+  pub fn cond_inverted(&self) -> bool { matches!(self, Jump::CondTargetFalse(_)) }
+}
+
 #[derive(Debug)]
 pub struct Elem {
   pub entry: ElemId,
