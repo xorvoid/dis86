@@ -173,7 +173,7 @@ pub fn run(appname: &str) {
     Err(err) => panic!("Failed to read file: '{}': {:?}", args.binary, err),
   };
 
-  let decoder = Decoder::new(&dat[start_idx..end_idx], start_idx);
+  let decoder = Decoder::new(&dat[start_idx..end_idx], f.start);
   let mut instr_list = vec![];
   let mut raw_list = vec![];
   for (instr, raw) in decoder {
@@ -190,11 +190,13 @@ pub fn run(appname: &str) {
       buf += "\n";
     }
     write_to_path(path, &buf);
+    return;
   }
 
   let mut ir = build::from_instrs(&instr_list, &cfg);
   if let Some(path) = args.emit_ir_initial.as_ref() {
     write_to_path(path, &format!("{}", ir));
+    return;
   }
 
   opt::optimize(&mut ir);
@@ -202,6 +204,7 @@ pub fn run(appname: &str) {
 
   if let Some(path) = args.emit_ir_sym.as_ref() {
     write_to_path(path, &format!("{}", ir));
+    return;
   }
 
   opt::forward_store_to_load(&mut ir);
@@ -212,34 +215,40 @@ pub fn run(appname: &str) {
   if let Some(path) = args.emit_ir_opt.as_ref() {
     let text = ir::display::display_ir_with_uses(&ir).unwrap();
     write_to_path(path, &format!("{}", &text));
+    return;
   }
 
   ir::fin::finalize(&mut ir);
   if let Some(path) = args.emit_ir_final.as_ref() {
     let text = ir::display::display_ir_with_uses(&ir).unwrap();
     write_to_path(path, &format!("{}", &text));
+    return;
   }
 
   if let Some(path) = args.emit_graph.as_ref() {
     let dot = ir::util::gen_graphviz_dotfile(&ir).unwrap();
     write_to_path(path, &dot);
+    return;
   }
 
   let ctrlflow = control_flow::ControlFlow::from_ir(&ir);
   if let Some(path) = args.emit_ctrlflow.as_ref() {
     let text = control_flow::format(&ctrlflow).unwrap();
     write_to_path(path, &text);
+    return;
   }
 
   let ast = ast::Function::from_ir(&f.name, &ir, &ctrlflow);
   if let Some(path) = args.emit_ast.as_ref() {
     let text = format!("{:#?}", ast);
     write_to_path(path, &text);
+    return;
   }
 
   if let Some(path) = args.emit_code.as_ref() {
     let flavor = if args.codegen_hydra { gen::Flavor::Hydra } else { gen::Flavor::Standard };
     let code = gen::generate(&ast, flavor).unwrap();
     write_to_path(path, &code);
+    return;
   }
 }

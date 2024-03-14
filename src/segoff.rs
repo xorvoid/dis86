@@ -10,6 +10,16 @@ impl SegOff {
   pub fn abs(&self) -> usize {
     (self.seg as usize) * 16 + (self.off as usize)
   }
+
+  pub fn add_offset(&self, off: u16) -> SegOff {
+    SegOff { seg: self.seg, off: self.off.wrapping_add(off) }
+  }
+
+  pub fn offset_to(&self, other: SegOff) -> u16 {
+    if self.seg != other.seg { panic!("Cannot take difference of different segments"); }
+    if self.off > other.off { panic!("Not a positive offset"); }
+    other.off - self.off
+  }
 }
 
 impl FromStr for SegOff {

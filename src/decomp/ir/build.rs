@@ -13,6 +13,8 @@ fn simple_binary_operation(opcode: instr::Opcode) -> Option<Opcode> {
     instr::Opcode::OP_ADD => Some(Opcode::Add),
     instr::Opcode::OP_SUB => Some(Opcode::Sub),
     instr::Opcode::OP_SHL => Some(Opcode::Shl),
+    instr::Opcode::OP_AND => Some(Opcode::And),
+    instr::Opcode::OP_OR => Some(Opcode::Or),
     instr::Opcode::OP_XOR => Some(Opcode::Xor),
     _ => None,
   }
@@ -46,14 +48,17 @@ fn jump_target(ins: &instr::Instr) -> Option<Address> {
   // target should be first operand
   let tgt = match &ins.operands[0] {
     instr::Operand::Rel(rel) => {
-      let end_addr = (ins.addr + ins.n_bytes) as u16;
-      let effective = end_addr.wrapping_add(rel.val);
-      Address(effective.into())
+      let effective = ins.rel_addr(rel);
+      Address(effective.abs().into())
     }
     _ => panic!("Unsupported branch operand"),
   };
 
   Some(tgt)
+}
+
+enum SpecialState {
+  PushCS, // CS register was pushed in the last instruction
 }
 
 struct IRBuilder<'a> {
@@ -62,6 +67,7 @@ struct IRBuilder<'a> {
   addrmap: HashMap<Address, BlockRef>,
   cur: BlockRef,
   cfg: &'a Config,
+  special: Option<SpecialState>,
 }
 
 struct BlockMeta {
@@ -77,6 +83,7 @@ impl<'a> IRBuilder<'a> {
       addrmap: HashMap::new(),
       cur: BlockRef(0),
       cfg,
+      special: None,
     };
 
     // Create and seal the entry block
@@ -328,9 +335,84 @@ impl IRBuilder<'_> {
     val
   }
 
+  fn process_callf_indirect(&mut self, ins: &instr::Instr) {
+    let addr = self.append_asm_src_operand(&ins.operands[0]);
+    self.append_instr(Opcode::CallPtr, vec![addr]);
+  }
+
+  fn process_callf(&mut self, ins: &instr::Instr) {
+    let instr::Operand::Far(far) = &ins.operands[0] else {
+      return self.process_callf_indirect(ins);
+    };
+    let addr = SegOff { seg: far.seg, off: far.off };
+    if let Some(func) = self.cfg.func_lookup(addr) {
+      // Known function
+      let idx = self.ir.funcs.len();
+      self.ir.funcs.push(func.name.to_string());
+      let ret;
+      if let Some(nargs) = &func.args {
+        // Known args
+        let mut operands = vec![Ref::Func(idx)];
+        let ss = self.ir.get_var(instr::Reg::SS, self.cur);
+            let sp = self.ir.get_var(instr::Reg::SP, self.cur);
+        for i in 0..(*nargs as i32) {
+          let mut off = sp;
+          if i != 0 {
+            let k = self.ir.append_const(2*i);
+            off = self.append_instr(Opcode::Add, vec![sp, k]);
+          }
+          let val = self.append_instr(Opcode::Load16, vec![ss, off]);
+          operands.push(val);
+        }
+        ret = self.append_instr(Opcode::CallArgs, operands);
+      } else {
+        // Unknown args
+        ret = self.append_instr(Opcode::CallFar, vec![Ref::Func(idx)]);
+      }
+      match &func.ret {
+        Type::Void => (), // nothing to do
+        Type::U16 => {
+          self.ir.set_var(instr::Reg::AX, self.cur, ret);
+        }
+        Type::U32 => {
+          let upper = self.append_instr(Opcode::Upper16, vec![ret]);
+          self.ir.set_var(instr::Reg::DX, self.cur, upper);
+
+          let lower = self.append_instr(Opcode::Lower16, vec![ret]);
+          self.ir.set_var(instr::Reg::AX, self.cur, lower);
+        }
+        _ => panic!("Unsupported function return type: {}", func.ret),
+      }
+    } else {
+      // Unknown function
+          let seg = self.ir.append_const(far.seg.into());
+      let off = self.ir.append_const(far.off.into());
+      let ret = self.append_instr(Opcode::CallFar, vec![seg, off]);
+      self.ir.set_var(instr::Reg::AX, self.cur, ret);
+    }
+  }
+
+  fn process_call(&mut self, ins: &instr::Instr, cs_pushed: bool) {
+    println!("cs_pushed: {}", cs_pushed);
+    let instr::Operand::Rel(rel) = &ins.operands[0] else {
+      panic!("Expected near call to have relative operand");
+    };
+    if cs_pushed {
+      // pop CS back off and use it to do a far call
+      self.append_pop();
+      // TODO: IMPL FAR CALL
+    }
+    // FIXME: THIS IS DEFINITELY BROKEN
+    let k = self.ir.append_const(rel.val.into());
+    let ret = self.append_instr(Opcode::CallNear, vec![k]);
+    self.ir.set_var(instr::Reg::AX, self.cur, ret);
+  }
+
   fn append_asm_instr(&mut self, ins: &instr::Instr) {
     //println!("## {}", intel_syntax::format(ins, &[], false).unwrap());
     assert!(ins.rep.is_none());
+
+    let special = self.special.take();
 
     // process simple binary operations
     if let Some(opcode) = simple_binary_operation(ins.opcode) {
@@ -344,6 +426,10 @@ impl IRBuilder<'_> {
     // handle less standard operations
     match &ins.opcode {
       instr::Opcode::OP_PUSH => {
+        if matches!(ins.operands[0], instr::Operand::Reg(instr::OperandReg(instr::Reg::CS))) {
+          assert!(self.special.is_none());
+          self.special = Some(SpecialState::PushCS);
+        }
         let a = self.append_asm_src_operand(&ins.operands[0]);
         self.append_push(a);
       }
@@ -382,19 +468,23 @@ impl IRBuilder<'_> {
         let vref = self.append_instr(Opcode::Add, vec![vref, one]);
         self.append_asm_dst_operand(&ins.operands[0], vref);
       }
+      instr::Opcode::OP_DEC => {
+        let one = self.ir.append_const(1);
+        let vref = self.append_asm_src_operand(&ins.operands[0]);
+        let vref = self.append_instr(Opcode::Sub, vec![vref, one]);
+        self.append_asm_dst_operand(&ins.operands[0], vref);
+      }
       instr::Opcode::OP_JMP => {
         let instr::Operand::Rel(rel) = &ins.operands[0] else { panic!("Expected relative offset operand for JMP") };
-        let end_addr = (ins.addr + ins.n_bytes) as u16;
-        let effective = Address(end_addr.wrapping_add(rel.val).into());
+        let effective = Address(ins.rel_addr(rel).abs());
         let blkref = self.get_block(effective);
         self.append_jmp(blkref);
       }
       instr::Opcode::OP_JE => {
         let instr::Operand::Rel(rel) = &ins.operands[0] else { panic!("Expected relative offset operand for JMP") };
-        let end_addr = (ins.addr + ins.n_bytes) as u16;
-        let effective = Address(end_addr.wrapping_add(rel.val).into());
+        let effective = Address(ins.rel_addr(rel).abs());
 
-        let false_blk = self.get_block(Address(ins.addr + ins.n_bytes));
+        let false_blk = self.get_block(Address(ins.end_addr().abs()));
         let true_blk = self.get_block(effective);
 
         let flags = self.get_flags();
@@ -404,10 +494,9 @@ impl IRBuilder<'_> {
       }
       instr::Opcode::OP_JNE => {
         let instr::Operand::Rel(rel) = &ins.operands[0] else { panic!("Expected relative offset operand for JMP") };
-        let end_addr = (ins.addr + ins.n_bytes) as u16;
-        let effective = Address(end_addr.wrapping_add(rel.val).into());
+        let effective = Address(ins.rel_addr(rel).abs());
 
-        let false_blk = self.get_block(Address(ins.addr + ins.n_bytes));
+        let false_blk = self.get_block(Address(ins.end_addr().abs()));
         let true_blk = self.get_block(effective);
 
         let flags = self.get_flags();
@@ -417,10 +506,9 @@ impl IRBuilder<'_> {
       }
       instr::Opcode::OP_JG => {
         let instr::Operand::Rel(rel) = &ins.operands[0] else { panic!("Expected relative offset operand for JMP") };
-        let end_addr = (ins.addr + ins.n_bytes) as u16;
-        let effective = Address(end_addr.wrapping_add(rel.val).into());
+        let effective = Address(ins.rel_addr(rel).abs());
 
-        let false_blk = self.get_block(Address(ins.addr + ins.n_bytes));
+        let false_blk = self.get_block(Address(ins.end_addr().abs()));
         let true_blk = self.get_block(effective);
 
         let flags = self.get_flags();
@@ -430,10 +518,9 @@ impl IRBuilder<'_> {
       }
       instr::Opcode::OP_JGE => {
         let instr::Operand::Rel(rel) = &ins.operands[0] else { panic!("Expected relative offset operand for JMP") };
-        let end_addr = (ins.addr + ins.n_bytes) as u16;
-        let effective = Address(end_addr.wrapping_add(rel.val).into());
+        let effective = Address(ins.rel_addr(rel).abs());
 
-        let false_blk = self.get_block(Address(ins.addr + ins.n_bytes));
+        let false_blk = self.get_block(Address(ins.end_addr().abs()));
         let true_blk = self.get_block(effective);
 
         let flags = self.get_flags();
@@ -443,10 +530,9 @@ impl IRBuilder<'_> {
       }
       instr::Opcode::OP_JL => {
         let instr::Operand::Rel(rel) = &ins.operands[0] else { panic!("Expected relative offset operand for JMP") };
-        let end_addr = (ins.addr + ins.n_bytes) as u16;
-        let effective = Address(end_addr.wrapping_add(rel.val).into());
+        let effective = Address(ins.rel_addr(rel).abs());
 
-        let false_blk = self.get_block(Address(ins.addr + ins.n_bytes));
+        let false_blk = self.get_block(Address(ins.end_addr().abs()));
         let true_blk = self.get_block(effective);
 
         let flags = self.get_flags();
@@ -456,10 +542,9 @@ impl IRBuilder<'_> {
       }
       instr::Opcode::OP_JLE => {
         let instr::Operand::Rel(rel) = &ins.operands[0] else { panic!("Expected relative offset operand for JMP") };
-        let end_addr = (ins.addr + ins.n_bytes) as u16;
-        let effective = Address(end_addr.wrapping_add(rel.val).into());
+        let effective = Address(ins.rel_addr(rel).abs());
 
-        let false_blk = self.get_block(Address(ins.addr + ins.n_bytes));
+        let false_blk = self.get_block(Address(ins.end_addr().abs()));
         let true_blk = self.get_block(effective);
 
         let flags = self.get_flags();
@@ -468,53 +553,11 @@ impl IRBuilder<'_> {
         self.append_jne(cond, true_blk, false_blk);
       }
       instr::Opcode::OP_CALLF => {
-        let instr::Operand::Far(far) = &ins.operands[0] else { panic!("Unsupported OP_CALLF operand") };
-        let addr = SegOff { seg: far.seg, off: far.off };
-        if let Some(func) = self.cfg.func_lookup(addr) {
-          // Known function
-          let idx = self.ir.funcs.len();
-          self.ir.funcs.push(func.name.to_string());
-          let ret;
-          if let Some(nargs) = &func.args {
-            // Known args
-            let mut operands = vec![Ref::Func(idx)];
-            let ss = self.ir.get_var(instr::Reg::SS, self.cur);
-            let sp = self.ir.get_var(instr::Reg::SP, self.cur);
-            for i in 0..(*nargs as i32) {
-              let mut off = sp;
-              if i != 0 {
-                let k = self.ir.append_const(2*i);
-                off = self.append_instr(Opcode::Add, vec![sp, k]);
-              }
-              let val = self.append_instr(Opcode::Load16, vec![ss, off]);
-              operands.push(val);
-            }
-            ret = self.append_instr(Opcode::CallArgs, operands);
-          } else {
-            // Unknown args
-            ret = self.append_instr(Opcode::Call, vec![Ref::Func(idx)]);
-          }
-          match &func.ret {
-            Type::Void => (), // nothing to do
-            Type::U16 => {
-              self.ir.set_var(instr::Reg::AX, self.cur, ret);
-            }
-            Type::U32 => {
-              let upper = self.append_instr(Opcode::Upper16, vec![ret]);
-              self.ir.set_var(instr::Reg::DX, self.cur, upper);
-
-              let lower = self.append_instr(Opcode::Lower16, vec![ret]);
-              self.ir.set_var(instr::Reg::AX, self.cur, lower);
-            }
-            _ => panic!("Unsupported function return type: {}", func.ret),
-          }
-        } else {
-          // Unknown function
-          let seg = self.ir.append_const(far.seg.into());
-          let off = self.ir.append_const(far.off.into());
-          let ret = self.append_instr(Opcode::Call, vec![seg, off]);
-          self.ir.set_var(instr::Reg::AX, self.cur, ret);
-        }
+        self.process_callf(ins);
+      }
+      instr::Opcode::OP_CALL => {
+        let cs_pushed = matches!(special, Some(SpecialState::PushCS));
+        self.process_call(ins, cs_pushed);
       }
       instr::Opcode::OP_LES => {
         let vref = self.append_asm_src_operand(&ins.operands[2]);
@@ -564,7 +607,7 @@ impl IRBuilder<'_> {
     for ins in instrs {
       let Some(target) = jump_target(ins) else { continue };
       block_start.insert(target.0);
-      block_start.insert(ins.addr + ins.n_bytes);
+      block_start.insert(ins.end_addr().abs());
     }
 
     // Step 2: Create all the blocks we should encounter
@@ -577,8 +620,8 @@ impl IRBuilder<'_> {
 
     // Step 3: iterate each instruction, building each block
     for ins in instrs {
-      if block_start.get(&ins.addr).is_some() {
-        self.start_next_blk(Address(ins.addr));
+      if block_start.get(&ins.addr.abs()).is_some() {
+        self.start_next_blk(Address(ins.addr.abs()));
       }
       self.append_asm_instr(ins);
     }

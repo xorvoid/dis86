@@ -1,4 +1,5 @@
 use crate::util::arrayvec::ArrayVec;
+use crate::segoff::SegOff;
 use crate::binary::Binary;
 use crate::instr::*;
 use crate::instr_fmt;
@@ -149,8 +150,8 @@ fn operand_m32(bin: &mut Binary, modrm: u8, sreg: Option<Reg>) -> Operand {
 }
 
 pub fn decode_one<'a>(bin: &mut Binary<'a>) -> Option<(Instr, &'a [u8])> {
-  let addr = bin.addr();
-  if addr == bin.end_addr() {
+  let start_addr = bin.addr();
+  if start_addr == bin.end_addr() {
     return None;
   }
 
@@ -271,18 +272,19 @@ pub fn decode_one<'a>(bin: &mut Binary<'a>) -> Option<(Instr, &'a [u8])> {
     operands.push(operand);
   }
 
-  let n_bytes = bin.addr() - addr;
+  let cur_addr = bin.addr();
+  let n_bytes = start_addr.offset_to(cur_addr);
 
   let instr = Instr {
     rep,
     opcode: fmt.op,
     operands,
-    addr: addr,
+    addr: start_addr,
     n_bytes,
     intel_hidden_operand_bitmask: fmt.hidden,
   };
 
-  let raw = bin.slice(addr, n_bytes);
+  let raw = bin.slice(start_addr, n_bytes);
 
   Some((instr, raw))
 }
@@ -293,8 +295,8 @@ pub struct Decoder<'a> {
 }
 
 impl<'a> Decoder<'a> {
-  pub fn new(mem: &'a [u8], base_addr: usize) -> Self {
-    Self { bin: Binary::new(mem, base_addr) }
+  pub fn new(mem: &'a [u8], start: SegOff) -> Self {
+    Self { bin: Binary::new(mem, start) }
   }
 }
 

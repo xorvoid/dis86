@@ -1,3 +1,4 @@
+use crate::segoff::SegOff;
 use crate::util::arrayvec::ArrayVec;
 pub use crate::instr_fmt::Opcode;
 
@@ -6,9 +7,18 @@ pub struct Instr {
   pub rep: Option<Rep>,
   pub opcode: Opcode,
   pub operands: ArrayVec<Operand, 3>,
-  pub addr: usize,
-  pub n_bytes: usize,
+  pub addr: SegOff,
+  pub n_bytes: u16,
   pub intel_hidden_operand_bitmask: u8,
+}
+
+impl Instr {
+  pub fn end_addr(&self) -> SegOff {
+    self.addr.add_offset(self.n_bytes)
+  }
+  pub fn rel_addr(&self, rel: &OperandRel) -> SegOff {
+    self.end_addr().add_offset(rel.val)
+  }
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -32,9 +32,8 @@ fn format_operand(s: &mut String, ins: &Instr, oper: &Operand) -> Result<()> {
     }
     Operand::Imm(o) => write!(s, "0x{:x}", o.val)?,
     Operand::Rel(o) => {
-      let end_addr = (ins.addr + ins.n_bytes) as u16;
-      let effective = end_addr.wrapping_add(o.val);
-      write!(s, "0x{:x}", effective)?;
+      let effective = ins.rel_addr(o);
+      write!(s, "0x{:x}", effective.abs())?;
     }
     Operand::Far(o) => write!(s, "0x{:x}:0x{:x}", o.seg, o.off)?,
   };
@@ -44,11 +43,11 @@ fn format_operand(s: &mut String, ins: &Instr, oper: &Operand) -> Result<()> {
 
 fn format_instr(s: &mut String, ins: &Instr, bytes: &[u8], with_detail: bool) -> Result<()> {
   if with_detail {
-    write!(s, "{:>8x}:\t", ins.addr)?;
+    write!(s, "{:>8x}:\t", ins.addr.abs())?;
     for b in bytes {
       write!(s, "{:02x} ", b)?;
     }
-    let used = ins.n_bytes * 3;
+    let used = ins.n_bytes as usize * 3;
     let remain = if used <= 21 { 21 - used } else { 0 };
     write!(s, "{:1$}\t", "", remain)?;
   }
