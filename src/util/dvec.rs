@@ -44,14 +44,19 @@ impl<T> DVec<T> {
     idx
   }
 
-  pub fn last(&self) -> Option<&T> {
+  pub fn last_idx(&self) -> Option<DVecIndex> {
     if self.pos.len() > 0 {
-      Some(&self.pos[self.pos.len()-1])
+      Some((self.pos.len()-1) as i64)
     } else if self.neg.len() > 0 {
-      Some(&self.neg[0])
+      Some(-1)
     } else {
       None
     }
+  }
+
+  pub fn last(&self) -> Option<&T> {
+    let idx = self.last_idx()?;
+    Some(&self[idx])
   }
 }
 

@@ -31,3 +31,8 @@ run-decomp *opts: build
 # A temporary command for dev build-test-cycle
 run-old:
      ./old/v2/build/src/app/dis86 decomp --config ../gizmo/build/src/hooklib/dis86_config.bsl --binary ../gizmo/dis/exe.bin --start-addr 0622:0922 --end-addr 0622:09e5
+
+rundiff a b: build
+     just run --emit-{{a}} /tmp/a
+     just run --emit-{{b}} /tmp/b
+     opendiff /tmp/a /tmp/b

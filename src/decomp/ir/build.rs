@@ -1,5 +1,4 @@
 use crate::instr;
-use crate::util::dvec::DVec;
 use crate::segoff::SegOff;
 use crate::decomp::config::Config;
 use crate::decomp::ir::*;
@@ -67,19 +66,6 @@ struct IRBuilder<'a> {
 struct BlockMeta {
   //sealed: bool, // has all predecessors?
   //incomplete_phis: Vec<(Name, Ref)>,
-}
-
-impl Block {
-  fn new(name: &str) -> Self {
-    Self {
-      name: name.to_string(),
-      defs: HashMap::new(),
-      preds: vec![],
-      instrs: DVec::new(),
-      sealed: false,
-      incomplete_phis: vec![],
-    }
-  }
 }
 
 impl<'a> IRBuilder<'a> {

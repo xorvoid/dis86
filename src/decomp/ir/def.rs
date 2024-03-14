@@ -401,3 +401,16 @@ impl IR {
    self.names.insert(r, FullName(name.clone(), idx));
  }
 }
+
+impl Block {
+  pub fn new(name: &str) -> Self {
+    Self {
+      name: name.to_string(),
+      defs: HashMap::new(),
+      preds: vec![],
+      instrs: DVec::new(),
+      sealed: false,
+      incomplete_phis: vec![],
+    }
+  }
+}

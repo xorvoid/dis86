@@ -128,6 +128,7 @@ pub fn run(appname: &str) {
     write_to_path(path, &format!("{}", &text));
   }
 
+  ir::fin::finalize(&mut ir);
   if let Some(path) = args.emit_ir_final.as_ref() {
     let text = ir::display::display_ir_with_uses(&ir).unwrap();
     write_to_path(path, &format!("{}", &text));
