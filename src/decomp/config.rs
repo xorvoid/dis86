@@ -1,12 +1,13 @@
 use crate::segoff::SegOff;
 use crate::bsl;
+use crate::decomp::types::Type;
 
 #[derive(Debug)]
 pub struct Func {
   pub name: String,
   pub start: SegOff,
   pub end: Option<SegOff>,
-  pub ret:  String,
+  pub ret: Type,
   pub args: Option<u16>,  // None means "unknown", Some(0) means "no args"
   pub pop_args_after_call: bool,
 }
@@ -15,7 +16,7 @@ pub struct Func {
 pub struct Global {
   pub name: String,
   pub offset: u16,
-  pub typ: String,
+  pub typ: Type,
 }
 
 #[derive(Debug)]
@@ -94,12 +95,14 @@ impl Config {
       };
       let args: i16 = args_str.parse()
         .map_err(|_| format!("Expected u16 for '{}.args', got '{}'", key, args_str))?;
+      let ret: Type = ret_str.parse()
+        .map_err(|err| format!("Expected type for '{}.ret', got '{}' | {}", key, ret_str, err))?;
 
       cfg.funcs.push(Func {
         name: key.to_string(),
         start,
         end,
-        ret: ret_str.to_string(),
+        ret,
         args: if args >= 0 { Some(args as u16) } else { None },
         pop_args_after_call,
       });
@@ -119,11 +122,19 @@ impl Config {
 
       let off = crate::util::parse::hex_u16(off_str)
         .map_err(|_| format!("Expected u16 hex for '{}.off', got '{}'", key, off_str))?;
+      let typ: Type = match type_str.parse() {
+        Ok(typ) => typ,
+        Err(err) => {
+          // FIXME: Make this a hard error.. currently the configs have undefined struct names.. need to support that first :-(
+          eprintln!("WRN: Expected type for '{}.type', got '{}' | {}", key, type_str, err);
+          Type::Unknown
+        }
+      };
 
       cfg.globals.push(Global {
         name: key.to_string(),
         offset: off,
-        typ: type_str.to_string(),
+        typ,
       });
     }
 

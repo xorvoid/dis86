@@ -2,6 +2,7 @@ use crate::instr;
 use crate::segoff::SegOff;
 use crate::decomp::config::Config;
 use crate::decomp::ir::*;
+use crate::decomp::types::Type;
 use std::collections::{HashSet, HashMap};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -489,12 +490,12 @@ impl IRBuilder<'_> {
             // Unknown args
             ret = self.append_instr(Opcode::Call, vec![Ref::Func(idx)]);
           }
-          match &func.ret as &str {
-            "void" => {}, // nothing to do
-            "u16" => {
+          match &func.ret {
+            Type::Void => (), // nothing to do
+            Type::U16 => {
               self.ir.set_var(instr::Reg::AX, self.cur, ret);
             }
-            "u32" => {
+            Type::U32 => {
               let upper = self.append_instr(Opcode::Upper16, vec![ret]);
               self.ir.set_var(instr::Reg::DX, self.cur, upper);
 

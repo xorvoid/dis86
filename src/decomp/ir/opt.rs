@@ -234,8 +234,6 @@ pub fn common_subexpression_elimination(ir: &mut IR) {
 }
 
 pub fn forward_store_to_load(ir: &mut IR) {
-  let mut prev_stores = vec![];
-
   let prev_lookup = |ir: &IR, prev_stores: &[Ref], seg, off| -> Option<Ref> {
     for store_ref in prev_stores.iter().rev() {
       let store_instr = ir.instr(*store_ref).unwrap();
@@ -249,7 +247,7 @@ pub fn forward_store_to_load(ir: &mut IR) {
 
   for b in 0..ir.blocks.len() {
     // Don't forward across blocks!!
-    prev_stores = vec![];
+    let mut prev_stores = vec![];
     for i in ir.blocks[b].instrs.range() {
       let r = Ref::Instr(BlockRef(b), i);
       let instr = ir.instr(r).unwrap();

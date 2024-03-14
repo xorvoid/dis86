@@ -1,5 +1,6 @@
 use crate::decomp::config::Config;
 use crate::decomp::ir::def::*;
+use crate::decomp::types::Type;
 use std::cmp::Ordering;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -233,16 +234,12 @@ pub fn symbolize_stack(ir: &mut IR) {
 
 pub fn populate_globals(ir: &mut IR, cfg: &Config) {
   for g in &cfg.globals {
-    let size = match &g.typ as &str {
-      "u8" => 1,
-      "u16" => 2,
-      "u32" => 4,
-      _ => {
-        eprintln!("WARN: Unsupported type '{}' for {} ... assuming u32", g.typ, g.name);
-        4
-      }
-    };
-    ir.symbols.globals.append(&g.name, g.offset.into(), size);
+    // FIXME: Remove the Type::Unknown
+    let size = g.typ.size_in_bytes().unwrap_or_else(|| {
+      eprintln!("WARN: Unsupported type '{}' for {} ... assuming u32", g.typ, g.name);
+      Type::U32.size_in_bytes().unwrap()
+    });
+    ir.symbols.globals.append(&g.name, g.offset.into(), size as u32);
   }
   ir.symbols.globals.finalize_non_overlaping();
 }
