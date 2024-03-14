@@ -234,11 +234,15 @@ pub fn forward_store_to_load(ir: &mut IR) {
 pub fn mem_symbol_to_ref(ir: &mut IR) {
   // FIXME: Need to pessimize with escape-analysis
   // TODO: Expand the scope of this.. only handing 16-bit symbols and operations
+
+  // Unseal all the blocks so phi nodes generate correctly
+  ir.unseal_all_blocks();
+
+  // Pass 1: Write -> Ref
   for b in 0..ir.blocks.len() {
     for i in ir.blocks[b].instrs.range() {
       let r = Ref::Instr(BlockRef(b), i);
       let instr = ir.instr(r).unwrap();
-
       if instr.opcode == Opcode::WriteVar16 {
         let Ref::Symbol(symref) = instr.operands[0] else { continue };
         if ir.symbols.symbol_type(symref) != sym::SymbolType::Local { continue; }
@@ -252,9 +256,7 @@ pub fn mem_symbol_to_ref(ir: &mut IR) {
 
         // Add the def
         ir.set_var(name, BlockRef(b), r);
-      }
-
-      else if instr.opcode == Opcode::ReadVar16 {
+      } else if instr.opcode == Opcode::ReadVar16 {
         let Ref::Symbol(symref) = instr.operands[0] else { continue };
         if ir.symbols.symbol_type(symref) != sym::SymbolType::Local { continue; }
         if ir.symbols.symbol(symref).size != 2 { continue; }
@@ -269,6 +271,8 @@ pub fn mem_symbol_to_ref(ir: &mut IR) {
     }
   }
 
+  // Re-seal all the blocks so phi nodes generate correctly
+  ir.seal_all_blocks();
 }
 
 pub fn simplify_branch_conds(ir: &mut IR) {

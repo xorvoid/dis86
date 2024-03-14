@@ -118,7 +118,7 @@ pub fn run(appname: &str) {
 
   opt::optimize(&mut ir);
   sym::symbolize(&mut ir, &cfg);
-  // opt::forward_store_to_load(&mut ir);
+  opt::forward_store_to_load(&mut ir);
   opt::optimize(&mut ir);
   opt::mem_symbol_to_ref(&mut ir);
   opt::optimize(&mut ir);

@@ -394,6 +394,18 @@ impl IR {
     }
   }
 
+  pub fn unseal_all_blocks(&mut self) {
+    for i in 0..self.blocks.len() {
+      self.blocks[i].sealed = false;
+    }
+  }
+
+  pub fn seal_all_blocks(&mut self) {
+    for i in 0..self.blocks.len() {
+      self.seal_block(BlockRef(i));
+    }
+  }
+
   fn set_name(&mut self, name: &Name, r: Ref) {
    let idx_ref = self.name_next.entry(name.clone()).or_insert(1);
    let idx = *idx_ref;
