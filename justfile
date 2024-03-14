@@ -14,7 +14,7 @@ test:
 
 # Show control-flow-graph using graphviz
 visualize-ctrlflow:
-     just run --emit-ctrlflow /tmp/ctrlflow.dot && dot -Tpng /tmp/ctrlflow.dot > /tmp/control_flow_graph.png && open /tmp/control_flow_graph.png
+     just run --emit-graph /tmp/ctrlflow.dot && dot -Tpng /tmp/ctrlflow.dot > /tmp/control_flow_graph.png && open /tmp/control_flow_graph.png
 
 # A temporary command for dev build-test-cycle
 run-dis: build

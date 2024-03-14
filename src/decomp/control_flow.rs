@@ -1,5 +1,6 @@
 use crate::decomp::ir;
 use std::collections::{HashMap, HashSet};
+use std::fmt::Write;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ElemId(pub usize);
@@ -671,19 +672,22 @@ fn label_blocks(cf: &mut ControlFlow) {
 }
 
 
-pub fn print(cf: &ControlFlow) {
+pub fn format(cf: &ControlFlow) -> Result<String, std::fmt::Error> {
+  let mut buf = String::new();
+  let f = &mut buf;
   for elt in cf.iter() {
-    print!("{:indent$}{:?} | ", "", elt.id, indent=2*elt.depth);
+    write!(f, "{:indent$}{:?} | ", "", elt.id, indent=2*elt.depth)?;
     let exits: Vec<_> = elt.elem.exits.iter().map(|x| x.0).collect();
     match &elt.elem.detail {
-      Detail::BasicBlock(b) => println!("BasicBlock({})", b.blkref.0),
+      Detail::BasicBlock(b) => writeln!(f, "BasicBlock({})", b.blkref.0)?,
       Detail::Loop(lp) => {
         let backedges: Vec<_> = lp.backedges.iter().cloned().map(|x| x.0).collect();
-        println!("Loop [entry={}, exits={:?}, backedges={:?}]", elt.elem.entry.0, exits, backedges);
+        writeln!(f, "Loop [entry={}, exits={:?}, backedges={:?}]", elt.elem.entry.0, exits, backedges)?;
       }
       Detail::If(_) => {
-        println!("If [entry={}, exits={:?}]", elt.elem.entry.0, exits);
+        writeln!(f, "If [entry={}, exits={:?}]", elt.elem.entry.0, exits)?;
       }
     }
   }
+  Ok(buf)
 }

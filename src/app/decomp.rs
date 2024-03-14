@@ -1,7 +1,7 @@
 use pico_args;
 use crate::segoff::SegOff;
 use crate::decode::Decoder;
-use crate::decomp::ir::{build, opt, sym, util};
+use crate::decomp::ir::{self, build, opt, sym};
 use crate::decomp::config::Config;
 use crate::decomp::gen;
 use crate::decomp::ast;
@@ -12,18 +12,22 @@ use std::io::Write;
 fn print_help(appname: &str) {
   println!("usage: {} dis OPTIONS", appname);
   println!("");
-  println!("OPTIONS:");
+  println!("REQUIRED OPTIONS:");
   println!("  --binary          path to binary on the filesystem (required)");
   println!("  --start-addr      start seg:off address (required)");
   println!("  --end-addr        end seg:off address (required)");
   println!("");
   println!("EMIT MODES:");
-  println!("  --emit-ctrlflow   path to emit a control-flow-graph dot file (optional)");
-  println!("  --emit-code       path to emit a c code (optional)");
+  println!("  --emit-ir-unopt   path to emit unoptimized SSA IR (optional)");
+  println!("  --emit-ir         path to emit optimized SSA IR (optional)");
+  println!("  --emit-graph      path to emit a control-flow-graph dot file (optional)");
+  println!("  --emit-ctrlflow   path to emit the inferred control-flow structure (optional)");
+  println!("  --emit-ast        path to emit the constructed AST (optional)");
+  println!("  --emit-code       path to emit c code (optional)");
 }
 
 fn write_to_path(path: &str, data: &str) {
-  if path == "-" {
+  if path.starts_with('-') {
     println!("{}", data);
   } else {
     let mut w = File::create(&path).unwrap();
@@ -38,7 +42,11 @@ struct Args {
   start_addr: SegOff,
   end_addr: SegOff,
 
+  emit_ir_unopt: Option<String>,
+  emit_ir: Option<String>,
+  emit_graph: Option<String>,
   emit_ctrlflow: Option<String>,
+  emit_ast: Option<String>,
   emit_code: Option<String>,
 }
 
@@ -57,7 +65,11 @@ fn parse_args(appname: &str) -> Result<Args, pico_args::Error> {
     binary: pargs.value_from_str("--binary")?,
     start_addr: pargs.value_from_str("--start-addr")?,
     end_addr: pargs.value_from_str("--end-addr")?,
+    emit_ir_unopt: pargs.opt_value_from_str("--emit-ir-unopt")?,
+    emit_ir: pargs.opt_value_from_str("--emit-ir")?,
+    emit_graph: pargs.opt_value_from_str("--emit-graph")?,
     emit_ctrlflow: pargs.opt_value_from_str("--emit-ctrlflow")?,
+    emit_ast: pargs.opt_value_from_str("--emit-ast")?,
     emit_code: pargs.opt_value_from_str("--emit-code")?,
   };
 
@@ -97,6 +109,10 @@ pub fn run(appname: &str) {
   }
 
   let mut ir = build::from_instrs(&instr_list, &cfg);
+  if let Some(path) = args.emit_ir_unopt.as_ref() {
+    write_to_path(path, &format!("{}", ir));
+  }
+
   opt::optimize(&mut ir);
   sym::symbolize(&mut ir, &cfg);
   // opt::forward_store_to_load(&mut ir);
@@ -104,19 +120,27 @@ pub fn run(appname: &str) {
   opt::mem_symbol_to_ref(&mut ir);
   opt::optimize(&mut ir);
 
-  if let Some(path) = args.emit_ctrlflow.as_ref() {
-    let dot = util::gen_graphviz_dotfile(&ir).unwrap();
+  if let Some(path) = args.emit_ir.as_ref() {
+    let text = ir::display::display_ir_with_uses(&ir).unwrap();
+    write_to_path(path, &format!("{}", &text));
+  }
+
+  if let Some(path) = args.emit_graph.as_ref() {
+    let dot = ir::util::gen_graphviz_dotfile(&ir).unwrap();
     write_to_path(path, &dot);
   }
 
-  // let s = display::display_ir_with_uses(&ir).unwrap();
-  // println!("{}", s);
-
   let ctrlflow = control_flow::ControlFlow::from_ir(&ir);
-  //println!("+=======================");
-  //control_flow::print(&ctrlflow);
+  if let Some(path) = args.emit_ctrlflow.as_ref() {
+    let text = control_flow::format(&ctrlflow).unwrap();
+    write_to_path(path, &text);
+  }
 
   let ast = ast::Function::from_ir("my_function", &ir, &ctrlflow);
+  if let Some(path) = args.emit_ast.as_ref() {
+    let text = format!("{:#?}", ast);
+    write_to_path(path, &text);
+  }
 
   if let Some(path) = args.emit_code.as_ref() {
     let code = gen::generate(&ast).unwrap();
