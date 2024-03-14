@@ -248,6 +248,8 @@ pub fn forward_store_to_load(ir: &mut IR) {
   };
 
   for b in 0..ir.blocks.len() {
+    // Don't forward across blocks!!
+    prev_stores = vec![];
     for i in ir.blocks[b].instrs.range() {
       let r = Ref::Instr(BlockRef(b), i);
       let instr = ir.instr(r).unwrap();
