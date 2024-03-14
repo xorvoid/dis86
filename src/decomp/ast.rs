@@ -36,6 +36,16 @@ pub enum BinaryOperator {
 }
 
 impl BinaryOperator {
+  fn signed(self) -> bool {
+    match self {
+      BinaryOperator::Gt => true,
+      BinaryOperator::Geq => true,
+      BinaryOperator::Lt => true,
+      BinaryOperator::Leq => true,
+      _ => false,
+    }
+  }
+
   fn invert(self) -> Option<Self> {
     match self {
       BinaryOperator::Eq => Some(BinaryOperator::Neq),
@@ -194,8 +204,13 @@ impl<'a> Builder<'a> {
       }
     }
 
-    let lhs = self.ref_to_expr(instr.operands[0], depth+1);
-    let rhs = self.ref_to_expr(instr.operands[1], depth+1);
+    let mut lhs = self.ref_to_expr(instr.operands[0], depth+1);
+    let mut rhs = self.ref_to_expr(instr.operands[1], depth+1);
+
+    if ast_op.signed() {
+      lhs = Expr::Cast(Type::I16, Box::new(lhs));
+      rhs = Expr::Cast(Type::I16, Box::new(rhs));
+    }
 
     Some(Expr::Binary(Box::new(BinaryExpr {
       op: ast_op,
