@@ -27,6 +27,41 @@ pub fn reduce_xor(ir: &mut IR) {
   }
 }
 
+/*
+From:
+  1 |   t36      = signext32  t34
+  1 |   dx.2     = upper16    t36
+  1 |   t37      = make32     dx.2                 t34
+
+To:
+  1 |   t37      = signext32  t34
+*/
+pub fn reduce_make_32_signext_32(ir: &mut IR) {
+  for b in 0..ir.blocks.len() {
+    for i in ir.blocks[b].instrs.range() {
+      let r = Ref::Instr(BlockRef(b), i);
+
+      let make32_ref = r;
+      let make32 = ir.instr(make32_ref).unwrap();
+      if make32.opcode != Opcode::Make32 { continue; }
+
+      let upper16_ref = make32.operands[0];
+      let Some(upper16) = ir.instr(upper16_ref) else { continue };
+      if upper16.opcode != Opcode::Upper16 { continue; }
+
+      let signext32_ref = upper16.operands[0];
+      let Some(signext32) = ir.instr(signext32_ref) else { continue };
+      if signext32.opcode != Opcode::SignExtTo32 { continue; }
+
+      if make32.operands[1] == signext32.operands[0] {
+        let instr = ir.instr_mut(make32_ref).unwrap();
+        instr.opcode = Opcode::Ref;
+        instr.operands = vec![signext32_ref];
+      }
+    }
+  }
+}
+
 pub fn reduce_phi(ir: &mut IR) {
   for b in 0..ir.blocks.len() {
     for i in ir.blocks[b].instrs.range() {
@@ -325,6 +360,7 @@ pub fn optimize(ir: &mut IR) {
     // constant_fold(ir);
     // reduce_jne(ir);
     reduce_xor(ir);
+    reduce_make_32_signext_32(ir);
     reduce_phi(ir);
     arithmetic_accumulation(ir);
     value_propagation(ir);
