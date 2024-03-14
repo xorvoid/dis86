@@ -30,9 +30,23 @@ pub struct UnaryExpr {
   pub rhs: Expr,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum BinaryOperator {
   Add, Sub, UDiv, And, Or, Xor, Shl, Shr, Eq, Neq, Gt, Geq, Lt, Leq,
+}
+
+impl BinaryOperator {
+  fn invert(self) -> Option<Self> {
+    match self {
+      BinaryOperator::Eq => Some(BinaryOperator::Neq),
+      BinaryOperator::Neq => Some(BinaryOperator::Eq),
+      BinaryOperator::Gt => Some(BinaryOperator::Leq),
+      BinaryOperator::Geq => Some(BinaryOperator::Lt),
+      BinaryOperator::Lt => Some(BinaryOperator::Geq),
+      BinaryOperator::Leq => Some(BinaryOperator::Gt),
+      _ => None,
+    }
+  }
 }
 
 #[derive(Debug)]
@@ -151,10 +165,10 @@ impl<'a> Builder<'a> {
 
   // depth==0 instruction itself (must generate)
   // depth==1 operand of another instruction (may generate)
-  fn ref_to_binary_expr(&mut self, r: ir::Ref, depth: usize) -> Option<Expr> {
+  fn ref_to_binary_expr(&mut self, r: ir::Ref, depth: usize, inverted: &mut bool) -> Option<Expr> {
     let instr = self.ir.instr(r).unwrap();
 
-    let ast_op = match instr.opcode {
+    let mut ast_op = match instr.opcode {
       ir::Opcode::Add => BinaryOperator::Add,
       ir::Opcode::Sub => BinaryOperator::Sub,
       ir::Opcode::UDiv => BinaryOperator::UDiv,
@@ -172,6 +186,14 @@ impl<'a> Builder<'a> {
       _ => return None,
     };
 
+    // Try to invert the operation if requested
+    if *inverted {
+      if let Some(op) = ast_op.invert() {
+        *inverted = false;
+        ast_op = op;
+      }
+    }
+
     let lhs = self.ref_to_expr(instr.operands[0], depth+1);
     let rhs = self.ref_to_expr(instr.operands[1], depth+1);
 
@@ -183,6 +205,22 @@ impl<'a> Builder<'a> {
   }
 
   fn ref_to_expr(&mut self, r: ir::Ref, depth: usize) -> Expr {
+    self.ref_to_expr_2(r, depth, false)
+  }
+
+  // FIXME: CLEANUP AND RENAME
+  fn ref_to_expr_2(&mut self, r: ir::Ref, depth: usize, mut inverted: bool) -> Expr {
+    let expr = self.ref_to_expr_3(r, depth, &mut inverted);
+    let expr = if inverted {
+      Expr::Unary(Box::new(UnaryExpr{op: UnaryOperator::Not, rhs: expr}))
+    } else {
+      expr
+    };
+    expr
+  }
+
+  // FIXME: CLEANUP AND RENAME
+  fn ref_to_expr_3(&mut self, r: ir::Ref, depth: usize, inverted: &mut bool) -> Expr {
     match self.ir.lookup_const(r) {
       Some(k) => return Expr::Const(k as i64),
       None => (),
@@ -192,7 +230,7 @@ impl<'a> Builder<'a> {
       return Expr::Name(name);
     }
 
-    if let Some(expr) = self.ref_to_binary_expr(r, depth) {
+    if let Some(expr) = self.ref_to_binary_expr(r, depth, inverted) {
       return expr;
     }
 
@@ -312,7 +350,7 @@ impl<'a> Builder<'a> {
 
   // Returns a jump condition expr if the block ends in a conditional branch
   #[must_use]
-  fn emit_blk(&mut self, blk: &mut Block, bref: ir::BlockRef) -> Option<Expr> {
+  fn emit_blk(&mut self, blk: &mut Block, bref: ir::BlockRef, inverted_cond: bool) -> Option<Expr> {
     for i in self.ir.blocks[bref.0].instrs.range() {
       let r = ir::Ref::Instr(bref, i);
       let instr = self.ir.instr(r).unwrap();
@@ -336,7 +374,7 @@ impl<'a> Builder<'a> {
         ir::Opcode::Jne => {
           // TODO: Maybe verify that there are no phis in the target block? This should be gaurenteed by
           // the ir finalize, but it's probably good to do sanity checks
-          let cond = self.ref_to_expr(instr.operands[0], 1);
+          let cond = self.ref_to_expr_2(instr.operands[0], 1, inverted_cond);
           return Some(cond);
         }
         ir::Opcode::WriteVar16 => {
@@ -414,7 +452,7 @@ impl<'a> Builder<'a> {
       blk.push_stmt(Stmt::Label(label));
     }
 
-    let cond = self.emit_blk(blk, bb.blkref);
+    let cond = self.emit_blk(blk, bb.blkref, false);
     self.emit_jump(blk, bb_elt.elem.jump.unwrap(), cond);
   }
 
@@ -436,14 +474,8 @@ impl<'a> Builder<'a> {
       let label = self.make_label(ifstmt.entry);
       blk.push_stmt(Stmt::Label(label));
     }
-    let Some(cond) = self.emit_blk(blk, bb.blkref) else {
+    let Some(cond) = self.emit_blk(blk, bb.blkref, ifstmt.inverted) else {
       panic!("expected ifstmt entry to end in a conditional jump");
-    };
-
-    let cond = if ifstmt.inverted {
-      Expr::Unary(Box::new(UnaryExpr{op: UnaryOperator::Not, rhs: cond}))
-    } else {
-      cond
     };
 
     let then_body = self.convert_body(iter, depth+1);
