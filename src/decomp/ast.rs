@@ -138,6 +138,8 @@ impl<'a> Builder<'a> {
     name
   }
 
+  // depth==0 instruction itself (must generate)
+  // depth==1 operand of another instruction (may generate)
   fn ref_to_binary_expr(&mut self, r: ir::Ref, depth: usize) -> Option<Expr> {
     let instr = self.ir.instr(r).unwrap();
 
@@ -174,7 +176,7 @@ impl<'a> Builder<'a> {
       Some(k) => return Expr::Const(k as i64),
       None => (),
     }
-    if depth > 0 && self.lookup_uses(r) != 1 {
+    if depth != 0 && self.lookup_uses(r) != 1 {
       let name = self.ref_name(r);
       return Expr::Name(name);
     }
@@ -316,19 +318,19 @@ impl<'a> Builder<'a> {
         ir::Opcode::Jne => {
           // TODO: Maybe verify that there are no phis in the target block? This should be gaurenteed by
           // the ir finalize, but it's probably good to do sanity checks
-          let cond = self.ref_to_expr(instr.operands[0], 0);
+          let cond = self.ref_to_expr(instr.operands[0], 1);
           return Some(cond);
         }
         ir::Opcode::WriteVar16 => {
           let lhs = self.symbol_to_expr(instr.operands[0].unwrap_symbol());
-          let rhs = self.ref_to_expr(instr.operands[1], 0);
+          let rhs = self.ref_to_expr(instr.operands[1], 1);
           blk.push_stmt(Stmt::Assign(Assign { lhs, rhs }));
         }
         ir::Opcode::Store16 => {
           let seg = self.ref_to_expr(instr.operands[0], 1);
           let off = self.ref_to_expr(instr.operands[1], 1);
           let lhs = Expr::Deref(Box::new(Expr::Abstract("PTR_16", vec![seg, off])));
-          let rhs = self.ref_to_expr(instr.operands[2], 0);
+          let rhs = self.ref_to_expr(instr.operands[2], 1);
           blk.push_stmt(Stmt::Assign(Assign { lhs, rhs }));
         }
         _ => {
