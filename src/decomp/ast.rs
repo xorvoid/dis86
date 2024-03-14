@@ -14,7 +14,7 @@ pub enum Expr {
   Call(Box<Expr>, Vec<Expr>),
   Abstract(&'static str, Vec<Expr>),
   Deref(Box<Expr>),
-  Cast(&'static str, Box<Expr>),
+  Cast(Type, Box<Expr>),
   UnimplPhi,
   UnimplPin,
 }
@@ -245,8 +245,10 @@ impl<'a> Builder<'a> {
         Expr::Abstract("MAKE_32", exprs)
       }
       ir::Opcode::SignExtTo32 => {
-        let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, depth+1)).collect();
-        Expr::Abstract("SIGNEXT_32", exprs)
+        assert!(instr.operands.len() == 1);
+        let rhs = self.ref_to_expr(instr.operands[0], depth+1);
+        // TODO: VERIFY THIS IS A U16
+        Expr::Cast(Type::I32, Box::new(Expr::Cast(Type::I16, Box::new(rhs))))
       }
       opcode @ _ => {
         panic!("Unimplemented {:?} in ast converter", opcode);
@@ -269,7 +271,7 @@ impl<'a> Builder<'a> {
           rhs: Expr::Const(symref.off as i64),
         }));
       }
-      expr = Expr::Cast("u16*", Box::new(expr));
+      expr = Expr::Cast(Type::ptr(Type::U16), Box::new(expr));
       expr = Expr::Deref(Box::new(expr));
     }
     expr

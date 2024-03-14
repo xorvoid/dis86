@@ -5,6 +5,7 @@ use std::fmt;
 pub enum Type {
   Void, U8, U16, U32, I8, I16, I32,
   Array(Box<Type>, ArraySize),
+  Ptr(Box<Type>),
   Unknown,
 }
 
@@ -15,6 +16,10 @@ pub enum ArraySize {
 }
 
 impl Type {
+  pub fn ptr(base: Type) -> Type {
+    Type::Ptr(Box::new(base))
+  }
+
   pub fn size_in_bytes(&self) -> Option<usize> {
     match self {
       Type::Void => None,
@@ -32,6 +37,7 @@ impl Type {
         }?;
         Some(elt_sz * count)
       }
+      Type::Ptr(_) => None, // Not sure what to do here.. on 8086 this a (seg:off) pair, but on a modern machine (like in hydra) it'll be 8 bytes... Hmmm
       Type::Unknown => None,
     }
   }
@@ -92,6 +98,7 @@ impl fmt::Display for Type {
         }
         write!(f, "]")
       }
+      Type::Ptr(base)  => write!(f, "{}*", base),
       Type::Unknown => write!(f, "?unknown_type?"),
     }
   }
