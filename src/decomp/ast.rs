@@ -1,6 +1,7 @@
 use crate::decomp::ir;
+use crate::decomp::types::*;
 use crate::decomp::control_flow::{self, ControlFlow, Detail, ElemId};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 type FlowIter<'a> = std::iter::Peekable<control_flow::ControlFlowIter<'a>>;
 
@@ -81,6 +82,7 @@ pub struct If {
 
 #[derive(Debug)]
 pub enum Stmt {
+  VarDecl(Type, String),
   Label(Label),
   Instr(ir::Ref),
   Expr(Expr),
@@ -95,6 +97,7 @@ pub enum Stmt {
 #[derive(Debug)]
 pub struct Function {
   pub name: String,
+  pub decls: Block,
   pub body: Block,
 }
 
@@ -107,6 +110,7 @@ struct Builder<'a> {
   n_uses: HashMap<ir::Ref, usize>,
   temp_names: HashMap<ir::Ref, String>,
   temp_count: usize,
+  assigned_names: HashSet<String>,
 }
 
 impl Block {
@@ -124,6 +128,7 @@ impl<'a> Builder<'a> {
       n_uses,
       temp_names: HashMap::new(),
       temp_count: 0,
+      assigned_names: HashSet::new(),
     }
   }
 
@@ -295,6 +300,7 @@ impl<'a> Builder<'a> {
 
       let name = self.ref_name(r);
       let rvalue = self.ref_to_expr(instr.operands[idx], 1);
+      self.assigned_names.insert(name.clone());
       blk.push_stmt(Stmt::Assign(Assign {
         lhs: Expr::Name(name),
         rhs: rvalue,
@@ -352,8 +358,10 @@ impl<'a> Builder<'a> {
             // This can happen in the case of a Call with no return value.. avoid generating the assignment of an unused void
             blk.push_stmt(Stmt::Expr(rvalue));
           } else {
+            let name = self.ref_name(r);
+            self.assigned_names.insert(name.clone());
             blk.push_stmt(Stmt::Assign(Assign {
-              lhs: Expr::Name(self.ref_name(r)),
+              lhs: Expr::Name(name),
               rhs: rvalue,
             }));
           }
@@ -458,8 +466,16 @@ impl<'a> Builder<'a> {
     let body = self.convert_body(&mut iter, 0);
     assert!(iter.next().is_none());
 
+    let mut decls = Block(vec![]);
+    let mut names: Vec<_> = self.assigned_names.iter().cloned().collect();
+    names.sort();
+    for name in names {
+      decls.0.push(Stmt::VarDecl(Type::U16, name));
+    }
+
     Function {
       name: name.to_string(),
+      decls,
       body,
     }
   }

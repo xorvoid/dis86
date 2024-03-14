@@ -18,6 +18,7 @@ impl Flavor {
 trait FlavorImpl {
   fn func_sig(&self, g: &mut Gen<'_>, name: &str) -> fmt::Result;
   fn ret(&self, g: &mut Gen<'_>, ret: &Return) -> fmt::Result;
+  fn call(&self, g: &mut Gen<'_>, name: &Expr, args: &[Expr], level: usize) -> fmt::Result;
 }
 
 struct Standard {}
@@ -31,6 +32,17 @@ impl FlavorImpl for Standard {
       Return::Far => g.text("return; /* FAR */")?,
       Return::Near => g.text("return; /* NEAR */")?,
     }
+    Ok(())
+  }
+
+  fn call(&self, g: &mut Gen<'_>, name: &Expr, args: &[Expr], level: usize) -> fmt::Result {
+    g.expr(name, level+1, self)?;
+    g.text("(")?;
+    for (i, arg) in args.iter().enumerate() {
+      if i != 0 { g.text(", ")?; }
+      g.expr(arg, 0, self)?;
+    }
+    g.text(")")?;
     Ok(())
   }
 }
@@ -47,6 +59,17 @@ impl FlavorImpl for Hydra {
       Return::Far => g.text("RETURN_FAR();")?,
       Return::Near => g.text("RETURN_NEAR();")?,
     }
+    Ok(())
+  }
+
+  fn call(&self, g: &mut Gen<'_>, name: &Expr, args: &[Expr], level: usize) -> fmt::Result {
+    g.expr(name, level+1, self)?;
+    g.text("(m")?;
+    for arg in args.iter() {
+      g.text(", ")?;
+      g.expr(arg, 0, self)?;
+    }
+    g.text(")")?;
     Ok(())
   }
 }
@@ -120,21 +143,21 @@ impl<'a> Gen<'a> {
     self.text(s)
   }
 
-  fn expr(&mut self, expr: &Expr, level: usize) -> fmt::Result {
+  fn expr(&mut self, expr: &Expr, level: usize, imp: &dyn FlavorImpl) -> fmt::Result {
     match expr {
       Expr::Unary(u) => {
         self.unary_oper(&u.op)?;
-        self.expr(&u.rhs, level+1)?;
+        self.expr(&u.rhs, level+1, imp)?;
       }
       Expr::Binary(b) => {
         if level > 0 {
           self.text("(")?;
         }
-        self.expr(&b.lhs, level+1)?;
+        self.expr(&b.lhs, level+1, imp)?;
         self.text(" ")?;
         self.binary_oper(&b.op)?;
         self.text(" ")?;
-        self.expr(&b.rhs, level+1)?;
+        self.expr(&b.rhs, level+1, imp)?;
         if level > 0 {
           self.text(")")?;
         }
@@ -153,26 +176,20 @@ impl<'a> Gen<'a> {
       }
       Expr::Cast(typ, expr) => {
         self.text(&format!("({})", typ))?;
-        self.expr(expr, level+1)?;
+        self.expr(expr, level+1, imp)?;
       }
       Expr::Deref(expr) => {
         self.text("*")?;
-        self.expr(expr, level+1)?;
+        self.expr(expr, level+1, imp)?;
       }
       Expr::Call(name, args) => {
-        self.expr(name, level+1)?;
-        self.text("(")?;
-        for (i, arg) in args.iter().enumerate() {
-          if i != 0 { self.text(", ")?; }
-          self.expr(arg, 0)?;
-        }
-        self.text(")")?;
+        imp.call(self, name, args, level)?;
       }
       Expr::Abstract(name, args) => {
         self.text(&format!("{}(", name))?;
         for (i, arg) in args.iter().enumerate() {
           if i != 0 { self.text(", ")?; }
-          self.expr(arg, 0)?;
+          self.expr(arg, 0, imp)?;
         }
         self.text(")")?;
       }
@@ -194,15 +211,21 @@ impl<'a> Gen<'a> {
         self.text(&format!("{}:;", l.0))?;
         self.endline()?;
       }
+      Stmt::VarDecl(typ, name) => {
+        self.text(&format!("{} ", typ))?;
+        self.text(&name)?;
+        self.text(";")?;
+        self.endline()?;
+      }
       Stmt::Expr(expr) => {
-        self.expr(expr, 0)?;
+        self.expr(expr, 0, imp)?;
         self.text(";")?;
         self.endline()?;
       }
       Stmt::Assign(s) => {
-        self.expr(&s.lhs, 0)?;
+        self.expr(&s.lhs, 0, imp)?;
         self.text(" = ")?;
-        self.expr(&s.rhs, 0)?;
+        self.expr(&s.rhs, 0, imp)?;
         self.text(";")?;
         self.endline()?;
       }
@@ -212,7 +235,7 @@ impl<'a> Gen<'a> {
       }
       Stmt::CondGoto(g) => {
         self.text("if (")?;
-        self.expr(&g.cond, 0)?;
+        self.expr(&g.cond, 0, imp)?;
         self.text(") ")?;
         self.goto(&g.label_true)?;
         self.text("else ")?;
@@ -233,7 +256,7 @@ impl<'a> Gen<'a> {
       }
       Stmt::If(ifstmt) => {
         self.text("if (")?;
-        self.expr(&ifstmt.cond, 0)?;
+        self.expr(&ifstmt.cond, 0, imp)?;
         self.text(") ")?;
         self.enter_block()?;
         self.endline()?;
@@ -257,9 +280,11 @@ impl<'a> Gen<'a> {
   }
 
   fn func(&mut self, func: &Function, imp: &dyn FlavorImpl) -> fmt::Result {
-    imp.func_sig(self, &func.name);
+    imp.func_sig(self, &func.name)?;
     self.endline()?;
     self.enter_block()?;
+    self.endline()?;
+    self.block(&func.decls, imp)?;
     self.endline()?;
     self.block(&func.body, imp)?;
     self.leave_block()?;
