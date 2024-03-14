@@ -1,7 +1,6 @@
 use crate::decomp::ir;
 use crate::decomp::control_flow::{self, ControlFlow, Detail, ElemId};
-use std::collections::{HashMap, HashSet};
-use std::fmt::Write;
+use std::collections::HashMap;
 
 type FlowIter<'a> = std::iter::Peekable<control_flow::ControlFlowIter<'a>>;
 
@@ -341,7 +340,7 @@ impl<'a> Builder<'a> {
     }
   }
 
-  fn convert_basic_block(&mut self, blk: &mut Block, iter: &mut FlowIter, depth: usize) {
+  fn convert_basic_block(&mut self, blk: &mut Block, iter: &mut FlowIter, _depth: usize) {
     let Some(bb_elt) = iter.next() else { panic!("expected basic block element") };
     let Detail::BasicBlock(bb) = &bb_elt.elem.detail else { panic!("expected basic block element") };
 
@@ -356,7 +355,7 @@ impl<'a> Builder<'a> {
 
   fn convert_loop(&mut self, blk: &mut Block, iter: &mut FlowIter, depth: usize) {
     let Some(loop_elt) = iter.next() else { panic!("expected loop element") };
-    let Detail::Loop(lp) = &loop_elt.elem.detail else { panic!("expected loop element") };
+    let Detail::Loop(_) = &loop_elt.elem.detail else { panic!("expected loop element") };
 
     let body = self.convert_body(iter, depth+1);
     blk.push_stmt(Stmt::Loop(Loop { body }));

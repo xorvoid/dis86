@@ -545,7 +545,7 @@ impl<'a> Parent<'a> {
 }
 
 #[must_use]
-fn schedule_layout_basic_block(elem: &mut Elem, parent: &Parent, data: &mut ControlFlowData) -> Option<ElemId> {
+fn schedule_layout_basic_block(elem: &mut Elem, parent: &Parent, _data: &mut ControlFlowData) -> Option<ElemId> {
   let Detail::BasicBlock(_) = &elem.detail else { panic!("Expected basic block") };
   let exits = &elem.exits;
 
