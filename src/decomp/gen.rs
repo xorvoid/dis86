@@ -144,6 +144,11 @@ impl<'a> Gen<'a> {
         self.text(&format!("{}:;", l.0))?;
         self.endline()?;
       }
+      Stmt::Expr(expr) => {
+        self.expr(expr, 0)?;
+        self.text(";")?;
+        self.endline()?;
+      }
       Stmt::Assign(s) => {
         self.expr(&s.lhs, 0)?;
         self.text(" = ")?;

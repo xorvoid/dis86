@@ -334,15 +334,19 @@ impl<'a> Builder<'a> {
           blk.push_stmt(Stmt::Assign(Assign { lhs, rhs }));
         }
         _ => {
-          if self.n_uses.get(&r).unwrap_or(&0) == &1 { continue; }
+          let uses = self.n_uses.get(&r).cloned().unwrap_or(0);
+          if uses == 1 { continue; }
 
-          let name = self.ref_name(r);
           let rvalue = self.ref_to_expr(r, 0);
-
-          blk.push_stmt(Stmt::Assign(Assign {
-            lhs: Expr::Name(name),
-            rhs: rvalue,
-          }));
+          if uses == 0 {
+            // This can happen in the case of a Call with no return value.. avoid generating the assignment of an unused void
+            blk.push_stmt(Stmt::Expr(rvalue));
+          } else {
+            blk.push_stmt(Stmt::Assign(Assign {
+              lhs: Expr::Name(self.ref_name(r)),
+              rhs: rvalue,
+            }));
+          }
         }
       }
     }
