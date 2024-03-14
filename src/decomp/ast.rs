@@ -63,6 +63,12 @@ pub struct Goto {
 }
 
 #[derive(Debug)]
+pub enum Return {
+  Far,
+  Near,
+}
+
+#[derive(Debug)]
 pub struct Loop {
   pub body: Block,
 }
@@ -81,7 +87,7 @@ pub enum Stmt {
   Assign(Assign),
   CondGoto(CondGoto),
   Goto(Goto),
-  Return,
+  Return(Return),
   Loop(Loop),
   If(If),
 }
@@ -306,8 +312,12 @@ impl<'a> Builder<'a> {
         ir::Opcode::Nop => continue,
         ir::Opcode::Phi => continue, // handled by jmp
         ir::Opcode::Pin => continue, // ignored
-        ir::Opcode::Ret => {
-          blk.push_stmt(Stmt::Return);
+        ir::Opcode::RetFar => {
+          blk.push_stmt(Stmt::Return(Return::Far));
+          return None;
+        }
+        ir::Opcode::RetNear => {
+          blk.push_stmt(Stmt::Return(Return::Near));
           return None;
         }
         ir::Opcode::Jmp => {

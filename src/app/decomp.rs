@@ -34,6 +34,9 @@ fn print_help(appname: &str) {
   println!("  --emit-ctrlflow   path to emit the inferred control-flow structure (optional)");
   println!("  --emit-ast        path to emit the constructed AST (optional)");
   println!("  --emit-code       path to emit c code (optional)");
+  println!("");
+  println!("CODEGEN FLAGS:");
+  println!("  --codegen-hydra   emit code that integrates well with the hydra runtime (optional)");
 }
 
 fn write_to_path(path: &str, data: &str) {
@@ -63,6 +66,18 @@ struct Args {
   emit_ctrlflow: Option<String>,
   emit_ast: Option<String>,
   emit_code: Option<String>,
+
+  codegen_hydra: bool,
+}
+
+fn match_flag(args: &mut Vec<std::ffi::OsString>, flag: &str) -> bool {
+  for i in 0..args.len() {
+    if args[i] == flag {
+      args.remove(i);
+      return true;
+    }
+  }
+  false
 }
 
 fn parse_args(appname: &str) -> Result<Args, pico_args::Error> {
@@ -75,7 +90,7 @@ fn parse_args(appname: &str) -> Result<Args, pico_args::Error> {
   }
 
   // Parse out all args
-  let args = Args {
+  let mut args = Args {
     config:          pargs.value_from_str("--config")?,
     binary:          pargs.value_from_str("--binary")?,
     start_addr:      pargs.opt_value_from_str("--start-addr")?,
@@ -90,10 +105,13 @@ fn parse_args(appname: &str) -> Result<Args, pico_args::Error> {
     emit_ctrlflow:   pargs.opt_value_from_str("--emit-ctrlflow")?,
     emit_ast:        pargs.opt_value_from_str("--emit-ast")?,
     emit_code:       pargs.opt_value_from_str("--emit-code")?,
+    codegen_hydra:   false,
   };
 
+  let mut remaining = pargs.finish();
+  args.codegen_hydra = match_flag(&mut remaining, "--codegen-hydra");
+
   // It's up to the caller what to do with the remaining arguments.
-  let remaining = pargs.finish();
   if remaining != &["decomp"] {
     eprintln!("Error: unused arguments left: {:?}.", remaining);
     std::process::exit(1);
@@ -220,7 +238,8 @@ pub fn run(appname: &str) {
   }
 
   if let Some(path) = args.emit_code.as_ref() {
-    let code = gen::generate(&ast).unwrap();
+    let flavor = if args.codegen_hydra { gen::Flavor::Hydra } else { gen::Flavor::Standard };
+    let code = gen::generate(&ast, flavor).unwrap();
     write_to_path(path, &code);
   }
 }

@@ -222,7 +222,7 @@ impl ControlFlow {
       let instr = ir.blocks[b].instrs.last().unwrap();
       let mut exits = vec![];
       match instr.opcode {
-        ir::Opcode::Ret => (),
+        ir::Opcode::RetFar | ir::Opcode::RetNear => (),
         ir::Opcode::Jmp => {
           exits.push(ElemId(instr.operands[0].unwrap_block().0));
         }

@@ -25,7 +25,7 @@ pub fn gen_graphviz_dotfile(ir: &ir::IR) -> Result<String, std::fmt::Error> {
     let src = &blk.name;
     let instr = blk.instrs.last().unwrap();
     match instr.opcode {
-      ir::Opcode::Ret => {
+      ir::Opcode::RetFar | ir::Opcode::RetNear  => {
         writeln!(f, "  {}_{} -> exit;", src, b)?;
       }
       ir::Opcode::Jmp => {

@@ -1,6 +1,56 @@
 use crate::decomp::ast::*;
 use std::fmt;
 
+pub enum Flavor {
+  Standard,
+  Hydra,
+}
+
+impl Flavor {
+  fn instantiate(&self) -> Box<dyn FlavorImpl> {
+    match self {
+      Flavor::Standard => Box::new(Standard{}),
+      Flavor::Hydra => Box::new(Hydra{}),
+    }
+  }
+}
+
+trait FlavorImpl {
+  fn func_sig(&self, g: &mut Gen<'_>, name: &str) -> fmt::Result;
+  fn ret(&self, g: &mut Gen<'_>, ret: &Return) -> fmt::Result;
+}
+
+struct Standard {}
+impl FlavorImpl for Standard {
+  fn func_sig(&self, g: &mut Gen<'_>, name: &str) -> fmt::Result {
+    g.text(&format!("void {}(void)", name))
+  }
+
+  fn ret(&self, g: &mut Gen<'_>, ret: &Return) -> fmt::Result {
+    match ret {
+      Return::Far => g.text("return; /* FAR */")?,
+      Return::Near => g.text("return; /* NEAR */")?,
+    }
+    Ok(())
+  }
+}
+
+struct Hydra {}
+impl FlavorImpl for Hydra {
+  fn func_sig(&self, g: &mut Gen<'_>, name: &str) -> fmt::Result {
+    let name = if name.starts_with("F_") { &name[2..] } else { name };
+    g.text(&format!("HOOK_FUNC(H_{})", name))
+  }
+
+  fn ret(&self, g: &mut Gen<'_>, ret: &Return) -> fmt::Result {
+    match ret {
+      Return::Far => g.text("RETURN_FAR();")?,
+      Return::Near => g.text("RETURN_NEAR();")?,
+    }
+    Ok(())
+  }
+}
+
 struct Gen<'a> {
   f: &'a mut dyn fmt::Write,
   indent_level: usize,
@@ -137,7 +187,7 @@ impl<'a> Gen<'a> {
     self.text(";")
   }
 
-  fn stmt(&mut self, stmt: &Stmt) -> fmt::Result {
+  fn stmt(&mut self, stmt: &Stmt, imp: &dyn FlavorImpl) -> fmt::Result {
     match stmt {
       Stmt::Label(l) => {
         self.suppress_indent();
@@ -169,15 +219,15 @@ impl<'a> Gen<'a> {
         self.goto(&g.label_false)?;
         self.endline()?;
       }
-      Stmt::Return => {
-        self.text("return;")?;
+      Stmt::Return(r) => {
+        imp.ret(self, r)?;
         self.endline()?;
       }
       Stmt::Loop(lp) => {
         self.text("while (1) ")?;
         self.enter_block()?;
         self.endline()?;
-        self.block(&lp.body)?;
+        self.block(&lp.body, imp)?;
         self.leave_block()?;
         self.endline()?;
       }
@@ -187,7 +237,7 @@ impl<'a> Gen<'a> {
         self.text(") ")?;
         self.enter_block()?;
         self.endline()?;
-        self.block(&ifstmt.then_body)?;
+        self.block(&ifstmt.then_body, imp)?;
         self.leave_block()?;
         self.endline()?;
       }
@@ -199,31 +249,32 @@ impl<'a> Gen<'a> {
     Ok(())
   }
 
-  fn block(&mut self, blk: &Block) -> fmt::Result {
+  fn block(&mut self, blk: &Block, imp: &dyn FlavorImpl) -> fmt::Result {
     for stmt in &blk.0 {
-      self.stmt(stmt)?;
+      self.stmt(stmt, imp)?;
     }
     Ok(())
   }
 
-  fn func(&mut self, func: &Function) -> fmt::Result {
-    self.text(&format!("void {}(void)", func.name))?;
+  fn func(&mut self, func: &Function, imp: &dyn FlavorImpl) -> fmt::Result {
+    imp.func_sig(self, &func.name);
     self.endline()?;
     self.enter_block()?;
     self.endline()?;
-    self.block(&func.body)?;
+    self.block(&func.body, imp)?;
     self.leave_block()?;
     Ok(())
   }
 }
 
-pub fn generate_generic(func: &Function, f: &mut dyn fmt::Write) -> fmt::Result {
+pub fn generate_generic(func: &Function, f: &mut dyn fmt::Write, flavor: Flavor) -> fmt::Result {
   let mut g = Gen::new(f);
-  g.func(func)
+  let imp = flavor.instantiate();
+  g.func(func, imp.as_ref())
 }
 
-pub fn generate(func: &Function) -> Result<String, fmt::Error> {
+pub fn generate(func: &Function, flavor: Flavor) -> Result<String, fmt::Error> {
   let mut buf = String::new();
-  generate_generic(func, &mut buf)?;
+  generate_generic(func, &mut buf, flavor)?;
   Ok(buf)
 }
