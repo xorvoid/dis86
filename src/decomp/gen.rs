@@ -16,15 +16,19 @@ impl Flavor {
 }
 
 trait FlavorImpl {
-  fn func_sig(&self, g: &mut Gen<'_>, name: &str) -> fmt::Result;
+  fn func_sig(&self, g: &mut Gen<'_>, func: &Function) -> fmt::Result;
   fn ret(&self, g: &mut Gen<'_>, ret: &Return) -> fmt::Result;
   fn call(&self, g: &mut Gen<'_>, name: &Expr, args: &[Expr], level: usize) -> fmt::Result;
 }
 
 struct Standard {}
 impl FlavorImpl for Standard {
-  fn func_sig(&self, g: &mut Gen<'_>, name: &str) -> fmt::Result {
-    g.text(&format!("void {}(void)", name))
+  fn func_sig(&self, g: &mut Gen<'_>, func: &Function) -> fmt::Result {
+    let ret_str = match &func.ret {
+      Some(ret) => format!("{}", ret),
+      None => "_unknown_return_type".to_string(),
+    };
+    g.text(&format!("{} {}(void)", ret_str, func.name))
   }
 
   fn ret(&self, g: &mut Gen<'_>, ret: &Return) -> fmt::Result {
@@ -67,7 +71,8 @@ impl FlavorImpl for Standard {
 
 struct Hydra {}
 impl FlavorImpl for Hydra {
-  fn func_sig(&self, g: &mut Gen<'_>, name: &str) -> fmt::Result {
+  fn func_sig(&self, g: &mut Gen<'_>, func: &Function) -> fmt::Result {
+    let name = &func.name;
     let name = if name.starts_with("F_") { &name[2..] } else { name };
     g.text(&format!("HOOK_FUNC(H_{})", name))
   }
@@ -79,17 +84,17 @@ impl FlavorImpl for Hydra {
         g.text("AX = ")?;
         g.expr(&ret.vals[0], 0, self)?;
         g.text(";")?;
-        g.endline();
+        g.endline()?;
       }
       2 => {
         g.text("DX = ")?;
         g.expr(&ret.vals[1], 0, self)?;
         g.text(";")?;
-        g.endline();
+        g.endline()?;
         g.text("AX = ")?;
         g.expr(&ret.vals[0], 0, self)?;
         g.text(";")?;
-        g.endline();
+        g.endline()?;
       }
       _ => panic!("Unsupported return values"),
     }
@@ -318,7 +323,7 @@ impl<'a> Gen<'a> {
   }
 
   fn func(&mut self, func: &Function, imp: &dyn FlavorImpl) -> fmt::Result {
-    imp.func_sig(self, &func.name)?;
+    imp.func_sig(self, func)?;
     self.endline()?;
     self.enter_block()?;
     self.endline()?;

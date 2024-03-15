@@ -217,7 +217,8 @@ pub fn run(appname: &str) {
     return;
   }
 
-  let ast = ast::Function::from_ir(&spec.name, &ir, &ctrlflow);
+  let ret = spec.func.map(|f| f.ret.clone());
+  let ast = ast::Function::from_ir(&spec.name, ret, &ir, &ctrlflow);
   if let Some(path) = args.emit_ast.as_ref() {
     let text = format!("{:#?}", ast);
     write_to_path(path, &text);

@@ -1,7 +1,7 @@
 use std::str::FromStr;
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Type {
   Void, U8, U16, U32, I8, I16, I32,
   Array(Box<Type>, ArraySize),
@@ -9,7 +9,7 @@ pub enum Type {
   Unknown,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ArraySize {
   Known(usize),
   Unknown,

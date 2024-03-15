@@ -127,6 +127,7 @@ pub enum Stmt {
 #[derive(Debug)]
 pub struct Function {
   pub name: String,
+  pub ret: Option<Type>,
   pub decls: Block,
   pub body: Block,
 }
@@ -542,7 +543,7 @@ impl<'a> Builder<'a> {
     blk
   }
 
-  fn build(&mut self, name: &str) -> Function {
+  fn build(&mut self, name: &str, ret: Option<Type>) -> Function {
     let mut iter = self.cf.iter().peekable();
     let body = self.convert_body(&mut iter, 0);
     assert!(iter.next().is_none());
@@ -556,6 +557,7 @@ impl<'a> Builder<'a> {
 
     Function {
       name: name.to_string(),
+      ret,
       decls,
       body,
     }
@@ -563,7 +565,7 @@ impl<'a> Builder<'a> {
 }
 
 impl Function {
-  pub fn from_ir(name: &str, ir: &ir::IR, ctrlflow: &ControlFlow) -> Self {
-    Builder::new(ir, ctrlflow).build(name)
+  pub fn from_ir(name: &str, ret: Option<Type>, ir: &ir::IR, ctrlflow: &ControlFlow) -> Self {
+    Builder::new(ir, ctrlflow).build(name, ret)
   }
 }
