@@ -310,7 +310,7 @@ impl<'a> Builder<'a> {
       }
       ir::Opcode::CallPtr => {
         let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, depth+1)).collect();
-        Expr::Abstract("CALL_PTR", exprs)
+        Expr::Abstract("CALL_FAR_INDIRECT", exprs)
       }
       ir::Opcode::Phi => {
         // generally handled by jmp, but other expressions that use a phi might end up here

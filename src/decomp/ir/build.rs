@@ -422,7 +422,7 @@ impl IRBuilder<'_> {
     args
   }
 
-  fn process_callf_known(&mut self, func: &config::Func, ins: &instr::Instr) {
+  fn process_call_known(&mut self, func: &config::Func, ins: &instr::Instr) {
     let idx = self.ir.funcs.len();
     self.ir.funcs.push(func.name.to_string());
 
@@ -451,22 +451,28 @@ impl IRBuilder<'_> {
     }
   }
 
-  fn process_callf_segoff(&mut self, addr: SegOff, ins: &instr::Instr) {
+  fn process_call_segoff(&mut self, addr: SegOff, mode: config::CallMode, ins: &instr::Instr) {
     if let Some(func) = self.cfg.func_lookup(addr) {
       // Known function
-      self.process_callf_known(func, ins);
+      if func.mode != mode {
+        panic!("Found function but it's call mode doesn't match! Expected {:?}, Got {:?}", mode, func.mode);
+      }
+      self.process_call_known(func, ins);
     } else {
       // Unknown function
       let nargs = self.heuristic_infer_call_arguments_by_context(ins,
-                    &format!("Unknown far call to {}", addr));
+                    &format!("Unknown call to {}", addr));
 
       let seg = self.ir.append_const(addr.seg.into());
       let off = self.ir.append_const(addr.off.into());
 
       let mut operands = vec![seg, off];
       operands.append(&mut self.load_args_from_stack(nargs));
-      let ret = self.append_instr(Opcode::CallFar, operands);
-
+      let opcode = match mode {
+        config::CallMode::Far => Opcode::CallFar,
+        config::CallMode::Near => Opcode::CallNear,
+      };
+      let ret = self.append_instr(opcode, operands);
       self.ir.set_var(instr::Reg::AX, self.cur, ret);
     }
   }
@@ -476,10 +482,10 @@ impl IRBuilder<'_> {
       return self.process_callf_indirect(ins);
     };
     let addr = SegOff { seg: far.seg, off: far.off };
-    self.process_callf_segoff(addr, ins);
+    self.process_call_segoff(addr, config::CallMode::Far, ins);
   }
 
-  fn process_call(&mut self, ins: &instr::Instr, cs_pushed: bool) {
+  fn process_calln(&mut self, ins: &instr::Instr, cs_pushed: bool) {
     let instr::Operand::Rel(rel) = &ins.operands[0] else {
       panic!("Expected near call to have relative operand");
     };
@@ -490,21 +496,11 @@ impl IRBuilder<'_> {
       // So, POP CS back off the stack and let's pretend it's a normal
       // far call
       self.append_pop();
-      self.process_callf_segoff(addr, ins);
+      self.process_call_segoff(addr, config::CallMode::Far, ins);
     } else {
       // Otherwise, we assume it's actually a near call
-      let nargs = self.heuristic_infer_call_arguments_by_context(ins,
-                &format!("Unknown near call to {}", addr));
-
-      let seg = self.ir.append_const(addr.seg.into());
-      let off = self.ir.append_const(addr.off.into());
-
-      let mut operands = vec![seg, off];
-      operands.append(&mut self.load_args_from_stack(nargs));
-      let ret = self.append_instr(Opcode::CallNear, operands);
-
-      self.ir.set_var(instr::Reg::AX, self.cur, ret);
-    };
+      self.process_call_segoff(addr, config::CallMode::Near, ins);
+    }
   }
 
   fn append_asm_instr(&mut self, ins: &instr::Instr) {
@@ -657,7 +653,7 @@ impl IRBuilder<'_> {
       }
       instr::Opcode::OP_CALL => {
         let cs_pushed = matches!(special, Some(SpecialState::PushCS));
-        self.process_call(ins, cs_pushed);
+        self.process_calln(ins, cs_pushed);
       }
       instr::Opcode::OP_LES => {
         let vref = self.append_asm_src_operand(&ins.operands[2]);

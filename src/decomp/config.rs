@@ -7,9 +7,16 @@ pub struct Func {
   pub name: String,
   pub start: SegOff,
   pub end: Option<SegOff>,
+  pub mode: CallMode,
   pub ret: Type,
   pub args: Option<u16>,  // None means "unknown", Some(0) means "no args"
   pub pop_args_after_call: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CallMode {
+  Near,
+  Far,
 }
 
 #[derive(Debug)]
@@ -80,6 +87,8 @@ impl Config {
         .ok_or_else(|| format!("No function 'start' property for '{}'", key))?;
       let end_str = f.get_str("end")
         .ok_or_else(|| format!("No function 'end' property for '{}'", key))?;
+      let mode_str = f.get_str("mode")
+        .ok_or_else(|| format!("No function 'mode' property for '{}'", key))?;
       let ret_str = f.get_str("ret")
         .ok_or_else(|| format!("No function 'ret' property for '{}'", key))?;
       let args_str = f.get_str("args")
@@ -93,6 +102,11 @@ impl Config {
         Some(end_str.parse()
              .map_err(|_| format!("Expected segoff for '{}.end', got '{}'", key, end_str))?)
       };
+      let mode = match mode_str {
+        "near" => CallMode::Near,
+        "far" => CallMode::Far,
+        _ => panic!("Unsupported mode '{}'", mode_str)
+      };
       let args: i16 = args_str.parse()
         .map_err(|_| format!("Expected u16 for '{}.args', got '{}'", key, args_str))?;
       let ret: Type = ret_str.parse()
@@ -102,6 +116,7 @@ impl Config {
         name: key.to_string(),
         start,
         end,
+        mode,
         ret,
         args: if args >= 0 { Some(args as u16) } else { None },
         pop_args_after_call,
