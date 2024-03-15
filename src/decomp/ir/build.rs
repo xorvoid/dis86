@@ -63,6 +63,7 @@ enum SpecialState {
 }
 
 struct IRBuilder<'a> {
+  instrs: &'a [instr::Instr],
   ir: IR,
   addrmap: HashMap<Address, BlockRef>,
   cur: BlockRef,
@@ -72,8 +73,9 @@ struct IRBuilder<'a> {
 }
 
 impl<'a> IRBuilder<'a> {
-  fn new(cfg: &'a Config, spec: &'a spec::Spec) -> Self {
+  fn new(cfg: &'a Config, instrs: &'a [instr::Instr], spec: &'a spec::Spec) -> Self {
     let mut this = Self {
+      instrs,
       ir: IR::new(),
       addrmap: HashMap::new(),
       cur: BlockRef(0),
@@ -283,7 +285,6 @@ impl IRBuilder<'_> {
     let ax = self.ir.get_var(instr::Reg::AX, self.cur);
     let dx = self.ir.get_var(instr::Reg::DX, self.cur);
     if let Some(func) = self.spec.func {
-      println!("func: {:?}", func);
       // Use the retval in the config defn
       match &func.ret {
         Type::Void => vec![], // no return value
@@ -346,35 +347,94 @@ impl IRBuilder<'_> {
     val
   }
 
-  fn process_callf_indirect(&mut self, ins: &instr::Instr) {
-    let addr = self.append_asm_src_operand(&ins.operands[0]);
-    self.append_instr(Opcode::CallPtr, vec![addr]);
+  // Try to infer the number of args by looking at the surrounding context for
+  // typical stack manipulation associated with the 8086 dos calling conventions
+  fn heuristic_infer_call_arguments_by_context(&self, ins: &instr::Instr, warn_msg: &str) -> u16 {
+    let idx = offset_from(self.instrs, ins);
+
+    let mut bytes_pushed_before = 0;
+    for i in (0..idx).rev() {
+      if self.instrs[i].opcode != instr::Opcode::OP_PUSH { break; }
+      bytes_pushed_before += 2;
+    }
+
+    let mut bytes_cleanup_after = 0;
+    if idx+1 < self.instrs.len() {
+      let cleanup = &self.instrs[idx+1];
+      match cleanup.opcode {
+        instr::Opcode::OP_POP => {
+          if matches!(cleanup.operands[0], instr::Operand::Reg(instr::OperandReg(instr::Reg::CX))) {
+            bytes_cleanup_after = 2;
+          }
+        }
+        instr::Opcode::OP_ADD => {
+        let matches =
+            matches!(cleanup.operands[0], instr::Operand::Reg(instr::OperandReg(instr::Reg::SP))) &&
+            matches!(cleanup.operands[1], instr::Operand::Imm(_));
+          if matches {
+            let instr::Operand::Imm(imm) = cleanup.operands[1] else { unreachable!() };
+            bytes_cleanup_after = imm.val;
+          }
+        }
+        _ => (),
+      }
+    }
+
+    if bytes_pushed_before >= bytes_cleanup_after {
+      assert!(bytes_cleanup_after%2 == 0);
+      let n = bytes_cleanup_after/2;
+      eprintln!("WARN: {}, inferred {} arg(s)... possibly erroneously", warn_msg, n);
+      n
+    } else {
+      // If more bytes are cleaned up then pushed.. pessimize
+      let n = 0;
+      eprintln!("WARN: {}, failed to infer, assuming {} arg(s)...very likely erroneously", warn_msg, n);
+      n
+    }
   }
 
-  fn process_callf_known(&mut self, func: &config::Func) {
+  fn process_callf_indirect(&mut self, ins: &instr::Instr) {
+    let addr = self.append_asm_src_operand(&ins.operands[0]);
+
+    let nargs = self.heuristic_infer_call_arguments_by_context(ins,
+              &format!("Unknown ptr call from '{}'", crate::intel_syntax::format(ins, &[], false).unwrap()));
+
+    let mut operands = vec![addr];
+    operands.append(&mut self.load_args_from_stack(nargs));
+    let ret = self.append_instr(Opcode::CallPtr, operands);
+
+    self.ir.set_var(instr::Reg::AX, self.cur, ret);
+  }
+
+  fn load_args_from_stack(&mut self, n: u16) -> Vec<Ref> {
+    let mut args = vec![];
+    let ss = self.ir.get_var(instr::Reg::SS, self.cur);
+    let sp = self.ir.get_var(instr::Reg::SP, self.cur);
+    for i in 0..(n as i32) {
+      let mut off = sp;
+      if i != 0 {
+        let k = self.ir.append_const(2*i);
+        off = self.append_instr(Opcode::Add, vec![sp, k]);
+      }
+      let val = self.append_instr(Opcode::Load16, vec![ss, off]);
+      args.push(val);
+    }
+    args
+  }
+
+  fn process_callf_known(&mut self, func: &config::Func, ins: &instr::Instr) {
     let idx = self.ir.funcs.len();
     self.ir.funcs.push(func.name.to_string());
 
-    let ret;
-    if let Some(nargs) = &func.args {
-      // Known args
-      let mut operands = vec![Ref::Func(idx)];
-      let ss = self.ir.get_var(instr::Reg::SS, self.cur);
-      let sp = self.ir.get_var(instr::Reg::SP, self.cur);
-      for i in 0..(*nargs as i32) {
-        let mut off = sp;
-        if i != 0 {
-          let k = self.ir.append_const(2*i);
-          off = self.append_instr(Opcode::Add, vec![sp, k]);
-        }
-        let val = self.append_instr(Opcode::Load16, vec![ss, off]);
-        operands.push(val);
-      }
-      ret = self.append_instr(Opcode::CallArgs, operands);
-    } else {
-      // Unknown args
-      ret = self.append_instr(Opcode::CallFar, vec![Ref::Func(idx)]);
-    }
+    let nargs = func.args.unwrap_or_else(|| {
+      self.heuristic_infer_call_arguments_by_context(ins,
+        &format!("Far call to {} with unknown args", func.name))
+    });
+
+    let mut operands = vec![Ref::Func(idx)];
+    operands.append(&mut self.load_args_from_stack(nargs));
+    let ret = self.append_instr(Opcode::CallArgs, operands);
+
     match &func.ret {
       Type::Void => (), // nothing to do
       Type::U16 => {
@@ -391,15 +451,22 @@ impl IRBuilder<'_> {
     }
   }
 
-  fn process_callf_segoff(&mut self, addr: SegOff) {
+  fn process_callf_segoff(&mut self, addr: SegOff, ins: &instr::Instr) {
     if let Some(func) = self.cfg.func_lookup(addr) {
       // Known function
-      self.process_callf_known(func);
+      self.process_callf_known(func, ins);
     } else {
       // Unknown function
+      let nargs = self.heuristic_infer_call_arguments_by_context(ins,
+                    &format!("Unknown far call to {}", addr));
+
       let seg = self.ir.append_const(addr.seg.into());
       let off = self.ir.append_const(addr.off.into());
-      let ret = self.append_instr(Opcode::CallFar, vec![seg, off]);
+
+      let mut operands = vec![seg, off];
+      operands.append(&mut self.load_args_from_stack(nargs));
+      let ret = self.append_instr(Opcode::CallFar, operands);
+
       self.ir.set_var(instr::Reg::AX, self.cur, ret);
     }
   }
@@ -409,26 +476,33 @@ impl IRBuilder<'_> {
       return self.process_callf_indirect(ins);
     };
     let addr = SegOff { seg: far.seg, off: far.off };
-    self.process_callf_segoff(addr);
+    self.process_callf_segoff(addr, ins);
   }
 
   fn process_call(&mut self, ins: &instr::Instr, cs_pushed: bool) {
     let instr::Operand::Rel(rel) = &ins.operands[0] else {
       panic!("Expected near call to have relative operand");
     };
-    let effective = ins.rel_addr(rel);
+    let addr = ins.rel_addr(rel);
     if cs_pushed {
       // If CS was previously pushed, then the function returns
       // via "retf", which means its juat a far-call in disguise.
       // So, POP CS back off the stack and let's pretend it's a normal
       // far call
       self.append_pop();
-      self.process_callf_segoff(effective);
+      self.process_callf_segoff(addr, ins);
     } else {
       // Otherwise, we assume it's actually a near call
-      let seg = self.ir.append_const(effective.seg.into());
-      let off = self.ir.append_const(effective.off.into());
-      let ret = self.append_instr(Opcode::CallNear, vec![seg, off]);
+      let nargs = self.heuristic_infer_call_arguments_by_context(ins,
+                &format!("Unknown near call to {}", addr));
+
+      let seg = self.ir.append_const(addr.seg.into());
+      let off = self.ir.append_const(addr.off.into());
+
+      let mut operands = vec![seg, off];
+      operands.append(&mut self.load_args_from_stack(nargs));
+      let ret = self.append_instr(Opcode::CallNear, operands);
+
       self.ir.set_var(instr::Reg::AX, self.cur, ret);
     };
   }
@@ -627,10 +701,10 @@ impl IRBuilder<'_> {
     }
   }
 
-  fn build_from_instrs(&mut self, instrs: &[instr::Instr]) {
+  fn build(&mut self) {
     // Step 1: Infer basic-block boundaries
     let mut block_start = HashSet::new();
-    for ins in instrs {
+    for ins in self.instrs {
       let Some(target) = jump_target(ins) else { continue };
       block_start.insert(target.0);
       block_start.insert(ins.end_addr().abs());
@@ -645,7 +719,7 @@ impl IRBuilder<'_> {
     }
 
     // Step 3: iterate each instruction, building each block
-    for ins in instrs {
+    for ins in self.instrs {
       if block_start.get(&ins.addr.abs()).is_some() {
         self.start_next_blk(Address(ins.addr.abs()));
       }
@@ -661,8 +735,26 @@ impl IRBuilder<'_> {
   }
 }
 
+/// Returns the offset of `elt` into `slice`.
+fn offset_from<T>(slice: &[T], elt: &T) -> usize {
+  let elt_addr = elt as *const T as usize;
+  let slice_addr = slice.as_ptr() as usize;
+  if elt_addr < slice_addr { panic!("elt not in slice!"); }
+
+  let off = elt_addr - slice_addr;
+  if (off % std::mem::size_of::<T>()) != 0 { panic!("offset is not a multiple of element size"); }
+
+  let n = off / std::mem::size_of::<T>();
+  if n >= slice.len() { panic!("index is out of range"); }
+
+  // sanity
+  debug_assert!(&slice[n] as *const _ == elt as *const _);
+
+  n
+}
+
 pub fn from_instrs(instrs: &[instr::Instr], cfg: &Config, spec: &spec::Spec<'_>) -> IR {
-  let mut bld = IRBuilder::new(cfg, spec);
-  bld.build_from_instrs(instrs);
+  let mut bld = IRBuilder::new(cfg, instrs, spec);
+  bld.build();
   bld.ir
 }

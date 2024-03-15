@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SegOff {
@@ -31,5 +32,11 @@ impl FromStr for SegOff {
       seg: u16::from_str_radix(&s[..idx], 16).map_err(|_| format!("Invalid segoff: '{}'", s))?,
       off: u16::from_str_radix(&s[idx+1..], 16).map_err(|_| format!("Invalid segoff: '{}'", s))?,
     })
+  }
+}
+
+impl fmt::Display for SegOff {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "{:04x}:{:04x}", self.seg, self.off)
   }
 }

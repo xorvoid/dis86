@@ -356,7 +356,7 @@ impl<'a> Builder<'a> {
   fn make_label(&self, id: ElemId) -> Label {
     let elem = self.cf.elem(id);
     let Detail::BasicBlock(bb) = &elem.detail else { panic!("Expected basic block") };
-    Label(format!("{}", self.ir.blocks[bb.blkref.0].name))
+    Label(format!("{}_b{}", self.ir.blocks[bb.blkref.0].name, bb.blkref.0))
   }
 
   fn emit_phis(&mut self, blk: &mut Block, src: ir::BlockRef, dst: ir::BlockRef) {
