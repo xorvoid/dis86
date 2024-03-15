@@ -210,8 +210,8 @@ fn allow_cse(opcode: Opcode) -> bool {
 }
 
 pub fn common_subexpression_elimination(ir: &mut IR) {
-  let mut prev = HashMap::new();
   for b in 0..ir.blocks.len() {
+    let mut prev = HashMap::new();
     for i in ir.blocks[b].instrs.range() {
       let r = Ref::Instr(BlockRef(b), i);
       let instr = ir.instr(r).unwrap();
