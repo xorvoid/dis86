@@ -250,7 +250,9 @@ impl<'a> Builder<'a> {
     if let ir::Ref::Init(reg) = r {
       return Expr::Name(reg.info().name.to_string());
     }
-    if depth != 0 && self.lookup_uses(r) != 1 {
+
+    let instr = self.ir.instr(r).unwrap();
+    if depth != 0 && (self.lookup_uses(r) != 1 || instr.opcode.is_call()) {
       let name = self.ref_name(r);
       return Expr::Name(name);
     }
@@ -260,7 +262,6 @@ impl<'a> Builder<'a> {
       return expr;
     }
 
-    let instr = self.ir.instr(r).unwrap();
     match instr.opcode {
       ir::Opcode::Load16 => {
         let seg = self.ref_to_expr(instr.operands[0], depth+1);
@@ -431,19 +432,18 @@ impl<'a> Builder<'a> {
         }
         _ => {
           let uses = self.n_uses.get(&r).cloned().unwrap_or(0);
-          if uses == 1 { continue; }
-
-          let rvalue = self.ref_to_expr(r, 0);
-          if uses == 0 {
-            // This can happen in the case of a Call with no return value.. avoid generating the assignment of an unused void
-            blk.push_stmt(Stmt::Expr(rvalue));
-          } else {
-            let name = self.ref_name(r);
-            self.assigned_names.insert(name.clone());
-            blk.push_stmt(Stmt::Assign(Assign {
-              lhs: Expr::Name(name),
-              rhs: rvalue,
-            }));
+          if uses >= 2 || instr.opcode.is_call() {
+            let rvalue = self.ref_to_expr(r, 0);
+            if uses > 0 {
+              let name = self.ref_name(r);
+              self.assigned_names.insert(name.clone());
+              blk.push_stmt(Stmt::Assign(Assign {
+                lhs: Expr::Name(name),
+                rhs: rvalue,
+              }));
+            } else {
+              blk.push_stmt(Stmt::Expr(rvalue));
+            }
           }
         }
       }

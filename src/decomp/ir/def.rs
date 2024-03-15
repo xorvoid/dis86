@@ -196,6 +196,13 @@ impl Opcode {
     }
   }
 
+  pub fn is_call(&self) -> bool {
+    match self {
+      Opcode::CallFar | Opcode::CallNear | Opcode::CallPtr | Opcode::CallArgs => true,
+      _ => false,
+    }
+  }
+
   pub fn operation_size(&self) -> u32 {
     match self {
       Opcode::Load8 => 1,
