@@ -1,3 +1,4 @@
+use crate::instr;
 use crate::decomp::config::Config;
 use crate::decomp::ir::def::*;
 use crate::decomp::types::Type;
@@ -158,8 +159,8 @@ impl SymbolMap {
 }
 
 pub fn symbolize_stack(ir: &mut IR) {
-  let ss = Ref::Init("ss"); //ir.blocks[0].defs.get(&instr::Reg::SS.into()).unwrap();
-  let sp = Ref::Init("sp"); //ir.blocks[0].defs.get(&instr::Reg::BP.into()).unwrap();
+  let ss = Ref::Init(instr::Reg::SS);
+  let sp = Ref::Init(instr::Reg::SP);
 
   // Detect locals and params
   let mut var_mem_refs = vec![];
@@ -247,7 +248,7 @@ pub fn populate_globals(ir: &mut IR, cfg: &Config) {
 pub fn symbolize_globals(ir: &mut IR, cfg: &Config) {
   populate_globals(ir, cfg);
 
-  let ds = Ref::Init("ds");
+  let ds = Ref::Init(instr::Reg::DS);
 
   for b in 0..ir.blocks.len() {
     for i in ir.blocks[b].instrs.range() {

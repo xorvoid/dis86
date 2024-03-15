@@ -115,7 +115,6 @@ pub fn arithmetic_accumulation(ir: &mut IR) {
       let vref = Ref::Instr(BlockRef(b), i);
       let Some((_, a)) = arith_const_oper(ir, vref) else { continue };
 
-
       let instr = ir.instr(vref).unwrap();
       let Some((nref, b)) = arith_const_oper(ir, instr.operands[0]) else { continue };
 
@@ -354,7 +353,7 @@ pub fn simplify_branch_conds(ir: &mut IR) {
   }
 }
 
-const N_OPT_PASSES: usize = 3;
+const N_OPT_PASSES: usize = 5;
 pub fn optimize(ir: &mut IR) {
   for _ in 0..N_OPT_PASSES {
     // constant_fold(ir);
@@ -362,11 +361,11 @@ pub fn optimize(ir: &mut IR) {
     reduce_xor(ir);
     reduce_make_32_signext_32(ir);
     reduce_phi(ir);
+    simplify_branch_conds(ir);
     arithmetic_accumulation(ir);
     value_propagation(ir);
     common_subexpression_elimination(ir);
     value_propagation(ir);
-    simplify_branch_conds(ir);
     // jump_propagation(ir);
   }
   deadcode_elimination(ir);

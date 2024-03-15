@@ -7,6 +7,7 @@ use crate::decomp::config::Config;
 use crate::decomp::gen;
 use crate::decomp::ast;
 use crate::decomp::control_flow;
+use crate::decomp::spec;
 use std::fs::File;
 use std::io::Write;
 
@@ -27,6 +28,7 @@ fn print_help(appname: &str) {
   println!("EMIT MODES:");
   println!("  --emit-dis        path to emit disassembly (optional)");
   println!("  --emit-ir-initial path to emit initial unoptimized SSA IR (optional)");
+  println!("  --emit-ir-presym  path to emit symbolized SSA IR (optional)");
   println!("  --emit-ir-sym     path to emit symbolized SSA IR (optional)");
   println!("  --emit-ir-opt     path to emit optimized SSA IR (optional)");
   println!("  --emit-ir-final   path to emit final SSA IR before control-flow analysis (optional)");
@@ -59,6 +61,7 @@ struct Args {
 
   emit_dis: Option<String>,
   emit_ir_initial: Option<String>,
+  emit_ir_presym: Option<String>,
   emit_ir_sym: Option<String>,
   emit_ir_opt: Option<String>,
   emit_ir_final: Option<String>,
@@ -99,6 +102,7 @@ fn parse_args(appname: &str) -> Result<Args, pico_args::Error> {
     emit_dis:        pargs.opt_value_from_str("--emit-dis")?,
     emit_ir_initial: pargs.opt_value_from_str("--emit-ir-initial")?,
     emit_ir_opt:     pargs.opt_value_from_str("--emit-ir-opt")?,
+    emit_ir_presym:  pargs.opt_value_from_str("--emit-ir-presym")?,
     emit_ir_sym:     pargs.opt_value_from_str("--emit-ir-sym")?,
     emit_ir_final:   pargs.opt_value_from_str("--emit-ir-final")?,
     emit_graph:      pargs.opt_value_from_str("--emit-graph")?,
@@ -120,35 +124,6 @@ fn parse_args(appname: &str) -> Result<Args, pico_args::Error> {
   Ok(args)
 }
 
-struct Func {
-  name: String,
-  start: SegOff,
-  end: SegOff,
-}
-
-impl Func {
-  fn from_config_name(cfg: &Config, name: &str) -> Func {
-    let Some(func) = cfg.func_lookup_by_name(name) else {
-      panic!("Failed to lookup function named: {}", name);
-    };
-    let Some(end) = func.end else {
-      panic!("Function has no 'end' addr defined in config");
-    };
-    Func {
-      name: name.to_string(),
-      start: func.start,
-      end,
-    }
-  }
-
-  fn from_start_and_end(start: Option<SegOff>, end: Option<SegOff>) -> Func {
-    let Some(start) = start else { panic!("No start address provided") };
-    let Some(end) = end else { panic!("No end address provided") };
-    let name = format!("func_{:08x}__{:04x}_{:04x}", start.abs(), start.seg, start.off);
-    Func { name, start, end }
-  }
-}
-
 pub fn run(appname: &str) {
   let args = match parse_args(appname) {
     Ok(v) => v,
@@ -160,20 +135,20 @@ pub fn run(appname: &str) {
 
   let cfg = Config::from_path(&args.config).unwrap();
 
-  let f = if let Some(name) = args.name.as_ref() {
-    Func::from_config_name(&cfg, name)
+  let spec = if let Some(name) = args.name.as_ref() {
+    spec::Spec::from_config_name(&cfg, name)
   } else {
-    Func::from_start_and_end(args.start_addr, args.end_addr)
+    spec::Spec::from_start_and_end(args.start_addr, args.end_addr)
   };
-  let start_idx = f.start.abs();
-  let end_idx = f.end.abs();
+  let start_idx = spec.start.abs();
+  let end_idx = spec.end.abs();
 
   let dat = match std::fs::read(&args.binary) {
     Ok(dat) => dat,
     Err(err) => panic!("Failed to read file: '{}': {:?}", args.binary, err),
   };
 
-  let decoder = Decoder::new(&dat[start_idx..end_idx], f.start);
+  let decoder = Decoder::new(&dat[start_idx..end_idx], spec.start);
   let mut instr_list = vec![];
   let mut raw_list = vec![];
   for (instr, raw) in decoder {
@@ -193,15 +168,19 @@ pub fn run(appname: &str) {
     return;
   }
 
-  let mut ir = build::from_instrs(&instr_list, &cfg);
+  let mut ir = build::from_instrs(&instr_list, &cfg, &spec);
   if let Some(path) = args.emit_ir_initial.as_ref() {
     write_to_path(path, &format!("{}", ir));
     return;
   }
 
   opt::optimize(&mut ir);
-  sym::symbolize(&mut ir, &cfg);
+  if let Some(path) = args.emit_ir_presym.as_ref() {
+    write_to_path(path, &format!("{}", ir));
+    return;
+  }
 
+  sym::symbolize(&mut ir, &cfg);
   if let Some(path) = args.emit_ir_sym.as_ref() {
     write_to_path(path, &format!("{}", ir));
     return;
@@ -238,7 +217,7 @@ pub fn run(appname: &str) {
     return;
   }
 
-  let ast = ast::Function::from_ir(&f.name, &ir, &ctrlflow);
+  let ast = ast::Function::from_ir(&spec.name, &ir, &ctrlflow);
   if let Some(path) = args.emit_ast.as_ref() {
     let text = format!("{:#?}", ast);
     write_to_path(path, &text);

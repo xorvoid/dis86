@@ -677,7 +677,13 @@ fn schedule_layout_body(body: &mut Body, parent: Option<&Parent>, data: &mut Con
   let mut remaining = body.elems.clone();
   let mut next = Some(body.lookup_from_id(body.entry).unwrap());
   while remaining.len() > 0 {
-    let cur = next.unwrap();
+    let cur = match next {
+      Some(cur) => cur,
+      None => {
+        // Select a block from remaining: first in blocknum ordering
+        itertools::sorted(remaining.iter()).cloned().next().unwrap()
+      }
+    };
 
     if !remaining.remove(&cur) { panic!("tried to schedule an unavailable block"); }
     body.layout.push(cur);

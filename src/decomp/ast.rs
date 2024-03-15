@@ -88,9 +88,15 @@ pub struct Goto {
 }
 
 #[derive(Debug)]
-pub enum Return {
+pub enum ReturnType {
   Far,
   Near,
+}
+
+#[derive(Debug)]
+pub struct Return {
+  pub rt: ReturnType,
+  pub vals: Vec<Expr>,
 }
 
 #[derive(Debug)]
@@ -240,8 +246,8 @@ impl<'a> Builder<'a> {
       Some(k) => return Expr::Const(k as i64),
       None => (),
     }
-    if let ir::Ref::Init(name) = r {
-      return Expr::Name(name.to_string());
+    if let ir::Ref::Init(reg) = r {
+      return Expr::Name(reg.info().name.to_string());
     }
     if depth != 0 && self.lookup_uses(r) != 1 {
       let name = self.ref_name(r);
@@ -390,11 +396,13 @@ impl<'a> Builder<'a> {
         ir::Opcode::Phi => continue, // handled by jmp
         ir::Opcode::Pin => continue, // ignored
         ir::Opcode::RetFar => {
-          blk.push_stmt(Stmt::Return(Return::Far));
+          let vals: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, 1)).collect();
+          blk.push_stmt(Stmt::Return(Return{rt: ReturnType::Far, vals}));
           return None;
         }
         ir::Opcode::RetNear => {
-          blk.push_stmt(Stmt::Return(Return::Near));
+          let vals: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, 1)).collect();
+          blk.push_stmt(Stmt::Return(Return{rt: ReturnType::Near, vals}));
           return None;
         }
         ir::Opcode::Jmp => {

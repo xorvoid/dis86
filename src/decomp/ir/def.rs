@@ -13,7 +13,7 @@ pub enum Ref {
   //None,
   Const(ConstRef),
   Instr(BlockRef, DVecIndex),
-  Init(&'static str),  // FIXME: Don't use a String
+  Init(instr::Reg),
   Block(BlockRef),
   Symbol(sym::SymbolRef),
   Func(usize),
@@ -210,7 +210,7 @@ impl Opcode {
   pub fn has_no_result(&self) -> bool {
     match self {
       Opcode::Nop => true,
-      Opcode::Pin => true,
+      //Opcode::Pin => true,
       Opcode::Store8 => true,
       Opcode::Store16 => true,
       Opcode::WriteVar8 => true,

@@ -1,6 +1,7 @@
 use crate::instr;
 use crate::segoff::SegOff;
 use crate::decomp::config::{self, Config};
+use crate::decomp::spec;
 use crate::decomp::ir::*;
 use crate::decomp::types::Type;
 use std::collections::{HashSet, HashMap};
@@ -63,26 +64,21 @@ enum SpecialState {
 
 struct IRBuilder<'a> {
   ir: IR,
-  blkmeta: Vec<BlockMeta>,
   addrmap: HashMap<Address, BlockRef>,
   cur: BlockRef,
   cfg: &'a Config,
+  spec: &'a spec::Spec<'a>,
   special: Option<SpecialState>,
 }
 
-struct BlockMeta {
-  //sealed: bool, // has all predecessors?
-  //incomplete_phis: Vec<(Name, Ref)>,
-}
-
 impl<'a> IRBuilder<'a> {
-  fn new(cfg: &'a Config) -> Self {
+  fn new(cfg: &'a Config, spec: &'a spec::Spec) -> Self {
     let mut this = Self {
       ir: IR::new(),
-      blkmeta: vec![],
       addrmap: HashMap::new(),
       cur: BlockRef(0),
       cfg,
+      spec,
       special: None,
     };
 
@@ -91,23 +87,23 @@ impl<'a> IRBuilder<'a> {
     this.ir.seal_block(entry);
 
     // Set initial register values
-    this.ir.set_var(instr::Reg::AX, this.cur, Ref::Init("AX"));
-    this.ir.set_var(instr::Reg::CX, this.cur, Ref::Init("CX"));
-    this.ir.set_var(instr::Reg::DX, this.cur, Ref::Init("DX"));
-    this.ir.set_var(instr::Reg::BX, this.cur, Ref::Init("BX"));
+    this.ir.set_var(instr::Reg::AX, this.cur, Ref::Init(instr::Reg::AX));
+    this.ir.set_var(instr::Reg::CX, this.cur, Ref::Init(instr::Reg::CX));
+    this.ir.set_var(instr::Reg::DX, this.cur, Ref::Init(instr::Reg::DX));
+    this.ir.set_var(instr::Reg::BX, this.cur, Ref::Init(instr::Reg::BX));
 
-    this.ir.set_var(instr::Reg::SP, this.cur, Ref::Init("SP"));
-    this.ir.set_var(instr::Reg::BP, this.cur, Ref::Init("BP"));
-    this.ir.set_var(instr::Reg::SI, this.cur, Ref::Init("SI"));
-    this.ir.set_var(instr::Reg::DI, this.cur, Ref::Init("DI"));
+    this.ir.set_var(instr::Reg::SP, this.cur, Ref::Init(instr::Reg::SP));
+    this.ir.set_var(instr::Reg::BP, this.cur, Ref::Init(instr::Reg::BP));
+    this.ir.set_var(instr::Reg::SI, this.cur, Ref::Init(instr::Reg::SI));
+    this.ir.set_var(instr::Reg::DI, this.cur, Ref::Init(instr::Reg::DI));
 
-    this.ir.set_var(instr::Reg::ES, this.cur, Ref::Init("ES"));
-    this.ir.set_var(instr::Reg::CS, this.cur, Ref::Init("CS"));
-    this.ir.set_var(instr::Reg::SS, this.cur, Ref::Init("SS"));
-    this.ir.set_var(instr::Reg::DS, this.cur, Ref::Init("DS"));
+    this.ir.set_var(instr::Reg::ES, this.cur, Ref::Init(instr::Reg::ES));
+    this.ir.set_var(instr::Reg::CS, this.cur, Ref::Init(instr::Reg::CS));
+    this.ir.set_var(instr::Reg::SS, this.cur, Ref::Init(instr::Reg::SS));
+    this.ir.set_var(instr::Reg::DS, this.cur, Ref::Init(instr::Reg::DS));
 
-    this.ir.set_var(instr::Reg::IP, this.cur, Ref::Init("IP"));
-    this.ir.set_var(instr::Reg::FLAGS, this.cur, Ref::Init("FLAGS"));
+    this.ir.set_var(instr::Reg::IP, this.cur, Ref::Init(instr::Reg::IP));
+    this.ir.set_var(instr::Reg::FLAGS, this.cur, Ref::Init(instr::Reg::FLAGS));
 
     this
   }
@@ -115,10 +111,6 @@ impl<'a> IRBuilder<'a> {
   fn new_block(&mut self, name: &str) -> BlockRef {
     let idx = self.ir.blocks.len();
     self.ir.blocks.push(Block::new(name));
-    self.blkmeta.push(BlockMeta {
-      // sealed: false,
-      // incomplete_phis: vec![],
-    });
     BlockRef(idx)
   }
 
@@ -283,7 +275,26 @@ impl IRBuilder<'_> {
 
   fn pin_register(&mut self, reg: instr::Reg) {
     let vref = self.ir.get_var(reg, self.cur);
-    self.append_instr(Opcode::Pin, vec![vref]);
+    let pin = self.append_instr(Opcode::Pin, vec![vref]);
+    self.ir.set_var(reg, self.cur, pin);
+  }
+
+  fn return_vals(&mut self) -> Vec<Ref> {
+    let ax = self.ir.get_var(instr::Reg::AX, self.cur);
+    let dx = self.ir.get_var(instr::Reg::DX, self.cur);
+    if let Some(func) = self.spec.func {
+      println!("func: {:?}", func);
+      // Use the retval in the config defn
+      match &func.ret {
+        Type::Void => vec![], // no return value
+        Type::U8 | Type::I8 | Type::U16 | Type::I16 => vec![ax],
+        Type::U32 | Type::I32  => vec![ax, dx],
+        _ => panic!("Unsupported function return type: {}", func.ret),
+      }
+    } else {
+      // Assume worst case: DX:AX return
+      vec![ax, dx]
+    }
   }
 
   fn pin_registers(&mut self) {
@@ -461,15 +472,14 @@ impl IRBuilder<'_> {
       }
       instr::Opcode::OP_RETF => {
         self.pin_registers();
-        // FIXME: WHEN RETURN A VALUE OR NOT?
-        self.append_instr(Opcode::RetFar, vec![]);
+        let ret_vals = self.return_vals();
+        self.append_instr(Opcode::RetFar, ret_vals);
 
       }
       instr::Opcode::OP_RET => {
         self.pin_registers();
-        // FIXME: WHEN RETURN A VALUE OR NOT?
-        self.append_instr(Opcode::RetNear, vec![]);
-
+        let ret_vals = self.return_vals();
+        self.append_instr(Opcode::RetNear, ret_vals);
       }
       instr::Opcode::OP_MOV => {
         let vref = self.append_asm_src_operand(&ins.operands[1]);
@@ -651,8 +661,8 @@ impl IRBuilder<'_> {
   }
 }
 
-pub fn from_instrs(instrs: &[instr::Instr], cfg: &Config) -> IR {
-  let mut bld = IRBuilder::new(cfg);
+pub fn from_instrs(instrs: &[instr::Instr], cfg: &Config, spec: &spec::Spec<'_>) -> IR {
+  let mut bld = IRBuilder::new(cfg, spec);
   bld.build_from_instrs(instrs);
   bld.ir
 }

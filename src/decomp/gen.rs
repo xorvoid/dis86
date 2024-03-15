@@ -28,9 +28,27 @@ impl FlavorImpl for Standard {
   }
 
   fn ret(&self, g: &mut Gen<'_>, ret: &Return) -> fmt::Result {
-    match ret {
-      Return::Far => g.text("return; /* FAR */")?,
-      Return::Near => g.text("return; /* NEAR */")?,
+    g.text("return")?;
+
+    match ret.vals.len() {
+      0 => (),
+      1 => {
+        g.text(" ")?;
+        g.expr(&ret.vals[0], 0, self)?;
+      }
+      2 => {
+        g.text(" MAKE_32(")?;
+        g.expr(&ret.vals[1], 0, self)?;
+        g.text(", ")?;
+        g.expr(&ret.vals[0], 0, self)?;
+        g.text(")")?;
+      }
+      _ => panic!("Unsupported return values"),
+    }
+
+    match &ret.rt {
+      ReturnType::Far => g.text("; /* FAR */")?,
+      ReturnType::Near => g.text("; /* NEAR */")?,
     }
     Ok(())
   }
@@ -55,9 +73,29 @@ impl FlavorImpl for Hydra {
   }
 
   fn ret(&self, g: &mut Gen<'_>, ret: &Return) -> fmt::Result {
-    match ret {
-      Return::Far => g.text("RETURN_FAR();")?,
-      Return::Near => g.text("RETURN_NEAR();")?,
+    match ret.vals.len() {
+      0 => (),
+      1 => {
+        g.text("AX = ")?;
+        g.expr(&ret.vals[0], 0, self)?;
+        g.text(";")?;
+        g.endline();
+      }
+      2 => {
+        g.text("DX = ")?;
+        g.expr(&ret.vals[1], 0, self)?;
+        g.text(";")?;
+        g.endline();
+        g.text("AX = ")?;
+        g.expr(&ret.vals[0], 0, self)?;
+        g.text(";")?;
+        g.endline();
+      }
+      _ => panic!("Unsupported return values"),
+    }
+    match &ret.rt {
+      ReturnType::Far => g.text("RETURN_FAR();")?,
+      ReturnType::Near => g.text("RETURN_NEAR();")?,
     }
     Ok(())
   }

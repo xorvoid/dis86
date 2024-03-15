@@ -89,7 +89,7 @@ impl Formatter {
           write!(f, "#0x{:x}", k)?;
         }
       }
-      Ref::Init(sym) => write!(f, "{}.0", sym)?,
+      Ref::Init(reg) => write!(f, "{}", reg.info().name)?,
       Ref::Block(blk) => write!(f, "b{}", blk.0)?,
       Ref::Instr(_, _) => {
         if let Some(FullName(sym, num)) = ir.names.get(&r) {
