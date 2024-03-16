@@ -630,6 +630,7 @@ impl IRBuilder<'_> {
       let b = self.append_asm_src_operand(&ins.operands[1]);
       let vref = self.append_instr(opcode, vec![a, b]);
       self.append_asm_dst_operand(&ins.operands[0], vref);
+      self.append_update_flags(vref);
       return;
     }
 
