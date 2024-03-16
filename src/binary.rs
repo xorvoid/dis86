@@ -1,12 +1,34 @@
 use crate::segoff::SegOff;
 
-pub struct Binary<'a> {
+pub struct Binary {
+  mem: Vec<u8>,
+}
+
+impl Binary {
+  pub fn from_file(path: &str) -> Result<Self, String> {
+    let mem = std::fs::read(path).map_err(
+      |err| format!("Failed to read file: '{}': {:?}", path, err))?;
+    Ok(Self { mem })
+  }
+
+  pub fn region(&self, start: SegOff, end: SegOff) -> &[u8] {
+    assert!(start <= end);
+    &self.mem[start.abs()..end.abs()]
+  }
+
+  pub fn region_iter(&self, start: SegOff, end: SegOff) -> RegionIter<'_> {
+    RegionIter::new(self.region(start, end), start)
+  }
+}
+
+
+pub struct RegionIter<'a> {
   mem: &'a [u8],
   base_addr: SegOff,
   off: usize
 }
 
-impl<'a> Binary<'a> {
+impl<'a> RegionIter<'a> {
   pub fn new(mem: &'a [u8], base_addr: SegOff) -> Self {
     Self { mem, base_addr, off: 0 }
   }
@@ -14,8 +36,8 @@ impl<'a> Binary<'a> {
   pub fn get(&self, addr: SegOff) -> u8 {
     let addr = addr.abs();
     let base = self.base_addr.abs();
-    if addr < base { panic!("Binary access below start of region"); }
-    if addr >= base + self.mem.len() { panic!("Binary access beyond end of region"); }
+    if addr < base { panic!("RegionIter access below start of region"); }
+    if addr >= base + self.mem.len() { panic!("RegionIter access beyond end of region"); }
     self.mem[addr - base]
   }
 
@@ -23,8 +45,8 @@ impl<'a> Binary<'a> {
     let addr = addr.abs();
     let base = self.base_addr.abs();
     let len = len as usize;
-    if addr < base { panic!("Binary access below start of region"); }
-    if addr+len > base + self.mem.len() { panic!("Binary access beyond end of region"); }
+    if addr < base { panic!("RegionIter access below start of region"); }
+    if addr+len > base + self.mem.len() { panic!("RegionIter access beyond end of region"); }
     &self.mem[addr - base .. addr - base + len]
   }
 
@@ -73,13 +95,14 @@ mod tests {
   use super::*;
   #[test]
   fn test() {
-    let mut b = Binary::new(&[0x12, 0x34, 0x56, 0x78, 0x9a], 10);
+    let addr = SegOff { seg: 0, off: 10 };
+    let mut b = RegionIter::new(&[0x12, 0x34, 0x56, 0x78, 0x9a], addr);
     assert_eq!(b.peek(), 0x12);
     assert_eq!(b.peek(), 0x12);
 
     b.advance();
     assert_eq!(b.peek(), 0x34);
-    assert_eq!(b.get(10), 0x12);
+    assert_eq!(b.get(addr), 0x12);
 
     let v = b.fetch();
     assert_eq!(v, 0x34);

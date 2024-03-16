@@ -1,5 +1,6 @@
 use pico_args;
 use crate::intel_syntax;
+use crate::binary::Binary;
 use crate::segoff::SegOff;
 use crate::decode::Decoder;
 use crate::decomp::ir::{self, build, opt, sym};
@@ -140,15 +141,20 @@ pub fn run(appname: &str) {
   } else {
     spec::Spec::from_start_and_end(args.start_addr, args.end_addr)
   };
-  let start_idx = spec.start.abs();
-  let end_idx = spec.end.abs();
 
-  let dat = match std::fs::read(&args.binary) {
-    Ok(dat) => dat,
-    Err(err) => panic!("Failed to read file: '{}': {:?}", args.binary, err),
-  };
+  let binary = Binary::from_file(&args.binary).unwrap();
 
-  let decoder = Decoder::new(&dat[start_idx..end_idx], spec.start);
+  // let start_idx = spec.start.abs();
+  // let end_idx = spec.end.abs();
+
+
+  // let binary = match std::fs::read(&args.binary) {
+  //   Ok(dat) => dat,
+  //   Err(err) => panic!("Failed to read file: '{}': {:?}", args.binary, err),
+  // };
+
+  let region = binary.region_iter(spec.start, spec.end);
+  let decoder = Decoder::new(region);
   let mut instr_list = vec![];
   let mut raw_list = vec![];
   for (instr, raw) in decoder {

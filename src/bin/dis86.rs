@@ -16,8 +16,9 @@ fn run_main() -> i32 {
   }
   let mode = &args[1];
 
-  if      mode == "dis"      { app::dis::run(&args[0]); return 0; }
-  else if mode == "decomp"   { app::decomp::run(&args[0]); return 0; }
+  //if      mode == "dis"      { app::dis::run(&args[0]); return 0; }
+  //else
+  if mode == "decomp"   { app::decomp::run(&args[0]); return 0; }
 
   else {
     eprintln!("Error: Unknown mode '{}'", mode);

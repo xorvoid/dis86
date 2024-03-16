@@ -1,6 +1,6 @@
 use crate::util::arrayvec::ArrayVec;
 use crate::segoff::SegOff;
-use crate::binary::Binary;
+use crate::binary::RegionIter;
 use crate::instr::*;
 use crate::instr_fmt;
 
@@ -36,7 +36,7 @@ fn operand_imm16(imm: u16) -> Operand {
   })
 }
 
-fn operand_rel(bin: &mut Binary, sz: Size) -> Operand {
+fn operand_rel(bin: &mut RegionIter, sz: Size) -> Operand {
   let val = match sz {
     Size::Size8 => bin.fetch_sext(),
     Size::Size16 => bin.fetch_u16(),
@@ -65,13 +65,13 @@ fn operand_dst(sz: Size) -> Operand {
   })
 }
 
-fn operand_far(bin: &mut Binary) -> Operand {
+fn operand_far(bin: &mut RegionIter) -> Operand {
   let off = bin.fetch_u16();
   let seg = bin.fetch_u16();
   Operand::Far(OperandFar { seg, off })
 }
 
-fn operand_moff(bin: &mut Binary, sz: Size, prefix_sreg: Option<Reg>) -> Operand {
+fn operand_moff(bin: &mut RegionIter, sz: Size, prefix_sreg: Option<Reg>) -> Operand {
   Operand::Mem(OperandMem {
     sz,
     sreg: prefix_sreg.unwrap_or(Reg::DS),
@@ -81,7 +81,7 @@ fn operand_moff(bin: &mut Binary, sz: Size, prefix_sreg: Option<Reg>) -> Operand
   })
 }
 
-fn operand_rm(bin: &mut Binary, sz: Size, modrm: u8, prefix_sreg: Option<Reg>) -> Operand {
+fn operand_rm(bin: &mut RegionIter, sz: Size, modrm: u8, prefix_sreg: Option<Reg>) -> Operand {
   let mode = modrm_mode(modrm);
   let rm = modrm_rm(modrm);
 
@@ -128,28 +128,28 @@ fn operand_rm(bin: &mut Binary, sz: Size, modrm: u8, prefix_sreg: Option<Reg>) -
   })
 }
 
-fn operand_rm8(bin: &mut Binary, modrm: u8, sreg: Option<Reg>) -> Operand { operand_rm(bin, Size::Size8, modrm, sreg) }
-fn operand_rm16(bin: &mut Binary, modrm: u8, sreg: Option<Reg>) -> Operand { operand_rm(bin, Size::Size16, modrm, sreg) }
+fn operand_rm8(bin: &mut RegionIter, modrm: u8, sreg: Option<Reg>) -> Operand { operand_rm(bin, Size::Size8, modrm, sreg) }
+fn operand_rm16(bin: &mut RegionIter, modrm: u8, sreg: Option<Reg>) -> Operand { operand_rm(bin, Size::Size16, modrm, sreg) }
 
-fn operand_m8(bin: &mut Binary, modrm: u8, sreg: Option<Reg>) -> Operand {
+fn operand_m8(bin: &mut RegionIter, modrm: u8, sreg: Option<Reg>) -> Operand {
   let oper = operand_rm(bin, Size::Size8, modrm, sreg);
   if !matches!(oper, Operand::Mem(_)) { panic!("Register used where memory operand was required"); }
   oper
 }
 
-fn operand_m16(bin: &mut Binary, modrm: u8, sreg: Option<Reg>) -> Operand {
+fn operand_m16(bin: &mut RegionIter, modrm: u8, sreg: Option<Reg>) -> Operand {
   let oper = operand_rm(bin, Size::Size16, modrm, sreg);
   if !matches!(oper, Operand::Mem(_)) { panic!("Register used where memory operand was required"); }
   oper
 }
 
-fn operand_m32(bin: &mut Binary, modrm: u8, sreg: Option<Reg>) -> Operand {
+fn operand_m32(bin: &mut RegionIter, modrm: u8, sreg: Option<Reg>) -> Operand {
   let oper = operand_rm(bin, Size::Size32, modrm, sreg);
   if !matches!(oper, Operand::Mem(_)) { panic!("Register used where memory operand was required"); }
   oper
 }
 
-pub fn decode_one<'a>(bin: &mut Binary<'a>) -> Option<(Instr, &'a [u8])> {
+pub fn decode_one<'a>(bin: &mut RegionIter<'a>) -> Option<(Instr, &'a [u8])> {
   let start_addr = bin.addr();
   if start_addr == bin.end_addr() {
     return None;
@@ -291,12 +291,12 @@ pub fn decode_one<'a>(bin: &mut Binary<'a>) -> Option<(Instr, &'a [u8])> {
 
 
 pub struct Decoder<'a> {
-  bin: Binary<'a>,
+  bin: RegionIter<'a>,
 }
 
 impl<'a> Decoder<'a> {
-  pub fn new(mem: &'a [u8], start: SegOff) -> Self {
-    Self { bin: Binary::new(mem, start) }
+  pub fn new(it: RegionIter<'a>) -> Self {
+    Self { bin: it }
   }
 }
 
@@ -565,7 +565,8 @@ mod tests {
   #[test]
   fn test() {
     for (n, test) in TESTS.iter().enumerate() {
-      let mut bin = Binary::new(test.dat, test.addr);
+      let addr = SegOff { seg: 0, off: test.addr.try_into().unwrap() };
+      let mut bin = RegionIter::new(test.dat, addr);
       let (ins, bytes) = decode_one(&mut bin).unwrap();
       let asm = crate::intel_syntax::format(&ins, &bytes, false).unwrap();
       if asm != test.asm {
