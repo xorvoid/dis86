@@ -3,8 +3,13 @@ use crate::segoff::SegOff;
 use crate::decomp::config::{self, Config};
 use crate::decomp::spec;
 use crate::decomp::ir::*;
-use crate::decomp::types::Type;
+use crate::decomp::types::{Type, ArraySize};
 use std::collections::{HashSet, HashMap};
+
+fn instr_str(ins: &instr::Instr) -> String {
+  crate::intel_syntax::format(ins, &[], false).unwrap()
+}
+
 
 fn simple_binary_operation(opcode: instr::Opcode) -> Option<Opcode> {
   match opcode {
@@ -16,42 +21,6 @@ fn simple_binary_operation(opcode: instr::Opcode) -> Option<Opcode> {
     instr::Opcode::OP_XOR => Some(Opcode::Xor),
     _ => None,
   }
-}
-
-fn jump_target(ins: &instr::Instr) -> Option<SegOff> {
-  // Filter for branch instructions
-  match &ins.opcode {
-    instr::Opcode::OP_JA => (),
-    instr::Opcode::OP_JAE => (),
-    instr::Opcode::OP_JB => (),
-    instr::Opcode::OP_JBE => (),
-    instr::Opcode::OP_JCXZ => (),
-    instr::Opcode::OP_JE => (),
-    instr::Opcode::OP_JG => (),
-    instr::Opcode::OP_JGE => (),
-    instr::Opcode::OP_JL => (),
-    instr::Opcode::OP_JLE => (),
-    instr::Opcode::OP_JMP => (),
-    instr::Opcode::OP_JMPF => (),
-    instr::Opcode::OP_JNE => (),
-    instr::Opcode::OP_JNO => (),
-    instr::Opcode::OP_JNP => (),
-    instr::Opcode::OP_JNS => (),
-    instr::Opcode::OP_JO => (),
-    instr::Opcode::OP_JP => (),
-    instr::Opcode::OP_JS => (),
-    _ => return None,
-  }
-
-  // target should be first operand
-  let tgt = match &ins.operands[0] {
-    instr::Operand::Rel(rel) => {
-      ins.rel_addr(rel)
-    }
-    _ => panic!("Unsupported branch operand: {:?}", ins.operands[0]),
-  };
-
-  Some(tgt)
 }
 
 enum SpecialState {
@@ -114,6 +83,88 @@ impl<'a> IRBuilder<'a> {
 
   fn get_block(&mut self, effective: SegOff) -> BlockRef {
     *self.addrmap.get(&effective).unwrap()
+  }
+
+  fn jump_indirect_targets(&self, ins: &instr::Instr, m: &instr::OperandMem) -> Option<Vec<SegOff>> {
+    // Matching jumps of the form: "jmp WORD PTR cs:[bx+0x6d7]"
+    if m.sz != instr::Size::Size16 { return None; }
+    if m.sreg != instr::Reg::CS    { return None; }
+    let Some(reg) = m.reg1 else    { return None; };
+    if !m.reg2.is_none()          { return None; }
+    let Some(off) = m.off else     { return None; };
+
+    // Construct a segoff address to the memory operand
+    let addr = SegOff {
+      seg: self.spec.start.seg, // code segment
+      off,
+    };
+
+    // Try to find a matching text segment region in config
+    let region = self.cfg.text_region_lookup_by_start_addr(addr).unwrap_or_else(
+      || panic!("Failed to find text section region ({}) for: '{}'", addr, instr_str(ins)));
+
+    // Unpack the array type
+    let Type::Array(basetype, ArraySize::Known(_len)) = &region.typ else {
+      panic!("Expected text segment region to be an array of known length ({}) for: '{}'", region.name, instr_str(ins));
+    };
+
+    // Sanity check type
+    if basetype.as_ref() != &Type::U16 {
+      panic!("Expected text segment region to be an array with basetype u16, got ({}) for: '{}'", region.name, instr_str(ins));
+    }
+
+    panic!("Maybe maybe maybe: {:?} | {:?}", m, region);
+  }
+
+  fn jump_targets(&self, ins: &instr::Instr) -> Option<Vec<SegOff>> {
+    // Special handling for some indirect jumps
+    if ins.opcode == instr::Opcode::OP_JMP {
+      if let instr::Operand::Mem(m) = &ins.operands[0] {
+        if let Some(targets) = self.jump_indirect_targets(ins, m) {
+          return Some(targets);
+        }
+        // If none.. we want to fall through so we hit the panic below
+      }
+    }
+
+    // Filter for branch instructions
+    match &ins.opcode {
+      instr::Opcode::OP_JA => (),
+      instr::Opcode::OP_JAE => (),
+      instr::Opcode::OP_JB => (),
+      instr::Opcode::OP_JBE => (),
+      instr::Opcode::OP_JCXZ => (),
+      instr::Opcode::OP_JE => (),
+      instr::Opcode::OP_JG => (),
+      instr::Opcode::OP_JGE => (),
+      instr::Opcode::OP_JL => (),
+      instr::Opcode::OP_JLE => (),
+      instr::Opcode::OP_JMP => (),
+      instr::Opcode::OP_JMPF => (),
+      instr::Opcode::OP_JNE => (),
+      instr::Opcode::OP_JNO => (),
+      instr::Opcode::OP_JNP => (),
+      instr::Opcode::OP_JNS => (),
+      instr::Opcode::OP_JO => (),
+      instr::Opcode::OP_JP => (),
+      instr::Opcode::OP_JS => (),
+      _ => return None,
+    }
+
+    // target should be first operand
+    let tgt_taken = match &ins.operands[0] {
+      instr::Operand::Rel(rel) => {
+        ins.rel_addr(rel)
+      }
+      _ => panic!("Unsupported branch instruction: '{}'", instr_str(ins)),
+    };
+
+    let tgt_not_taken = ins.end_addr();
+
+    Some(vec![
+      tgt_taken,
+      tgt_not_taken,
+    ])
   }
 
   fn append_instr(&mut self, opcode: Opcode, operands: Vec<Ref>) -> Ref {
@@ -393,7 +444,7 @@ impl IRBuilder<'_> {
     let addr = self.append_asm_src_operand(&ins.operands[0]);
 
     let nargs = self.heuristic_infer_call_arguments_by_context(ins,
-              &format!("Unknown ptr call from '{}'", crate::intel_syntax::format(ins, &[], false).unwrap()));
+                  &format!("Unknown ptr call from '{}'", instr_str(ins)));
 
     let mut operands = vec![addr];
     operands.append(&mut self.load_args_from_stack(nargs));
@@ -644,9 +695,10 @@ impl IRBuilder<'_> {
     // Step 1: Infer basic-block boundaries
     let mut block_start = HashSet::new();
     for ins in self.instrs {
-      let Some(target) = jump_target(ins) else { continue };
-      block_start.insert(target);
-      block_start.insert(ins.end_addr());
+      let Some(targets) = self.jump_targets(ins) else { continue };
+      for tgt in targets {
+        block_start.insert(tgt);
+      }
     }
 
     // Step 2: Create all the blocks we should encounter
