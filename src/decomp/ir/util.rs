@@ -19,7 +19,7 @@ pub fn compute_uses(ir: &ir::IR) -> HashMap<ir::Ref, usize> {
 pub fn gen_graphviz_dotfile(ir: &ir::IR) -> Result<String, std::fmt::Error> {
   let mut buf = String::new();
   let f = &mut buf;
-  writeln!(f, "digraph control_flow {{")?;
+  writeln!(f, "strict digraph control_flow {{")?;
   for b in 0..ir.blocks.len() {
     let blk = &ir.blocks[b];
     let src = &blk.name;
@@ -40,6 +40,13 @@ pub fn gen_graphviz_dotfile(ir: &ir::IR) -> Result<String, std::fmt::Error> {
         let false_tgt_name = &ir.blocks[false_tgt].name;
         writeln!(f, "  {}_{} -> {}_{};", src, b, true_tgt_name, true_tgt)?;
         writeln!(f, "  {}_{} -> {}_{};", src, b, false_tgt_name, false_tgt)?;
+      }
+      ir::Opcode::JmpTbl => {
+        for dst in &instr.operands[1..] {
+          let tgt = dst.unwrap_block().0;
+          let tgt_name = &ir.blocks[tgt].name;
+          writeln!(f, "  {}_{} -> {}_{};", src, b, tgt_name, tgt)?;
+        }
       }
       _ => panic!("Expected last instruction to be a branching instruction: {:?}", instr),
     }
