@@ -1,4 +1,5 @@
 use crate::instr;
+use crate::binary;
 use crate::segoff::SegOff;
 use crate::decomp::config::{self, Config};
 use crate::decomp::spec;
@@ -29,23 +30,27 @@ enum SpecialState {
 
 struct IRBuilder<'a> {
   instrs: &'a [instr::Instr],
+  cfg: &'a Config,
+  spec: &'a spec::Spec<'a>,
+  binary: &'a binary::Binary,
+
   ir: IR,
   addrmap: HashMap<SegOff, BlockRef>,
   cur: BlockRef,
-  cfg: &'a Config,
-  spec: &'a spec::Spec<'a>,
   special: Option<SpecialState>,
 }
 
 impl<'a> IRBuilder<'a> {
-  fn new(cfg: &'a Config, instrs: &'a [instr::Instr], spec: &'a spec::Spec) -> Self {
+  fn new(cfg: &'a Config, instrs: &'a [instr::Instr], spec: &'a spec::Spec, binary: &'a binary::Binary) -> Self {
     let mut this = Self {
       instrs,
+      cfg,
+      spec,
+      binary,
+
       ir: IR::new(),
       addrmap: HashMap::new(),
       cur: BlockRef(0),
-      cfg,
-      spec,
       special: None,
     };
 
@@ -104,7 +109,7 @@ impl<'a> IRBuilder<'a> {
       || panic!("Failed to find text section region ({}) for: '{}'", addr, instr_str(ins)));
 
     // Unpack the array type
-    let Type::Array(basetype, ArraySize::Known(_len)) = &region.typ else {
+    let Type::Array(basetype, ArraySize::Known(len)) = &region.typ else {
       panic!("Expected text segment region to be an array of known length ({}) for: '{}'", region.name, instr_str(ins));
     };
 
@@ -113,7 +118,22 @@ impl<'a> IRBuilder<'a> {
       panic!("Expected text segment region to be an array with basetype u16, got ({}) for: '{}'", region.name, instr_str(ins));
     }
 
-    panic!("Maybe maybe maybe: {:?} | {:?}", m, region);
+    // Sanity check range
+    if region.start.add_offset(2 * *len as u16) != region.end {
+      panic!("Expected text segment region with a length that is consistent with the region size, got ({}) for: '{}'", region.name, instr_str(ins));
+    }
+
+    // Grab the bytes to the region from the raw binary
+    let dat = self.binary.region(region.start, region.end);
+
+    // Process them into branch targets
+    let mut tgts = vec![];
+    for i in 0..*len {
+      let off = u16::from_le_bytes(dat[2*i .. 2*i+2].try_into().unwrap());
+      tgts.push(SegOff { seg: self.spec.start.seg, off });
+    }
+
+    Some(tgts)
   }
 
   fn jump_targets(&self, ins: &instr::Instr) -> Option<Vec<SegOff>> {
@@ -744,8 +764,10 @@ fn offset_from<T>(slice: &[T], elt: &T) -> usize {
   n
 }
 
-pub fn from_instrs(instrs: &[instr::Instr], cfg: &Config, spec: &spec::Spec<'_>) -> IR {
-  let mut bld = IRBuilder::new(cfg, instrs, spec);
-  bld.build();
-  bld.ir
+impl IR {
+  pub fn from_instrs(instrs: &[instr::Instr], cfg: &Config, spec: &spec::Spec<'_>, binary: &binary::Binary) -> IR {
+    let mut bld = IRBuilder::new(cfg, instrs, spec, binary);
+    bld.build();
+    bld.ir
+  }
 }

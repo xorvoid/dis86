@@ -3,7 +3,7 @@ use crate::intel_syntax;
 use crate::binary::Binary;
 use crate::segoff::SegOff;
 use crate::decode::Decoder;
-use crate::decomp::ir::{self, build, opt, sym};
+use crate::decomp::ir::{self, opt, sym};
 use crate::decomp::config::Config;
 use crate::decomp::gen;
 use crate::decomp::ast;
@@ -144,15 +144,6 @@ pub fn run(appname: &str) {
 
   let binary = Binary::from_file(&args.binary).unwrap();
 
-  // let start_idx = spec.start.abs();
-  // let end_idx = spec.end.abs();
-
-
-  // let binary = match std::fs::read(&args.binary) {
-  //   Ok(dat) => dat,
-  //   Err(err) => panic!("Failed to read file: '{}': {:?}", args.binary, err),
-  // };
-
   let region = binary.region_iter(spec.start, spec.end);
   let decoder = Decoder::new(region);
   let mut instr_list = vec![];
@@ -174,7 +165,7 @@ pub fn run(appname: &str) {
     return;
   }
 
-  let mut ir = build::from_instrs(&instr_list, &cfg, &spec);
+  let mut ir = ir::IR::from_instrs(&instr_list, &cfg, &spec, &binary);
   if let Some(path) = args.emit_ir_initial.as_ref() {
     write_to_path(path, &format!("{}", ir));
     return;
