@@ -1,7 +1,7 @@
 use crate::util::arrayvec::ArrayVec;
 use crate::binary::RegionIter;
-use crate::instr::*;
-use crate::instr_fmt;
+use crate::asm::instr::*;
+use crate::asm::instr_fmt;
 
 // Mode is the 2-bits from [6..7] in the ModRM byte
 fn modrm_mode(modrm: u8) -> u8 { modrm>>6 }

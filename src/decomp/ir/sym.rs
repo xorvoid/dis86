@@ -1,4 +1,4 @@
-use crate::instr;
+use crate::asm::instr;
 use crate::decomp::config::Config;
 use crate::decomp::ir::def::*;
 use crate::decomp::types::Type;

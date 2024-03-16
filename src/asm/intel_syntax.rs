@@ -1,4 +1,4 @@
-use crate::instr::*;
+use crate::asm::instr::*;
 use std::fmt::Write;
 
 type Result<T> = std::result::Result<T, std::fmt::Error>;

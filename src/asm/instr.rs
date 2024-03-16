@@ -1,6 +1,6 @@
 use crate::segoff::SegOff;
 use crate::util::arrayvec::ArrayVec;
-pub use crate::instr_fmt::Opcode;
+pub use crate::asm::instr_fmt::Opcode;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Instr {

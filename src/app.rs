@@ -1,8 +1,8 @@
 use pico_args;
-use crate::intel_syntax;
 use crate::binary::Binary;
 use crate::segoff::SegOff;
-use crate::decode::Decoder;
+use crate::asm::decode::Decoder;
+use crate::asm::intel_syntax;
 use crate::decomp::ir::{self, opt, sym};
 use crate::decomp::config::Config;
 use crate::decomp::gen;

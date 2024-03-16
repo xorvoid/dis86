@@ -1,4 +1,4 @@
-use crate::instr;
+use crate::asm::instr;
 use crate::binary;
 use crate::segoff::SegOff;
 use crate::decomp::config::{self, Config};
@@ -10,7 +10,7 @@ use std::collections::{HashSet, HashMap};
 const DEBUG: bool = false;
 
 fn instr_str(ins: &instr::Instr) -> String {
-  crate::intel_syntax::format(ins, &[], false).unwrap()
+  crate::asm::intel_syntax::format(ins, &[], false).unwrap()
 }
 
 
