@@ -805,7 +805,7 @@ impl IRBuilder<'_> {
     let mut addr_ordered: Vec<_> = block_start.iter().collect();
     addr_ordered.sort();
     for addr in addr_ordered {
-      let bref = self.new_block(&format!("addr_{:x}", addr.off));
+      let bref = self.new_block(&format!("addr_{:x}", addr.abs()));
       self.addrmap.insert(*addr, bref);
     }
 

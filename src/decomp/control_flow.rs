@@ -7,7 +7,7 @@ use std::fmt::Write;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ElemId(pub usize);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub enum Jump {
   None,                           // no jump, e.g. infinite loop, return, etc
   UncondFallthrough,              // jmp elided, fallthrough
@@ -15,6 +15,7 @@ pub enum Jump {
   CondTargetTrue(ElemId),         // jne true tgt needed, false elided, fallthrough
   CondTargetFalse(ElemId),        // jne false tgt needed, true elided, fallthrough
   CondTargetBoth(ElemId, ElemId), // jne not elided
+  Table(Vec<ElemId>),             // jmptbl not elided
 }
 
 impl Jump {
@@ -37,6 +38,7 @@ pub enum Detail {
 }
 
 #[derive(Debug)]
+
 pub struct BasicBlock {
   pub labeled: bool,
   pub blkref: ir::BlockRef,
@@ -47,6 +49,7 @@ pub struct Loop {
   pub entry: ElemId,
   pub exits: Vec<ElemId>,
   pub backedges: HashSet<ElemId>,
+
   pub body: Body,
 }
 
@@ -241,6 +244,11 @@ impl ControlFlow {
         ir::Opcode::Jne => {
           exits.push(ElemId(instr.operands[1].unwrap_block().0));
           exits.push(ElemId(instr.operands[2].unwrap_block().0));
+        }
+        ir::Opcode::JmpTbl => {
+          for oper in &instr.operands[1..] {
+            exits.push(ElemId(oper.unwrap_block().0));
+          }
         }
         _ => panic!("Expected last instruction to be a branching instruction: {:?}", instr),
       }
@@ -619,7 +627,8 @@ fn schedule_layout_basic_block(elem: &mut Elem, parent: &Parent, _data: &mut Con
       (None, Jump::CondTargetBoth(tgt_true, tgt_false))
     }
   } else {
-    panic!("A basic block can only have 0, 1, or 2 exits");
+    // JmpTbl will end up here..
+    (None, Jump::Table(exits.clone()))
   };
 
   elem.jump = Some(jump);
@@ -702,15 +711,20 @@ fn label_blocks(cf: &mut ControlFlow) {
   // Phase 1: Iterate the full controlflow, collecting all jump targets
   let mut targets =  HashSet::new();
   for elt in cf.iter() {
-    match elt.elem.jump.unwrap() {
+    match elt.elem.jump.as_ref().unwrap() {
       Jump::None => (),
       Jump::UncondFallthrough => (),
-      Jump::UncondTarget(tgt) => { targets.insert(tgt); }
-      Jump::CondTargetTrue(tgt) => { targets.insert(tgt); }
-      Jump::CondTargetFalse(tgt) => { targets.insert(tgt); }
+      Jump::UncondTarget(tgt) => { targets.insert(*tgt); }
+      Jump::CondTargetTrue(tgt) => { targets.insert(*tgt); }
+      Jump::CondTargetFalse(tgt) => { targets.insert(*tgt); }
       Jump::CondTargetBoth(tgt_true, tgt_false) => {
-        targets.insert(tgt_true);
-        targets.insert(tgt_false);
+        targets.insert(*tgt_true);
+        targets.insert(*tgt_false);
+      }
+      Jump::Table(tgts) => {
+        for tgt in tgts {
+          targets.insert(*tgt);
+        }
       }
     }
   }

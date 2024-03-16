@@ -29,12 +29,12 @@ pub fn reduce_xor(ir: &mut IR) {
 
 /*
 From:
-  1 |   t36      = signext32  t34
-  1 |   dx.2     = upper16    t36
-  1 |   t37      = make32     dx.2                 t34
+  t36      = signext32  t34
+  dx.2     = upper16    t36
+  t37      = make32     dx.2                 t34
 
 To:
-  1 |   t37      = signext32  t34
+  t37      = signext32  t34
 */
 pub fn reduce_make_32_signext_32(ir: &mut IR) {
   for b in 0..ir.blocks.len() {
@@ -85,7 +85,7 @@ pub fn reduce_phi(ir: &mut IR) {
       ir.instr_mut(r).unwrap().operands = operands;
 
       // all operands the same? reduce to a mov
-      if trivial {
+      if trivial && single_ref.is_some() {
         let vref = single_ref.unwrap();
         let instr = ir.instr_mut(r).unwrap();
         instr.opcode = Opcode::Ref;

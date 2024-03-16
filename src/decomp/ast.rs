@@ -481,6 +481,7 @@ impl<'a> Builder<'a> {
         let label_false = self.make_label(tgt_false);
         blk.push_stmt(Stmt::CondGoto(CondGoto { cond, label_true, label_false }));
       }
+      control_flow::Jump::Table(_) => panic!("Jump::Table Unimpl"),
     }
   }
 
@@ -493,7 +494,7 @@ impl<'a> Builder<'a> {
       blk.push_stmt(Stmt::Label(label));
     }
 
-    let jump = bb_elt.elem.jump.unwrap();
+    let jump = bb_elt.elem.jump.clone().unwrap();
     let cond = self.emit_blk(blk, bb.blkref, jump.cond_inverted());
     self.emit_jump(blk, jump, cond);
   }
@@ -504,7 +505,7 @@ impl<'a> Builder<'a> {
 
     let body = self.convert_body(iter, depth+1);
     blk.push_stmt(Stmt::Loop(Loop { body }));
-    self.emit_jump(blk, loop_elt.elem.jump.unwrap(), None);
+    self.emit_jump(blk, loop_elt.elem.jump.clone().unwrap(), None);
   }
 
   fn convert_ifstmt(&mut self, blk: &mut Block, iter: &mut FlowIter, depth: usize) {
@@ -522,7 +523,7 @@ impl<'a> Builder<'a> {
 
     let then_body = self.convert_body(iter, depth+1);
     blk.push_stmt(Stmt::If(If { cond, then_body }));
-    self.emit_jump(blk, ifstmt_elt.elem.jump.unwrap(), None);
+    self.emit_jump(blk, ifstmt_elt.elem.jump.clone().unwrap(), None);
   }
 
   fn convert_body(&mut self, iter: &mut FlowIter, depth: usize) -> Block {
