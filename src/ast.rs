@@ -125,6 +125,7 @@ pub struct If {
 pub struct Switch {
   pub switch_val: Expr,
   pub cases: Vec<SwitchCase>,
+  pub default: Option<Vec<Stmt>>,
 }
 
 #[derive(Debug)]
@@ -146,6 +147,7 @@ pub enum Stmt {
   Loop(Loop),
   If(If),
   Switch(Switch),
+  Unreachable,
 }
 
 #[derive(Debug)]
@@ -552,6 +554,7 @@ impl<'a> Builder<'a> {
         blk.push_stmt(Stmt::Switch(Switch {
           switch_val: idx,
           cases,
+          default: Some(vec![Stmt::Unreachable]),
         }));
       }
     }

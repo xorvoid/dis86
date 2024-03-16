@@ -310,7 +310,18 @@ impl<'a> Gen<'a> {
             self.stmt(stmt, imp)?;
           }
         }
+        if let Some(stmts) = &sw.default {
+          self.text("default: ")?;
+          if stmts.len() > 1 { self.endline()?; }
+          for stmt in stmts {
+            self.stmt(stmt, imp)?;
+          }
+        }
         self.leave_block()?;
+        self.endline()?;
+      }
+      Stmt::Unreachable => {
+        self.text("assert(0 && \"unreachable\");")?;
         self.endline()?;
       }
       _ => {
