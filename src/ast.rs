@@ -32,7 +32,7 @@ pub struct UnaryExpr {
 
 #[derive(Debug, Clone, Copy)]
 pub enum BinaryOperator {
-  Add, Sub, Shl, Shr, Mul, Div, And, Or, Xor, Eq, Neq, Gt, Geq, Lt, Leq,
+  Add, Sub, Shl, Shr, Mul, Div, Mod, And, Or, Xor, Eq, Neq, Gt, Geq, Lt, Leq,
 }
 
 impl BinaryOperator {
@@ -44,6 +44,7 @@ impl BinaryOperator {
       BinaryOperator::Shr => ">>",
       BinaryOperator::Mul => "*",
       BinaryOperator::Div => "/",
+      BinaryOperator::Mod => "%",
       BinaryOperator::And => "&",
       BinaryOperator::Or  => "|",
       BinaryOperator::Xor => "^",
@@ -121,6 +122,18 @@ pub struct If {
 }
 
 #[derive(Debug)]
+pub struct Switch {
+  pub switch_val: Expr,
+  pub cases: Vec<SwitchCase>,
+}
+
+#[derive(Debug)]
+pub struct SwitchCase {
+  pub case_val: Expr,
+  pub stmts: Vec<Stmt>,
+}
+
+#[derive(Debug)]
 pub enum Stmt {
   VarDecl(Type, String),
   Label(Label),
@@ -132,6 +145,7 @@ pub enum Stmt {
   Return(Return),
   Loop(Loop),
   If(If),
+  Switch(Switch),
 }
 
 #[derive(Debug)]
@@ -434,6 +448,12 @@ impl<'a> Builder<'a> {
           let cond = self.ref_to_expr_2(instr.operands[0], 1, inverted_cond);
           return Some(cond);
         }
+        ir::Opcode::JmpTbl => {
+          // TODO: Maybe verify that there are no phis in the target block? This should be gaurenteed by
+          // the ir finalize, but it's probably good to do sanity checks
+          let idx = self.ref_to_expr(instr.operands[0], 1);
+          return Some(idx);
+        }
         ir::Opcode::WriteVar16 => {
           let lhs = self.symbol_to_expr(instr.operands[0].unwrap_symbol());
           let rhs = self.ref_to_expr(instr.operands[1], 1);
@@ -446,9 +466,31 @@ impl<'a> Builder<'a> {
           let rhs = self.ref_to_expr(instr.operands[2], 1);
           blk.push_stmt(Stmt::Assign(Assign { lhs, rhs }));
         }
+        ir::Opcode::AssertEven => {
+          let val = self.ref_to_expr(instr.operands[0], 1);
+          let cond = Expr::Binary(Box::new(BinaryExpr {
+            op: BinaryOperator::Eq,
+            lhs: Expr::Binary(Box::new(BinaryExpr {
+              op: BinaryOperator::Mod,
+              lhs: val,
+              rhs: Expr::Const(2),
+            })),
+            rhs: Expr::Const(0),
+          }));
+          blk.push_stmt(Stmt::Expr(Expr::Abstract("assert", vec![cond])));
+        }
+        ir::Opcode::AssertPos => {
+          let val = self.ref_to_expr(instr.operands[0], 1);
+          let cond = Expr::Binary(Box::new(BinaryExpr {
+            op: BinaryOperator::Geq,
+            lhs: Expr::Cast(Type::I16, Box::new(val)),
+            rhs: Expr::Const(0),
+          }));
+          blk.push_stmt(Stmt::Expr(Expr::Abstract("assert", vec![cond])));
+        }
         _ => {
           let uses = self.n_uses.get(&r).cloned().unwrap_or(0);
-          if uses >= 2 || instr.opcode.is_call() {
+          if uses != 1 || instr.opcode.is_call() {
             let rvalue = self.ref_to_expr(r, 0);
             if uses > 0 {
               let name = self.ref_name(r);
@@ -497,7 +539,21 @@ impl<'a> Builder<'a> {
         let label_false = self.make_label(tgt_false);
         blk.push_stmt(Stmt::CondGoto(CondGoto { cond, label_true, label_false }));
       }
-      control_flow::Jump::Table(_) => panic!("Jump::Table Unimpl"),
+      control_flow::Jump::Table(tgts) => {
+        let idx = cond.unwrap();
+        let mut cases = vec![];
+        for (i, tgt) in tgts.iter().enumerate() {
+          let label = self.make_label(*tgt);
+          cases.push(SwitchCase {
+            case_val: Expr::Const(i as i64),
+            stmts: vec![Stmt::Goto(Goto { label })],
+          });
+        }
+        blk.push_stmt(Stmt::Switch(Switch {
+          switch_val: idx,
+          cases,
+        }));
+      }
     }
   }
 

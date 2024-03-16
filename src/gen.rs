@@ -220,7 +220,11 @@ impl<'a> Gen<'a> {
         }
         self.text(")")?;
       }
-      _ => self.text(&format!("UNIMPL_EXPR /* {:?} */", expr))?,
+      _ => {
+        panic!("UNIMPL EXPR: {:?}", expr);
+        //self.text(&format!("UNIMPL_EXPR /* {:?} */", expr))?;
+      }
+
     }
     Ok(())
   }
@@ -291,9 +295,28 @@ impl<'a> Gen<'a> {
         self.leave_block()?;
         self.endline()?;
       }
-      _ => {
-        self.text(&format!("UNIMPL_STMT; /* {:?} */", stmt))?;
+      Stmt::Switch(sw) => {
+        self.text("switch (")?;
+        self.expr(&sw.switch_val, 0, imp)?;
+        self.text(") ")?;
+        self.enter_block()?;
         self.endline()?;
+        for case in &sw.cases {
+          self.text("case ")?;
+          self.expr(&case.case_val, 0, imp)?;
+          self.text(": ")?;
+          if case.stmts.len() > 1 { self.endline()?; }
+          for stmt in &case.stmts {
+            self.stmt(stmt, imp)?;
+          }
+        }
+        self.leave_block()?;
+        self.endline()?;
+      }
+      _ => {
+        panic!("UNIMPL STMT: {:?}", stmt);
+        // self.text(&format!("UNIMPL_STMT; /* {:?} */", stmt))?;
+        // self.endline()?;
       }
     }
     Ok(())
