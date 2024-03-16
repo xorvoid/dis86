@@ -14,9 +14,8 @@ impl Finalizer {
   // This is required only when a block ends with a jne and
   // one or more target block contain phis
   fn insert_intermediate_phi_blocks(&mut self, ir: &mut IR) {
-    for b in 0..ir.blocks.len() {
-      let blkref = BlockRef(b);
-      let r = Ref::Instr(blkref, ir.blocks[b].instrs.last_idx().unwrap());
+    for blkref in ir.iter_blocks() {
+      let r = Ref::Instr(blkref, ir.block(blkref).instrs.last_idx().unwrap());
       let instr = ir.instr(r).unwrap().clone();
       if instr.opcode != Opcode::Jne { continue; }
       if target_has_phis(ir, instr.operands[1].unwrap_block()) {
@@ -33,17 +32,13 @@ impl Finalizer {
     let num = self.num;
     self.num += 1;
 
+    // fetch the dest_blkref
+    let instr = ir.instr(r).unwrap();
+    let dest_blkref = instr.operands[oper_idx];
+
     // generate new block
     let mut new_blk = Block::new(&format!("phi_{:04}", num));
     new_blk.sealed = true;
-
-    // determine the blkref
-    let new_blkref = BlockRef(ir.blocks.len());
-
-    // update the jne instruction to jump to the new blk
-    let instr = ir.instr_mut(r).unwrap();
-    let dest_blkref = instr.operands[oper_idx];
-    instr.operands[oper_idx] = Ref::Block(new_blkref);
 
     // have the new block jump to the original destination
     new_blk.instrs.push_back(Instr {
@@ -55,10 +50,15 @@ impl Finalizer {
     new_blk.preds.push(blkref);
 
     // append the block to the ir
-    ir.blocks.push(new_blk);
+    let new_blkref = ir.push_block(new_blk);
+
+    // update the jne instruction to jump to the new blk
+    let instr = ir.instr_mut(r).unwrap();
+    let dest_blkref = instr.operands[oper_idx];
+    instr.operands[oper_idx] = Ref::Block(new_blkref);
 
     // update the dest block preds to be the new block instead of the old block
-    let dest_blk = &mut ir.blocks[dest_blkref.unwrap_block().0];
+    let dest_blk = ir.block_mut(dest_blkref.unwrap_block());
     for pred in &mut dest_blk.preds {
       if *pred == blkref {
         *pred = new_blkref;
@@ -68,8 +68,7 @@ impl Finalizer {
 }
 
 fn target_has_phis(ir: &IR, b: BlockRef) -> bool {
-  for i in ir.blocks[b.0].instrs.range() {
-    let r = Ref::Instr(b, i);
+  for r in ir.iter_instrs(b) {
     if ir.instr(r).unwrap().opcode == Opcode::Phi {
       return true;
     }

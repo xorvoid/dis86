@@ -164,9 +164,8 @@ pub fn symbolize_stack(ir: &mut IR) {
 
   // Detect locals and params
   let mut var_mem_refs = vec![];
-  for b in 0..ir.blocks.len() {
-    for i in ir.blocks[b].instrs.range() {
-      let r = Ref::Instr(BlockRef(b), i);
+  for b in ir.iter_blocks() {
+    for r in ir.iter_instrs(b) {
 
       let mem_ref = r;
       let mem_instr = ir.instr(mem_ref).unwrap();
@@ -250,9 +249,8 @@ pub fn symbolize_globals(ir: &mut IR, cfg: &Config) {
 
   let ds = Ref::Init(instr::Reg::DS);
 
-  for b in 0..ir.blocks.len() {
-    for i in ir.blocks[b].instrs.range() {
-      let r = Ref::Instr(BlockRef(b), i);
+  for b in ir.iter_blocks() {
+    for r in ir.iter_instrs(b) {
       let instr = ir.instr(r).unwrap();
       if !instr.opcode.is_load() && !instr.opcode.is_store() { continue; }
       if instr.operands[0] != ds { continue; }

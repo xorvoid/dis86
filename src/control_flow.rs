@@ -233,8 +233,8 @@ impl ControlFlow {
       }
     };
 
-    for b in 0..ir.blocks.len() {
-      let instr = ir.blocks[b].instrs.last().unwrap();
+    for b in ir.iter_blocks() {
+      let instr = ir.block(b).instrs.last().unwrap();
       let mut exits = vec![];
       match instr.opcode {
         ir::Opcode::RetFar | ir::Opcode::RetNear => (),
@@ -254,12 +254,12 @@ impl ControlFlow {
       }
 
       cf.data.append(Elem {
-        entry: ElemId(b),
+        entry: ElemId(b.0),
         exits,
         jump: None,
-        detail: Detail::BasicBlock(BasicBlock { blkref: ir::BlockRef(b), labeled: false }),
+        detail: Detail::BasicBlock(BasicBlock { blkref: b, labeled: false }),
       });
-      cf.func.body.elems.insert(ElemId(b));
+      cf.func.body.elems.insert(ElemId(b.0));
     }
 
     cf

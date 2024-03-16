@@ -331,7 +331,7 @@ pub struct IR {
   pub funcs: Vec<String>,
   pub names: HashMap<Ref, FullName>,
   pub name_next: HashMap<Name, usize>,
-  pub blocks: Vec<Block>,
+  pub blocks: Vec<Option<Block>>,  // Optional because dead blocks can be pruned out
 }
 
 impl IR {
@@ -346,9 +346,38 @@ impl IR {
     }
   }
 
+  pub fn block(&self, blkref: BlockRef) -> &Block {
+    self.blocks[blkref.0].as_ref().unwrap()
+  }
+
+  pub fn block_mut(&mut self, blkref: BlockRef) -> &mut Block {
+    self.blocks[blkref.0].as_mut().unwrap()
+  }
+
+  pub fn push_block(&mut self, blk: Block) -> BlockRef {
+    let idx = self.blocks.len();
+    self.blocks.push(Some(blk));
+    BlockRef(idx)
+  }
+
+  pub fn iter_blocks(&self) -> impl Iterator<Item=BlockRef> {
+    // FIXME: Can we avoid the intermediate vec?? (Without holding &self hostage?)
+    let mut blkrefs = vec![];
+    for i in 0..self.blocks.len() {
+      if self.blocks[i].is_some() {
+        blkrefs.push(BlockRef(i))
+      }
+    }
+    blkrefs.into_iter()
+  }
+
+  pub fn iter_instrs(&self, blk: BlockRef) -> impl Iterator<Item=Ref> {
+    self.block(blk).instrs.range().map(move |idx| Ref::Instr(blk, idx))
+  }
+
   pub fn instr(&self, r: Ref) -> Option<&Instr> {
     if let Ref::Instr(b, i) = r {
-      Some(&self.blocks[b.0].instrs[i])
+      Some(&self.block(b).instrs[i])
     } else {
       None
     }
@@ -356,7 +385,7 @@ impl IR {
 
   pub fn instr_mut(&mut self, r: Ref) -> Option<&mut Instr> {
     if let Ref::Instr(b, i) = r {
-      Some(&mut self.blocks[b.0].instrs[i])
+      Some(&mut self.block_mut(b).instrs[i])
     } else {
       None
     }
@@ -390,8 +419,8 @@ impl IR {
     let sym: Name = sym.into();
     let Ref::Instr(blk, idx) = phiref else { panic!("Invalid ref") };
 
-    let preds = self.blocks[blk.0].preds.clone(); // ARGH: Need to break borrow on 'self' so we can recurse
-    assert!(self.blocks[blk.0].instrs[idx].opcode == Opcode::Phi);
+    let preds = self.block(blk).preds.clone(); // ARGH: Need to break borrow on 'self' so we can recurse
+    assert!(self.block_mut(blk).instrs[idx].opcode == Opcode::Phi);
 
     // recurse each pred
     let mut refs = vec![];
@@ -400,7 +429,7 @@ impl IR {
     }
 
     // update the phi with operands
-    self.blocks[blk.0].instrs[idx].operands = refs;
+    self.block_mut(blk).instrs[idx].operands = refs;
 
     // TODO: Remove trivial phis
   }
@@ -408,7 +437,7 @@ impl IR {
   fn phi_create(&mut self, sym: Name, blk: BlockRef) -> Ref {
     // create phi node (without operands) to terminate recursion
 
-    let idx = self.blocks[blk.0].instrs.push_front(Instr {
+    let idx = self.block_mut(blk).instrs.push_front(Instr {
       opcode: Opcode::Phi,
       operands: vec![],
     });
@@ -423,20 +452,19 @@ impl IR {
     let sym: Name = sym.into();
 
     // Defined locally in this block? Easy.
-    match self.blocks[blk.0].defs.get(&sym) {
+    match self.block_mut(blk).defs.get(&sym) {
       Some(val) => return *val,
       None => (),
     }
 
     // Otherwise, search predecessors
-    let b = &self.blocks[blk.0];
-    if !b.sealed {
+    if !self.block(blk).sealed {
       // add an empty phi node and mark it for later population
       let phi = self.phi_create(sym.clone(), blk);
-      self.blocks[blk.0].incomplete_phis.push((sym, phi));
+      self.block_mut(blk).incomplete_phis.push((sym, phi));
       phi
     } else {
-      let preds = &self.blocks[blk.0].preds;
+      let preds = &self.block(blk).preds;
       if preds.len() == 1 {
         let parent = preds[0];
         self.get_var(sym, parent)
@@ -451,12 +479,12 @@ impl IR {
 
   pub fn set_var<S: Into<Name>>(&mut self, sym: S, blk: BlockRef, r: Ref) {
     let sym = sym.into();
-    self.blocks[blk.0].defs.insert(sym.clone(), r);
+    self.block_mut(blk).defs.insert(sym.clone(), r);
     self.set_name(&sym, r);
   }
 
   pub fn seal_block(&mut self, r: BlockRef) {
-    let b = &mut self.blocks[r.0];
+    let b = self.block_mut(r);
     if b.sealed { panic!("block is already sealed!"); }
     b.sealed = true;
     for (sym, phi) in std::mem::replace(&mut b.incomplete_phis, vec![]) {
@@ -465,14 +493,14 @@ impl IR {
   }
 
   pub fn unseal_all_blocks(&mut self) {
-    for i in 0..self.blocks.len() {
-      self.blocks[i].sealed = false;
+    for b in self.iter_blocks() {
+      self.block_mut(b).sealed = false;
     }
   }
 
   pub fn seal_all_blocks(&mut self) {
-    for i in 0..self.blocks.len() {
-      self.seal_block(BlockRef(i));
+    for b in self.iter_blocks() {
+      self.seal_block(b);
     }
   }
 

@@ -92,9 +92,7 @@ impl<'a> IRBuilder<'a> {
   }
 
   fn new_block(&mut self, name: &str) -> BlockRef {
-    let idx = self.ir.blocks.len();
-    self.ir.blocks.push(Block::new(name));
-    BlockRef(idx)
+    self.ir.push_block(Block::new(name))
   }
 
   fn get_block(&mut self, effective: SegOff) -> BlockRef {
@@ -203,19 +201,18 @@ impl<'a> IRBuilder<'a> {
       opcode,
       operands,
     };
-    let blk = &mut self.ir.blocks[self.cur.0];
-    let idx = blk.instrs.push_back(instr);
+    let idx = self.ir.block_mut(self.cur).instrs.push_back(instr);
     Ref::Instr(self.cur, idx)
   }
 
   fn append_jmp(&mut self, next: BlockRef) {
-    self.ir.blocks[next.0].preds.push(self.cur);
+    self.ir.block_mut(next).preds.push(self.cur);
     self.append_instr(Opcode::Jmp, vec![Ref::Block(next)]);
   }
 
   fn append_jne(&mut self, cond: Ref, true_blk: BlockRef, false_blk: BlockRef) {
-    self.ir.blocks[true_blk.0].preds.push(self.cur);
-    self.ir.blocks[false_blk.0].preds.push(self.cur);
+    self.ir.block_mut(true_blk).preds.push(self.cur);
+    self.ir.block_mut(false_blk).preds.push(self.cur);
     self.append_instr(Opcode::Jne, vec![
       cond,
       Ref::Block(true_blk),
@@ -232,7 +229,7 @@ impl<'a> IRBuilder<'a> {
     let mut opers = vec![idx];
     for tgt in targets {
       let blkref = self.get_block(tgt);
-      self.ir.blocks[blkref.0].preds.push(self.cur);
+      self.ir.block_mut(blkref).preds.push(self.cur);
       opers.push(Ref::Block(blkref));
     }
     self.append_instr(Opcode::JmpTbl, opers);
@@ -246,7 +243,7 @@ impl<'a> IRBuilder<'a> {
     let next_bref = self.get_block(next);
 
     // Make sure the last instruction is a jump
-    match self.ir.blocks[self.cur.0].instrs.last().map(|ins| ins.opcode) {
+    match self.ir.block(self.cur).instrs.last().map(|ins| ins.opcode) {
       Some(Opcode::Jmp) => (),
       Some(Opcode::Jne) => (),
       Some(Opcode::JmpTbl) => (),
@@ -255,7 +252,7 @@ impl<'a> IRBuilder<'a> {
 
     // Switch to the next block
     self.switch_blk(next_bref);
-    assert!(self.ir.blocks[self.cur.0].instrs.empty());
+    assert!(self.ir.block(self.cur).instrs.empty());
   }
 }
 
@@ -820,9 +817,9 @@ impl IRBuilder<'_> {
     }
 
     // Step 4: walk blocks and seal them
-    for i in 0..self.ir.blocks.len() {
-      if !self.ir.blocks[i].sealed {
-        self.ir.seal_block(BlockRef(i));
+    for blkref in self.ir.iter_blocks() {
+      if !self.ir.block(blkref).sealed {
+        self.ir.seal_block(blkref);
       }
     }
   }

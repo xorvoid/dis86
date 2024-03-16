@@ -137,11 +137,8 @@ impl Formatter {
   }
 
   fn fmt_ir(&mut self, ir: &IR) -> fmt::Result {
-    for (i, blk) in ir.blocks.iter().enumerate() {
-      // if self.is_block_dead(BlockRef(i)) {
-      //   continue;
-      // }
-      let bref = BlockRef(i);
+    for bref in ir.iter_blocks() {
+      let blk = ir.block(bref);
       self.fmt_blkhdr(bref, blk)?;
       for idx in blk.instrs.range() {
         let iref = Ref::Instr(bref, idx);
@@ -166,8 +163,8 @@ impl fmt::Display for IR {
 pub fn display_ir_with_uses(ir: &IR) -> Result<String, std::fmt::Error> {
   let n_uses = util::compute_uses(ir);
   let mut r = Formatter::new();
-  for (i, blk) in ir.blocks.iter().enumerate() {
-    let bref = BlockRef(i);
+  for bref in ir.iter_blocks() {
+    let blk = ir.block(bref);
     r.fmt_blkhdr(bref, blk)?;
     for idx in blk.instrs.range() {
       let iref = Ref::Instr(bref, idx);

@@ -375,13 +375,13 @@ impl<'a> Builder<'a> {
   fn make_label(&self, id: ElemId) -> Label {
     let elem = self.cf.elem(id);
     let Detail::BasicBlock(bb) = &elem.detail else { panic!("Expected basic block") };
-    Label(format!("{}", self.ir.blocks[bb.blkref.0].name))
+    Label(format!("{}", self.ir.block(bb.blkref).name))
   }
 
   fn emit_phis(&mut self, blk: &mut Block, src: ir::BlockRef, dst: ir::BlockRef) {
     // first, which pred is the src block?
     let mut idx = None;
-    for (i, pred) in self.ir.blocks[dst.0].preds.iter().enumerate() {
+    for (i, pred) in self.ir.block(dst).preds.iter().enumerate() {
       if *pred == src {
         idx = Some(i);
         break;
@@ -390,8 +390,7 @@ impl<'a> Builder<'a> {
     let idx = idx.unwrap();
 
     // next, for each phi, generate code for the pred idx
-    for i in self.ir.blocks[dst.0].instrs.range() {
-      let r = ir::Ref::Instr(dst, i);
+    for r in self.ir.iter_instrs(dst) {
       let instr = self.ir.instr(r).unwrap();
       if instr.opcode != ir::Opcode::Phi { continue };
 
@@ -408,8 +407,7 @@ impl<'a> Builder<'a> {
   // Returns a jump condition expr if the block ends in a conditional branch
   #[must_use]
   fn emit_blk(&mut self, blk: &mut Block, bref: ir::BlockRef, inverted_cond: bool) -> Option<Expr> {
-    for i in self.ir.blocks[bref.0].instrs.range() {
-      let r = ir::Ref::Instr(bref, i);
+    for r in self.ir.iter_instrs(bref) {
       let instr = self.ir.instr(r).unwrap();
       match instr.opcode {
         ir::Opcode::Nop => continue,

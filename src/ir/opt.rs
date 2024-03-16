@@ -12,9 +12,8 @@ fn operand_propagate(ir: &IR, mut r: Ref) -> Ref {
 }
 
 pub fn reduce_xor(ir: &mut IR) {
-  for b in 0..ir.blocks.len() {
-    for i in ir.blocks[b].instrs.range() {
-      let r = Ref::Instr(BlockRef(b), i);
+  for b in ir.iter_blocks() {
+    for r in ir.iter_instrs(b) {
       let instr = ir.instr(r).unwrap();
       if instr.opcode != Opcode::Xor || instr.operands[0] != instr.operands[1] {
         continue;
@@ -37,10 +36,8 @@ To:
   t37      = signext32  t34
 */
 pub fn reduce_make_32_signext_32(ir: &mut IR) {
-  for b in 0..ir.blocks.len() {
-    for i in ir.blocks[b].instrs.range() {
-      let r = Ref::Instr(BlockRef(b), i);
-
+  for b in ir.iter_blocks() {
+    for r in ir.iter_instrs(b) {
       let make32_ref = r;
       let make32 = ir.instr(make32_ref).unwrap();
       if make32.opcode != Opcode::Make32 { continue; }
@@ -63,9 +60,8 @@ pub fn reduce_make_32_signext_32(ir: &mut IR) {
 }
 
 pub fn reduce_phi(ir: &mut IR) {
-  for b in 0..ir.blocks.len() {
-    for i in ir.blocks[b].instrs.range() {
-      let r = Ref::Instr(BlockRef(b), i);
+  for b in ir.iter_blocks() {
+    for r in ir.iter_instrs(b) {
       if ir.instr(r).unwrap().opcode != Opcode::Phi { continue; }
 
       // propagate while checking conditions
@@ -110,9 +106,8 @@ fn arith_const_oper(ir: &IR, vref: Ref) -> Option<(Ref, i32)> {
 }
 
 pub fn arithmetic_accumulation(ir: &mut IR) {
-  for b in 0..ir.blocks.len() {
-    for i in ir.blocks[b].instrs.range() {
-      let vref = Ref::Instr(BlockRef(b), i);
+  for b in ir.iter_blocks() {
+    for vref in ir.iter_instrs(b) {
       let Some((_, a)) = arith_const_oper(ir, vref) else { continue };
 
       let instr = ir.instr(vref).unwrap();
@@ -139,9 +134,8 @@ pub fn arithmetic_accumulation(ir: &mut IR) {
 }
 
 pub fn value_propagation(ir: &mut IR) {
-  for b in 0..ir.blocks.len() {
-    for i in ir.blocks[b].instrs.range() {
-      let r = Ref::Instr(BlockRef(b), i);
+  for b in ir.iter_blocks() {
+    for r in ir.iter_instrs(b) {
       // Propagate all operands
       let mut operands = ir.instr(r).unwrap().operands.clone();
       for j in 0..operands.len() {
@@ -165,9 +159,8 @@ pub fn deadcode_elimination(ir: &mut IR) {
   // code that DCE can eliminate.
 
   let mut unprocessed = VecDeque::new();
-  for b in 0..ir.blocks.len() {
-    for i in ir.blocks[b].instrs.range() {
-      let r = Ref::Instr(BlockRef(b), i);
+  for b in ir.iter_blocks() {
+    for r in ir.iter_instrs(b) {
       let instr = ir.instr(r).unwrap();
       if instr.opcode.has_side_effects() {
         unprocessed.push_back(r);
@@ -190,9 +183,8 @@ pub fn deadcode_elimination(ir: &mut IR) {
   }
 
   // Lastly, use the live set to remove dead-code
-  for b in 0..ir.blocks.len() {
-    for i in ir.blocks[b].instrs.range() {
-      let r = Ref::Instr(BlockRef(b), i);
+  for b in ir.iter_blocks() {
+    for r in ir.iter_instrs(b) {
       if live_refs.get(&r).is_some() { continue; } // live
       let instr = ir.instr_mut(r).unwrap();
       instr.opcode = Opcode::Nop;
@@ -210,10 +202,9 @@ fn allow_cse(opcode: Opcode) -> bool {
 }
 
 pub fn common_subexpression_elimination(ir: &mut IR) {
-  for b in 0..ir.blocks.len() {
+  for b in ir.iter_blocks() {
     let mut prev = HashMap::new();
-    for i in ir.blocks[b].instrs.range() {
-      let r = Ref::Instr(BlockRef(b), i);
+    for r in ir.iter_instrs(b) {
       let instr = ir.instr(r).unwrap();
       if !allow_cse(instr.opcode) { continue; }
 
@@ -244,11 +235,10 @@ pub fn forward_store_to_load(ir: &mut IR) {
     None
   };
 
-  for b in 0..ir.blocks.len() {
+  for b in ir.iter_blocks() {
     // Don't forward across blocks!!
     let mut prev_stores = vec![];
-    for i in ir.blocks[b].instrs.range() {
-      let r = Ref::Instr(BlockRef(b), i);
+    for r in ir.iter_instrs(b) {
       let instr = ir.instr(r).unwrap();
       if instr.opcode.is_store() {
         prev_stores.push(r);
@@ -273,9 +263,8 @@ pub fn mem_symbol_to_ref(ir: &mut IR) {
   ir.unseal_all_blocks();
 
   // Pass 1: Write -> Ref
-  for b in 0..ir.blocks.len() {
-    for i in ir.blocks[b].instrs.range() {
-      let r = Ref::Instr(BlockRef(b), i);
+  for b in ir.iter_blocks() {
+    for r in ir.iter_instrs(b) {
       let instr = ir.instr(r).unwrap();
       if instr.opcode == Opcode::WriteVar16 {
         let Ref::Symbol(symref) = instr.operands[0] else { continue };
@@ -289,14 +278,14 @@ pub fn mem_symbol_to_ref(ir: &mut IR) {
         instr.operands = vec![instr.operands[1]];
 
         // Add the def
-        ir.set_var(name, BlockRef(b), r);
+        ir.set_var(name, b, r);
       } else if instr.opcode == Opcode::ReadVar16 {
         let Ref::Symbol(symref) = instr.operands[0] else { continue };
         if ir.symbols.symbol_type(symref) != sym::SymbolType::Local { continue; }
         if ir.symbols.symbol(symref).size != 2 { continue; }
 
         let name = Name::Var(ir.symbols.symbol_name(symref));
-        let vref = ir.get_var(name, BlockRef(b));
+        let vref = ir.get_var(name, b);
 
         let instr = ir.instr_mut(r).unwrap();
         instr.opcode = Opcode::Ref;
@@ -310,9 +299,8 @@ pub fn mem_symbol_to_ref(ir: &mut IR) {
 }
 
 pub fn simplify_branch_conds(ir: &mut IR) {
-  for b in 0..ir.blocks.len() {
-    for i in ir.blocks[b].instrs.range() {
-      let r = Ref::Instr(BlockRef(b), i);
+  for b in ir.iter_blocks() {
+    for r in ir.iter_instrs(b) {
       let instr = ir.instr(r).unwrap();
 
       let opcode_new = match instr.opcode {
@@ -376,7 +364,7 @@ pub fn simplify_branch_conds(ir: &mut IR) {
         instr.opcode = opcode_new;
         instr.operands = vec![pred_ref, z];
       }
-}
+    }
   }
 }
 
