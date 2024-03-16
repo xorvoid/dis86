@@ -69,6 +69,16 @@ impl Config {
     }
     None
   }
+
+  pub fn text_region_lookup_by_start_addr(&self, addr: SegOff) -> Option<&TextSectionRegion> {
+    // TODO: Consider something better than linear search
+    for r in &self.text_section {
+      if addr == r.start {
+        return Some(r)
+      }
+    }
+    None
+  }
 }
 
 impl Config {
