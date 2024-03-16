@@ -542,8 +542,8 @@ impl Block {
         instr.operands[0].unwrap_block()
       ],
       Opcode::Jne => vec![
-        instr.operands[0].unwrap_block(),
-        instr.operands[1].unwrap_block()
+        instr.operands[1].unwrap_block(),
+        instr.operands[2].unwrap_block()
       ],
       Opcode::JmpTbl => {
         instr.operands[1..].iter().map(|oper| oper.unwrap_block()).collect()

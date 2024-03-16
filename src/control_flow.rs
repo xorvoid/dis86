@@ -83,10 +83,21 @@ impl ControlFlowData {
   fn checkout(&mut self, id: ElemId) -> Elem { self.0[id.0].take().unwrap() }
   fn release(&mut self, id: ElemId, elem: Elem) { assert!(self.0[id.0].is_none()); self.0[id.0] = Some(elem); }
 
+  fn append_with_id(&mut self, id: ElemId, elem: Elem) {
+    assert!(id.0 >= self.len());
+    while self.len() < id.0 {
+      self.0.push(None);
+    }
+    assert!(id.0 == self.len());
+    self.append(elem);
+  }
+
   #[allow(unused)]
   fn debug_dump(&self) {
     for (i, elem) in self.0.iter().enumerate() {
-      println!("{:3} | {:?}", i, elem.as_ref().unwrap());
+      if let Some(elem) = elem {
+        println!("{:3} | {:?}", i, elem);
+      }
     }
   }
 }
@@ -256,7 +267,7 @@ impl ControlFlow {
       //   _ => panic!("Expected last instruction to be a branching instruction: {:?}", instr),
       // }
 
-      cf.data.append(Elem {
+      cf.data.append_with_id(ElemId(b.0), Elem {
         entry: ElemId(b.0),
         exits,
         jump: None,
