@@ -38,8 +38,11 @@ impl Root {
     Some(Root { ctx })
   }
 
+  #[allow(unused)]
   pub fn get(&self, key: &str) -> Option<Value> { node_get(self.ctx, key) }
+  #[allow(unused)]
   pub fn get_str(&self, key: &str) -> Option<&str> { node_get_str(self.ctx, key) }
+  #[allow(unused)]
   pub fn get_node(&self, key: &str) -> Option<Node> { node_get_node(self.ctx, key) }
 }
 
@@ -68,6 +71,7 @@ impl<'a> Value<'a> {
     }
   }
 
+  #[allow(unused)]
   pub fn as_str(&self) -> Option<&'a str> {
     match self {
       Self::Str(s) => Some(s),
@@ -103,8 +107,11 @@ fn node_get_node<'a>(ctx: *mut bsl_t, key: &str) -> Option<Node<'a>> {
 }
 
 impl<'a> Node<'a> {
+  #[allow(unused)]
   pub fn get(&self, key: &str) -> Option<Value> { node_get(self.ctx, key) }
+  #[allow(unused)]
   pub fn get_str(&self, key: &str) -> Option<&str> { node_get_str(self.ctx, key) }
+  #[allow(unused)]
   pub fn get_node(&self, key: &str) -> Option<Node> { node_get_node(self.ctx, key) }
 
   pub fn iter(&self) -> Iter {

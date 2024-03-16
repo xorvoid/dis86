@@ -1,4 +1,4 @@
-use crate::decomp::ir;
+use crate::ir;
 use std::collections::HashMap;
 use std::fmt::Write;
 

@@ -1,5 +1,5 @@
 use crate::segoff::SegOff;
-use crate::decomp::config::{self, Config};
+use crate::config::{self, Config};
 
 pub struct Spec<'a> {
   pub func: Option<&'a config::Func>,

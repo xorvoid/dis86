@@ -1,6 +1,6 @@
 use crate::segoff::SegOff;
 use crate::bsl;
-use crate::decomp::types::Type;
+use crate::types::Type;
 
 #[derive(Debug)]
 pub struct Func {

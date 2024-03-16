@@ -3,12 +3,12 @@ use crate::binary::Binary;
 use crate::segoff::SegOff;
 use crate::asm::decode::Decoder;
 use crate::asm::intel_syntax;
-use crate::decomp::ir::{self, opt, sym};
-use crate::decomp::config::Config;
-use crate::decomp::gen;
-use crate::decomp::ast;
-use crate::decomp::control_flow;
-use crate::decomp::spec;
+use crate::ir::{self, opt, sym};
+use crate::config::Config;
+use crate::gen;
+use crate::ast;
+use crate::control_flow;
+use crate::spec;
 use std::fs::File;
 use std::io::Write;
 

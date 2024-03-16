@@ -1,5 +1,5 @@
-use crate::decomp::ir::def::*;
-use crate::decomp::ir::sym;
+use crate::ir::def::*;
+use crate::ir::sym;
 use std::collections::{hash_map, HashMap, HashSet, VecDeque};
 
 // Propagate operand through any ref opcodes

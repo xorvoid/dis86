@@ -1,5 +1,5 @@
 use crate::asm::instr;
-use crate::decomp::ir::sym;
+use crate::ir::sym;
 use crate::util::dvec::{DVec, DVecIndex};
 use std::collections::HashMap;
 

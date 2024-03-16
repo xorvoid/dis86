@@ -1,5 +1,5 @@
 use std::env;
-use dis86::decomp::config::Config;
+use dis86::config::Config;
 
 fn main() {
   let args: Vec<_> = env::args().collect();

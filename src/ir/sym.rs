@@ -1,7 +1,7 @@
 use crate::asm::instr;
-use crate::decomp::config::Config;
-use crate::decomp::ir::def::*;
-use crate::decomp::types::Type;
+use crate::config::Config;
+use crate::ir::def::*;
+use crate::types::Type;
 use std::cmp::Ordering;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -188,7 +188,7 @@ pub fn symbolize_stack(ir: &mut IR) {
 
       var_mem_refs.push((mem_ref, off, size));
 
-      // let mut f = crate::decomp::ir::display::Formatter::new();
+      // let mut f = crate::ir::display::Formatter::new();
       // f.fmt_instr(ir, addr_ref, addr_instr).unwrap();
       // f.fmt_instr(ir, mem_ref, mem_instr).unwrap();
       // println!("{}", f.finish());

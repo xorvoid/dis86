@@ -1,4 +1,4 @@
-use crate::decomp::ast::*;
+use crate::ast::*;
 use std::fmt;
 
 pub enum Flavor {

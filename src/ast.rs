@@ -1,6 +1,6 @@
-use crate::decomp::ir;
-use crate::decomp::types::*;
-use crate::decomp::control_flow::{self, ControlFlow, Detail, ElemId};
+use crate::ir;
+use crate::types::*;
+use crate::control_flow::{self, ControlFlow, Detail, ElemId};
 use std::collections::{HashMap, HashSet};
 
 type FlowIter<'a> = std::iter::Peekable<control_flow::ControlFlowIter<'a>>;

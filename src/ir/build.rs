@@ -1,10 +1,10 @@
 use crate::asm::instr;
 use crate::binary;
 use crate::segoff::SegOff;
-use crate::decomp::config::{self, Config};
-use crate::decomp::spec;
-use crate::decomp::ir::*;
-use crate::decomp::types::{Type, ArraySize};
+use crate::config::{self, Config};
+use crate::spec;
+use crate::ir::*;
+use crate::types::{Type, ArraySize};
 use std::collections::{HashSet, HashMap};
 
 const DEBUG: bool = false;

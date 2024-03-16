@@ -1,4 +1,4 @@
-use crate::decomp::ir::def::*;
+use crate::ir::def::*;
 
 struct Finalizer {
   num: usize,

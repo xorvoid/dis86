@@ -1,5 +1,5 @@
 use crate::asm::instr;
-use crate::decomp::ir::*;
+use crate::ir::*;
 use std::fmt::{self, Write};
 use std::collections::HashMap;
 
