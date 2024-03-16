@@ -18,7 +18,7 @@ vis name:
 
 # A temporary command for dev build-test-cycle
 run name *opts: build
-     ./target/debug/dis86 decomp --config ../gizmo/build/src/hooklib/dis86_config.bsl --binary ../gizmo/dis/exe.bin --name {{name}} {{opts}}
+     ./target/debug/dis86 --config ../gizmo/build/src/hooklib/dis86_config.bsl --binary ../gizmo/dis/exe.bin --name {{name}} {{opts}}
 
 # A temporary command for dev build-test-cycle
 run-old:

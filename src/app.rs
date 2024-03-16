@@ -12,8 +12,9 @@ use crate::decomp::spec;
 use std::fs::File;
 use std::io::Write;
 
-fn print_help(appname: &str) {
-  println!("usage: {} dis OPTIONS", appname);
+fn print_help() {
+  let appname = std::env::args().next().unwrap();
+  println!("usage: {} OPTIONS", appname);
   println!("");
   println!("REQUIRED OPTIONS:");
   println!("  --config          path to binary configuration file (required)");
@@ -84,12 +85,12 @@ fn match_flag(args: &mut Vec<std::ffi::OsString>, flag: &str) -> bool {
   false
 }
 
-fn parse_args(appname: &str) -> Result<Args, pico_args::Error> {
+fn parse_args() -> Result<Args, pico_args::Error> {
   let mut pargs = pico_args::Arguments::from_env();
 
   // Help has a higher priority and should be handled separately.
   if pargs.contains(["-h", "--help"]) {
-    print_help(appname);
+    print_help();
     std::process::exit(0);
   }
 
@@ -117,7 +118,7 @@ fn parse_args(appname: &str) -> Result<Args, pico_args::Error> {
   args.codegen_hydra = match_flag(&mut remaining, "--codegen-hydra");
 
   // It's up to the caller what to do with the remaining arguments.
-  if remaining != &["decomp"] {
+  if remaining.len() != 0 {
     eprintln!("Error: unused arguments left: {:?}.", remaining);
     std::process::exit(1);
   }
@@ -125,12 +126,12 @@ fn parse_args(appname: &str) -> Result<Args, pico_args::Error> {
   Ok(args)
 }
 
-pub fn run(appname: &str) {
-  let args = match parse_args(appname) {
+pub fn run() -> i32 {
+  let args = match parse_args() {
     Ok(v) => v,
     Err(e) => {
       eprintln!("Error: {}.", e);
-      std::process::exit(1);
+      return 1;
     }
   };
 
@@ -162,25 +163,25 @@ pub fn run(appname: &str) {
       buf += "\n";
     }
     write_to_path(path, &buf);
-    return;
+    return 0;
   }
 
   let mut ir = ir::IR::from_instrs(&instr_list, &cfg, &spec, &binary);
   if let Some(path) = args.emit_ir_initial.as_ref() {
     write_to_path(path, &format!("{}", ir));
-    return;
+    return 0;
   }
 
   opt::optimize(&mut ir);
   if let Some(path) = args.emit_ir_presym.as_ref() {
     write_to_path(path, &format!("{}", ir));
-    return;
+    return 0;
   }
 
   sym::symbolize(&mut ir, &cfg);
   if let Some(path) = args.emit_ir_sym.as_ref() {
     write_to_path(path, &format!("{}", ir));
-    return;
+    return 0;
   }
 
   opt::forward_store_to_load(&mut ir);
@@ -192,27 +193,27 @@ pub fn run(appname: &str) {
   if let Some(path) = args.emit_ir_opt.as_ref() {
     let text = ir::display::display_ir_with_uses(&ir).unwrap();
     write_to_path(path, &format!("{}", &text));
-    return;
+    return 0;
   }
 
   ir::fin::finalize(&mut ir);
   if let Some(path) = args.emit_ir_final.as_ref() {
     let text = ir::display::display_ir_with_uses(&ir).unwrap();
     write_to_path(path, &format!("{}", &text));
-    return;
+    return 0;
   }
 
   if let Some(path) = args.emit_graph.as_ref() {
     let dot = ir::util::gen_graphviz_dotfile(&ir).unwrap();
     write_to_path(path, &dot);
-    return;
+    return 0;
   }
 
   let ctrlflow = control_flow::ControlFlow::from_ir(&ir);
   if let Some(path) = args.emit_ctrlflow.as_ref() {
     let text = control_flow::format(&ctrlflow).unwrap();
     write_to_path(path, &text);
-    return;
+    return 0;
   }
 
   let ret = spec.func.map(|f| f.ret.clone());
@@ -220,13 +221,15 @@ pub fn run(appname: &str) {
   if let Some(path) = args.emit_ast.as_ref() {
     let text = format!("{:#?}", ast);
     write_to_path(path, &text);
-    return;
+    return 0;
   }
 
   if let Some(path) = args.emit_code.as_ref() {
     let flavor = if args.codegen_hydra { gen::Flavor::Hydra } else { gen::Flavor::Standard };
     let code = gen::generate(&ast, flavor).unwrap();
     write_to_path(path, &code);
-    return;
+    return 0;
   }
+
+  return 0;
 }
