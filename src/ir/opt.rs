@@ -193,6 +193,39 @@ pub fn deadcode_elimination(ir: &mut IR) {
   }
 }
 
+pub fn deadblock_elimination(ir: &mut IR) {
+  // A dead block is one with no preds
+  for blkref in ir.iter_blocks() {
+    let blk = ir.block(blkref);
+    if blkref == BlockRef(0) { continue; } // entry block is always alive
+    if blk.preds.len() > 0 { continue; }
+
+    // Need to remove ourself as a pred from any target blocks
+    for exit in blk.exits() {
+      // Find pred_idx
+      let exit_blk = ir.block_mut(exit);
+      let mut pred_idx = None;
+      for (i, p) in exit_blk.preds.iter().enumerate() {
+        if *p == blkref {
+          pred_idx = Some(i);
+          break;
+        }
+      }
+      let pred_idx = pred_idx.unwrap();
+
+      // Remove index from pred and all phis
+      exit_blk.preds.remove(pred_idx);
+      for r in ir.iter_instrs(exit) {
+        let instr = ir.instr_mut(r).unwrap();
+        if instr.opcode != Opcode::Phi { continue; }
+        instr.operands.remove(pred_idx);
+      }
+    }
+
+    ir.remove_block(blkref);
+  }
+}
+
 fn allow_cse(opcode: Opcode) -> bool {
   match opcode {
     Opcode::Add => true,
@@ -370,6 +403,7 @@ pub fn simplify_branch_conds(ir: &mut IR) {
 
 const N_OPT_PASSES: usize = 5;
 pub fn optimize(ir: &mut IR) {
+  deadblock_elimination(ir);
   for _ in 0..N_OPT_PASSES {
     reduce_xor(ir);
     reduce_make_32_signext_32(ir);

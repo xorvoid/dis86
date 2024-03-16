@@ -234,24 +234,27 @@ impl ControlFlow {
     };
 
     for b in ir.iter_blocks() {
-      let instr = ir.block(b).instrs.last().unwrap();
-      let mut exits = vec![];
-      match instr.opcode {
-        ir::Opcode::RetFar | ir::Opcode::RetNear => (),
-        ir::Opcode::Jmp => {
-          exits.push(ElemId(instr.operands[0].unwrap_block().0));
-        }
-        ir::Opcode::Jne => {
-          exits.push(ElemId(instr.operands[1].unwrap_block().0));
-          exits.push(ElemId(instr.operands[2].unwrap_block().0));
-        }
-        ir::Opcode::JmpTbl => {
-          for oper in &instr.operands[1..] {
-            exits.push(ElemId(oper.unwrap_block().0));
-          }
-        }
-        _ => panic!("Expected last instruction to be a branching instruction: {:?}", instr),
-      }
+      let exits = ir.block(b).exits().into_iter().map(|x| ElemId(x.0)).collect();
+
+      // let instr = ir.block(b).instrs.last().unwrap();
+      // let mut exits = vec![]
+
+      // match instr.opcode {
+      //   ir::Opcode::RetFar | ir::Opcode::RetNear => (),
+      //   ir::Opcode::Jmp => {
+      //     exits.push(ElemId(instr.operands[0].unwrap_block().0));
+      //   }
+      //   ir::Opcode::Jne => {
+      //     exits.push(ElemId(instr.operands[1].unwrap_block().0));
+      //     exits.push(ElemId(instr.operands[2].unwrap_block().0));
+      //   }
+      //   ir::Opcode::JmpTbl => {
+      //     for oper in &instr.operands[1..] {
+      //       exits.push(ElemId(oper.unwrap_block().0));
+      //     }
+      //   }
+      //   _ => panic!("Expected last instruction to be a branching instruction: {:?}", instr),
+      // }
 
       cf.data.append(Elem {
         entry: ElemId(b.0),

@@ -360,6 +360,12 @@ impl IR {
     BlockRef(idx)
   }
 
+  pub fn remove_block(&mut self, blkref: BlockRef) {
+    // Caller is responsible for ensuring there are no references to this block elsewhere in the IR
+    assert!(self.blocks[blkref.0].is_some());
+    self.blocks[blkref.0] = None;
+  }
+
   pub fn iter_blocks(&self) -> impl Iterator<Item=BlockRef> {
     // FIXME: Can we avoid the intermediate vec?? (Without holding &self hostage?)
     let mut blkrefs = vec![];
@@ -521,6 +527,24 @@ impl Block {
       instrs: DVec::new(),
       sealed: false,
       incomplete_phis: vec![],
+    }
+  }
+
+  pub fn exits(&self) -> Vec<BlockRef> {
+    let instr = self.instrs.last().unwrap();
+    match instr.opcode {
+      Opcode::RetFar | Opcode::RetNear => vec![],
+      Opcode::Jmp => vec![
+        instr.operands[0].unwrap_block()
+      ],
+      Opcode::Jne => vec![
+        instr.operands[0].unwrap_block(),
+        instr.operands[1].unwrap_block()
+      ],
+      Opcode::JmpTbl => {
+        instr.operands[1..].iter().map(|oper| oper.unwrap_block()).collect()
+      },
+      _ => panic!("Expected last instruction to be a branching instruction: {:?}", instr),
     }
   }
 }
