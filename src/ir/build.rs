@@ -221,8 +221,9 @@ impl<'a> IRBuilder<'a> {
 
   fn append_jmptbl(&mut self, reg_ref: Ref, targets: Vec<SegOff>) {
     // NOTE: The reg value will have been scaled up to do the memory access, we need to "de-scale" it
-    // This is technically not gaurenteed to be safe so we insert and "assert"
+    // This is technically not gaurenteed to be safe so we insert some "asserts"
     self.append_instr(Opcode::AssertEven, vec![reg_ref]);
+    self.append_instr(Opcode::AssertPos, vec![reg_ref]);
     // Then scale it down..
     let k = self.ir.append_const(1);
             let idx = self.append_instr(Opcode::UShr, vec![reg_ref, k]);

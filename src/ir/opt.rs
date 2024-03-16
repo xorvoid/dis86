@@ -28,11 +28,13 @@ pub fn reduce_xor(ir: &mut IR) {
 
 /*
 From:
+--------------------------------------------
   t36      = signext32  t34
   dx.2     = upper16    t36
   t37      = make32     dx.2                 t34
 
 To:
+--------------------------------------------
   t37      = signext32  t34
 */
 pub fn reduce_make_32_signext_32(ir: &mut IR) {
@@ -59,7 +61,15 @@ pub fn reduce_make_32_signext_32(ir: &mut IR) {
   }
 }
 
-pub fn reduce_phi(ir: &mut IR) {
+/*
+From:
+--------------------------------------------
+  t5 = phi t5 t1 t1 t5 t5
+To:
+--------------------------------------------
+  t5 = ref t1
+*/
+pub fn reduce_phi_single_ref(ir: &mut IR) {
   for b in ir.iter_blocks() {
     for r in ir.iter_instrs(b) {
       if ir.instr(r).unwrap().opcode != Opcode::Phi { continue; }
@@ -86,6 +96,66 @@ pub fn reduce_phi(ir: &mut IR) {
         let instr = ir.instr_mut(r).unwrap();
         instr.opcode = Opcode::Ref;
         instr.operands = vec![vref];
+      }
+    }
+  }
+}
+
+/*
+From:
+--------------------------------------------
+b1:
+  t1 = op r1 r2 r3
+       jmp b3
+
+b2:
+  t2 = op r1 r2 r3
+       jmp b3
+
+b3: (b1 b2 b3)
+  t5 = phi t1 t2 t5
+
+To:
+--------------------------------------------
+b3: (b1, b2)
+  t5 = op r1 r2 r3
+*/
+pub fn reduce_phi_common_subexpr(ir: &mut IR) {
+  for b in ir.iter_blocks() {
+    for r in ir.iter_instrs(b) {
+      if ir.instr(r).unwrap().opcode != Opcode::Phi { continue; }
+
+      let mut operands = ir.instr(r).unwrap().operands.clone();
+
+      // propagate all operands
+      for oper in &mut operands {
+        *oper = operand_propagate(ir, *oper);
+      }
+
+      // find first non-trivial to act as common
+      let mut common = None;
+      for oper in &operands {
+        if *oper == r { continue; }
+        common = Some(*oper);
+        break;
+      }
+      let Some(common) = common else { continue };
+      let Some(common_instr) = ir.instr(common).cloned() else { continue };
+
+      // see if all non-trivial operands match
+      let mut all_match = true;
+      for oper in &operands {
+        if *oper == r { continue; }
+        let instr = ir.instr(*oper);
+        if instr.is_none() || &common_instr != instr.unwrap() {
+          all_match = false;
+          break;
+        }
+      }
+
+      // re-write the phi
+      if all_match {
+        *ir.instr_mut(r).unwrap() = common_instr;
       }
     }
   }
@@ -407,7 +477,8 @@ pub fn optimize(ir: &mut IR) {
   for _ in 0..N_OPT_PASSES {
     reduce_xor(ir);
     reduce_make_32_signext_32(ir);
-    reduce_phi(ir);
+    reduce_phi_single_ref(ir);
+    reduce_phi_common_subexpr(ir);
     simplify_branch_conds(ir);
     arithmetic_accumulation(ir);
     value_propagation(ir);

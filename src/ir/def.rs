@@ -142,6 +142,7 @@ pub enum Opcode {
 
   // TODO: HMMM.... Better Impl?
   AssertEven,
+  AssertPos,
 }
 
 
@@ -217,6 +218,7 @@ impl Opcode {
       Opcode::JmpTbl      => "jmptbl",
 
       Opcode::AssertEven => "assert_even",
+      Opcode::AssertPos  => "assert_pos",
     }
   }
 
@@ -309,6 +311,8 @@ impl Opcode {
       Opcode::Jmp => true,
       Opcode::Jne => true,
       Opcode::JmpTbl => true,
+      Opcode::AssertEven => true,
+      Opcode::AssertPos => true,
       _ => false,
     }
   }
