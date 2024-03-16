@@ -52,7 +52,7 @@ fn jump_target(ins: &instr::Instr) -> Option<Address> {
       let effective = ins.rel_addr(rel);
       Address(effective.abs().into())
     }
-    _ => panic!("Unsupported branch operand"),
+    _ => panic!("Unsupported branch operand: {:?}", ins.operands[0]),
   };
 
   Some(tgt)

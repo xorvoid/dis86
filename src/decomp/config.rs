@@ -27,6 +27,14 @@ pub struct Global {
 }
 
 #[derive(Debug)]
+pub struct TextSectionRegion {
+  pub name: String,
+  pub start: SegOff,
+  pub end: SegOff,
+  pub typ: Type,
+}
+
+#[derive(Debug)]
 pub struct Segmap {
   pub name: String,
   pub from: u16,
@@ -37,6 +45,7 @@ pub struct Segmap {
 pub struct Config {
   pub funcs: Vec<Func>,
   pub globals: Vec<Global>,
+  pub text_section: Vec<TextSectionRegion>,
   pub segmaps: Vec<Segmap>,
 }
 
@@ -67,6 +76,7 @@ impl Config {
     let mut cfg = Config {
       funcs: vec![],
       globals: vec![],
+      text_section: vec![],
       segmaps: vec![],
     };
 
@@ -76,6 +86,15 @@ impl Config {
     let root = bsl::parse(&dat)
       .ok_or_else(|| format!("Failed to parse config"))?;
 
+    cfg.parse_functions(&root)?;
+    cfg.parse_globals(&root)?;
+    cfg.parse_text_section(&root)?;
+    cfg.parse_segmap(&root)?;
+
+    Ok(cfg)
+  }
+
+  fn parse_functions(&mut self, root: &bsl::Root) -> Result<(), String> {
     let func = root.get_node("dis86.functions")
       .ok_or_else(|| format!("Failed to get the functions node"))?;
 
@@ -112,7 +131,7 @@ impl Config {
       let ret: Type = ret_str.parse()
         .map_err(|err| format!("Expected type for '{}.ret', got '{}' | {}", key, ret_str, err))?;
 
-      cfg.funcs.push(Func {
+      self.funcs.push(Func {
         name: key.to_string(),
         start,
         end,
@@ -123,6 +142,10 @@ impl Config {
       });
     }
 
+    Ok(())
+  }
+
+  fn parse_globals(&mut self, root: &bsl::Root) -> Result<(), String> {
     let glob = root.get_node("dis86.globals")
       .ok_or_else(|| format!("Failed to get the globals node"))?;
 
@@ -146,13 +169,49 @@ impl Config {
         }
       };
 
-      cfg.globals.push(Global {
+      self.globals.push(Global {
         name: key.to_string(),
         offset: off,
         typ,
       });
     }
+    Ok(())
+  }
 
+  fn parse_text_section(&mut self, root: &bsl::Root) -> Result<(), String> {
+    let func = root.get_node("dis86.text_section")
+      .ok_or_else(|| format!("Failed to get the text_section node"))?;
+
+    for (key, val) in func.iter() {
+      let f = val.as_node()
+        .ok_or_else(|| format!("Expected text_section properties"))?;
+
+      let start_str = f.get_str("start")
+        .ok_or_else(|| format!("No text_section 'start' property for '{}'", key))?;
+      let end_str = f.get_str("end")
+        .ok_or_else(|| format!("No text_section 'end' property for '{}'", key))?;
+      let type_str = f.get_str("type")
+        .ok_or_else(|| format!("No text_section 'type' property for '{}'", key))?;
+
+      let start: SegOff = start_str.parse()
+        .map_err(|_| format!("Expected segoff for '{}.start', got '{}'", key, start_str))?;
+      let end: SegOff = end_str.parse()
+        .map_err(|_| format!("Expected segoff for '{}.start', got '{}'", key, end_str))?;
+      let typ: Type = type_str.parse()
+        .map_err(|err| format!("Expected type for '{}.type', got '{}' | {}", key, type_str, err))?;
+
+      self.text_section.push(TextSectionRegion {
+        name: key.to_string(),
+        start,
+        end,
+        typ,
+      });
+    }
+
+    Ok(())
+  }
+
+  fn parse_segmap(&mut self, root: &bsl::Root) -> Result<(), String> {
     let segmap = root.get_node("dis86.segmap")
       .ok_or_else(|| format!("Failed to get the segmap node"))?;
 
@@ -170,13 +229,12 @@ impl Config {
       let to = crate::util::parse::hex_u16(to_str)
         .map_err(|_| format!("Expected u16 hex for '{}.to', got '{}'", key, to_str))?;
 
-      cfg.segmaps.push(Segmap {
+      self.segmaps.push(Segmap {
         name: key.to_string(),
         from,
         to,
       });
     }
-
-    Ok(cfg)
+    Ok(())
   }
 }
