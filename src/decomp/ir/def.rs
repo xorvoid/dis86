@@ -78,10 +78,10 @@ pub enum Opcode {
   And,
   Or,
   Xor,
-  IDiv,
-  UDiv,
-  IMul,
-  UMul,
+  IMul,  // signed
+  UMul,  // unsigned
+  IDiv,  // signed
+  UDiv,  // unsigned
 
   Neg,
 
@@ -160,10 +160,10 @@ impl Opcode {
       Opcode::And         => "and",
       Opcode::Or          => "or",
       Opcode::Xor         => "xor",
-      Opcode::IDiv        => "idiv",
-      Opcode::UDiv        => "udiv",
       Opcode::IMul        => "imul",
       Opcode::UMul        => "umul",
+      Opcode::IDiv        => "idiv",
+      Opcode::UDiv        => "udiv",
       Opcode::Neg         => "neg",
       Opcode::SignExtTo32 => "signext32",
       //Opcode::AddrOf      => "addrof",

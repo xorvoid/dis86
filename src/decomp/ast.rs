@@ -32,17 +32,27 @@ pub struct UnaryExpr {
 
 #[derive(Debug, Clone, Copy)]
 pub enum BinaryOperator {
-  Add, Sub, UDiv, And, Or, Xor, Shl, Shr, Eq, Neq, Gt, Geq, Lt, Leq,
+  Add, Sub, Shl, Shr, Mul, Div, And, Or, Xor, Eq, Neq, Gt, Geq, Lt, Leq,
 }
 
 impl BinaryOperator {
-  fn signed(self) -> bool {
+  pub fn as_operator_str(&self) -> &'static str {
     match self {
-      BinaryOperator::Gt => true,
-      BinaryOperator::Geq => true,
-      BinaryOperator::Lt => true,
-      BinaryOperator::Leq => true,
-      _ => false,
+      BinaryOperator::Add => "+",
+      BinaryOperator::Sub => "-",
+      BinaryOperator::Shl => "<<",
+      BinaryOperator::Shr => ">>",
+      BinaryOperator::Mul => "*",
+      BinaryOperator::Div => "/",
+      BinaryOperator::And => "&",
+      BinaryOperator::Or  => "|",
+      BinaryOperator::Xor => "^",
+      BinaryOperator::Eq  => "==",
+      BinaryOperator::Neq => "!=",
+      BinaryOperator::Gt  => ">",
+      BinaryOperator::Geq => ">=",
+      BinaryOperator::Lt  => "<",
+      BinaryOperator::Leq => "<=",
     }
   }
 
@@ -185,21 +195,29 @@ impl<'a> Builder<'a> {
   fn ref_to_binary_expr(&mut self, r: ir::Ref, depth: usize, inverted: &mut bool) -> Option<Expr> {
     let instr = self.ir.instr(r).unwrap();
 
-    let mut ast_op = match instr.opcode {
-      ir::Opcode::Add => BinaryOperator::Add,
-      ir::Opcode::Sub => BinaryOperator::Sub,
-      ir::Opcode::UDiv => BinaryOperator::UDiv,
-      ir::Opcode::And => BinaryOperator::And,
-      ir::Opcode::Or => BinaryOperator::Or,
-      ir::Opcode::Xor => BinaryOperator::Xor,
-      ir::Opcode::Shl => BinaryOperator::Shl,
-      ir::Opcode::Shr => BinaryOperator::Shr,
-      ir::Opcode::Eq => BinaryOperator::Eq,
-      ir::Opcode::Neq => BinaryOperator::Neq,
-      ir::Opcode::Gt => BinaryOperator::Gt,
-      ir::Opcode::Geq => BinaryOperator::Geq,
-      ir::Opcode::Lt => BinaryOperator::Lt,
-      ir::Opcode::Leq => BinaryOperator::Leq,
+    let (mut ast_op, signed) = match instr.opcode {
+      ir::Opcode::Add  => (BinaryOperator::Add,  false),
+      ir::Opcode::Sub  => (BinaryOperator::Sub,  false),
+      ir::Opcode::IMul => (BinaryOperator::Mul,  true),
+      ir::Opcode::UMul => (BinaryOperator::Mul,  false),
+      ir::Opcode::IDiv => (BinaryOperator::Div,  true),
+      ir::Opcode::UDiv => (BinaryOperator::Div,  false),
+      ir::Opcode::And  => (BinaryOperator::And,  false),
+      ir::Opcode::Or   => (BinaryOperator::Or,   false),
+      ir::Opcode::Xor  => (BinaryOperator::Xor,  false),
+      ir::Opcode::Shl  => (BinaryOperator::Shl,  false),
+      ir::Opcode::Shr  => (BinaryOperator::Shr,  true),
+      ir::Opcode::UShr => (BinaryOperator::Shr,  false),
+      ir::Opcode::Eq   => (BinaryOperator::Eq,   false),
+      ir::Opcode::Neq  => (BinaryOperator::Neq,  false),
+      ir::Opcode::Gt   => (BinaryOperator::Gt,   true),
+      ir::Opcode::Geq  => (BinaryOperator::Geq,  true),
+      ir::Opcode::Lt   => (BinaryOperator::Lt,   true),
+      ir::Opcode::Leq  => (BinaryOperator::Leq,  true),
+      ir::Opcode::UGt  => (BinaryOperator::Gt,   false),
+      ir::Opcode::UGeq => (BinaryOperator::Geq,  false),
+      ir::Opcode::ULt  => (BinaryOperator::Lt,   false),
+      ir::Opcode::ULeq => (BinaryOperator::Leq,  false),
       _ => return None,
     };
 
@@ -214,7 +232,7 @@ impl<'a> Builder<'a> {
     let mut lhs = self.ref_to_expr(instr.operands[0], depth+1);
     let mut rhs = self.ref_to_expr(instr.operands[1], depth+1);
 
-    if ast_op.signed() {
+    if signed {
       lhs = Expr::Cast(Type::I16, Box::new(lhs));
       rhs = Expr::Cast(Type::I16, Box::new(rhs));
     }

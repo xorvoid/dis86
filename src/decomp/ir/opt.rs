@@ -356,8 +356,6 @@ pub fn simplify_branch_conds(ir: &mut IR) {
 const N_OPT_PASSES: usize = 5;
 pub fn optimize(ir: &mut IR) {
   for _ in 0..N_OPT_PASSES {
-    // constant_fold(ir);
-    // reduce_jne(ir);
     reduce_xor(ir);
     reduce_make_32_signext_32(ir);
     reduce_phi(ir);
@@ -366,7 +364,6 @@ pub fn optimize(ir: &mut IR) {
     value_propagation(ir);
     common_subexpression_elimination(ir);
     value_propagation(ir);
-    // jump_propagation(ir);
   }
   deadcode_elimination(ir);
 }

@@ -167,23 +167,7 @@ impl<'a> Gen<'a> {
   }
 
   fn binary_oper(&mut self, oper: &BinaryOperator) -> fmt::Result {
-    let s = match oper {
-      BinaryOperator::Add => "+",
-      BinaryOperator::Sub => "-",
-      BinaryOperator::UDiv => "/",
-      BinaryOperator::And => "&",
-      BinaryOperator::Or  => "|",
-      BinaryOperator::Xor => "^",
-      BinaryOperator::Shl => "<<",
-      BinaryOperator::Shr => ">>",
-      BinaryOperator::Eq  => "==",
-      BinaryOperator::Neq => "!=",
-      BinaryOperator::Gt  => ">",
-      BinaryOperator::Geq => ">=",
-      BinaryOperator::Lt  => "<",
-      BinaryOperator::Leq => "<=",
-    };
-    self.text(s)
+    self.text(oper.as_operator_str())
   }
 
   fn expr(&mut self, expr: &Expr, level: usize, imp: &dyn FlavorImpl) -> fmt::Result {
