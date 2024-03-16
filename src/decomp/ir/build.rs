@@ -7,6 +7,8 @@ use crate::decomp::ir::*;
 use crate::decomp::types::{Type, ArraySize};
 use std::collections::{HashSet, HashMap};
 
+const DEBUG: bool = false;
+
 fn instr_str(ins: &instr::Instr) -> String {
   crate::intel_syntax::format(ins, &[], false).unwrap()
 }
@@ -17,9 +19,18 @@ fn simple_binary_operation(opcode: instr::Opcode) -> Option<Opcode> {
     instr::Opcode::OP_ADD => Some(Opcode::Add),
     instr::Opcode::OP_SUB => Some(Opcode::Sub),
     instr::Opcode::OP_SHL => Some(Opcode::Shl),
+    instr::Opcode::OP_SAR => Some(Opcode::Shr),
+    instr::Opcode::OP_SHR => Some(Opcode::UShr),
     instr::Opcode::OP_AND => Some(Opcode::And),
     instr::Opcode::OP_OR => Some(Opcode::Or),
     instr::Opcode::OP_XOR => Some(Opcode::Xor),
+    _ => None,
+  }
+}
+
+fn simple_unary_operation(opcode: instr::Opcode) -> Option<Opcode> {
+  match opcode {
+    instr::Opcode::OP_NEG => Some(Opcode::Neg),
     _ => None,
   }
 }
@@ -94,8 +105,8 @@ impl<'a> IRBuilder<'a> {
     // Matching jumps of the form: "jmp WORD PTR cs:[bx+0x6d7]"
     if m.sz != instr::Size::Size16 { return None; }
     if m.sreg != instr::Reg::CS    { return None; }
-    let Some(reg) = m.reg1 else    { return None; };
-    if !m.reg2.is_none()          { return None; }
+    let Some(_) = m.reg1 else      { return None; };
+    if !m.reg2.is_none()           { return None; }
     let Some(off) = m.off else     { return None; };
 
     // Construct a segoff address to the memory operand
@@ -211,6 +222,22 @@ impl<'a> IRBuilder<'a> {
       Ref::Block(false_blk)]);
   }
 
+  fn append_jmptbl(&mut self, reg_ref: Ref, targets: Vec<SegOff>) {
+    // NOTE: The reg value will have been scaled up to do the memory access, we need to "de-scale" it
+    // This is technically not gaurenteed to be safe so we insert and "assert"
+    self.append_instr(Opcode::AssertEven, vec![reg_ref]);
+    // Then scale it down..
+    let k = self.ir.append_const(1);
+            let idx = self.append_instr(Opcode::UShr, vec![reg_ref, k]);
+    let mut opers = vec![idx];
+    for tgt in targets {
+      let blkref = self.get_block(tgt);
+      self.ir.blocks[blkref.0].preds.push(self.cur);
+      opers.push(Ref::Block(blkref));
+    }
+    self.append_instr(Opcode::JmpTbl, opers);
+  }
+
   fn switch_blk(&mut self, bref: BlockRef) {
     self.cur = bref;
   }
@@ -219,9 +246,10 @@ impl<'a> IRBuilder<'a> {
     let next_bref = self.get_block(next);
 
     // Make sure the last instruction is a jump
-    match self.ir.blocks[self.cur.0].instrs.last().unwrap().opcode {
-      Opcode::Jmp => (),
-      Opcode::Jne => (),
+    match self.ir.blocks[self.cur.0].instrs.last().map(|ins| ins.opcode) {
+      Some(Opcode::Jmp) => (),
+      Some(Opcode::Jne) => (),
+      Some(Opcode::JmpTbl) => (),
       _ => self.append_jmp(next_bref), // need to append a trailing jump
     }
 
@@ -243,26 +271,26 @@ impl IRBuilder<'_> {
   }
 
   fn compute_mem_address(&mut self, mem: &instr::OperandMem) -> Ref {
-    assert!(mem.reg2.is_none());
+    let mut refs = vec![];
+    if let Some(reg) = mem.reg2 {
+      refs.push(self.ir.get_var(reg, self.cur));
+    }
+    if let Some(reg) = mem.reg1 {
+      refs.push(self.ir.get_var(reg, self.cur));
+    }
+    if let Some(off) = mem.off {
+      refs.push(self.ir.append_const((off as i16).into()));
+    }
 
-    let addr = match (&mem.reg1, &mem.off) {
-      (Some(reg1), Some(off)) => {
-        let reg = self.ir.get_var(reg1, self.cur);
-        let off = self.ir.append_const((*off as i16).into());
-        self.append_instr(Opcode::Add, vec![reg, off])
-      }
-      (Some(reg1), None) => {
-        self.ir.get_var(reg1, self.cur)
-      }
-      (None, Some(off)) => {
-        self.ir.append_const((*off as i16).into())
-      }
-      (None, None) => {
-        panic!("Invalid addressing mode");
-      }
-    };
-
-    addr
+    if refs.len() == 1 {
+      refs[0]
+    } else if refs.len() == 2 {
+      self.append_instr(Opcode::Add, vec![refs[0], refs[1]])
+    } else {
+      assert!(refs.len() == 3);
+      let lhs = self.append_instr(Opcode::Add, vec![refs[0], refs[1]]);
+      self.append_instr(Opcode::Add, vec![lhs, refs[2]])
+    }
   }
 
   fn append_asm_src_mem(&mut self, mem: &instr::OperandMem) -> Ref {
@@ -588,6 +616,14 @@ impl IRBuilder<'_> {
 
     let special = self.special.take();
 
+    // process simple unary operations
+    if let Some(opcode) = simple_unary_operation(ins.opcode) {
+      let a = self.append_asm_src_operand(&ins.operands[0]);
+      let vref = self.append_instr(opcode, vec![a]);
+      self.append_asm_dst_operand(&ins.operands[0], vref);
+      return;
+    }
+
     // process simple binary operations
     if let Some(opcode) = simple_binary_operation(ins.opcode) {
       let a = self.append_asm_src_operand(&ins.operands[0]);
@@ -635,6 +671,18 @@ impl IRBuilder<'_> {
         //let vref = self.append_instr(Opcode::Ref, vec![vref]);
         self.append_asm_dst_operand(&ins.operands[0], vref);
       }
+      instr::Opcode::OP_IMUL => {
+        // IMUL has many forms, let's be conservative for now and hard sanity check the version we need
+        assert!(
+          matches!(ins.operands[0], instr::Operand::Reg(_)) &&
+          matches!(ins.operands[1], instr::Operand::Reg(_)) &&
+          matches!(ins.operands[2], instr::Operand::Imm(_)));
+
+        let lhs = self.append_asm_src_operand(&ins.operands[1]);
+        let rhs = self.append_asm_src_operand(&ins.operands[2]);
+        let res = self.append_instr(Opcode::IMul, vec![lhs, rhs]);
+        self.append_asm_dst_operand(&ins.operands[0], res);
+     }
       instr::Opcode::OP_INC => {
         let one = self.ir.append_const(1);
         let vref = self.append_asm_src_operand(&ins.operands[0]);
@@ -650,9 +698,24 @@ impl IRBuilder<'_> {
         self.append_update_flags(vref);
       }
       instr::Opcode::OP_JMP => {
-        let instr::Operand::Rel(rel) = &ins.operands[0] else { panic!("Expected relative offset operand for JMP") };
-        let blkref = self.get_block(ins.rel_addr(rel));
-        self.append_jmp(blkref);
+        match &ins.operands[0] {
+          instr::Operand::Mem(m) => {
+            // Special handling for some indirect jumps
+            let Some(targets) = self.jump_indirect_targets(ins, m) else {
+              panic!("Indirect jump form not currently supported for '{}'", instr_str(ins));
+            };
+            let Some(reg) = m.reg1 else {
+              panic!("Shouldn't fail.. should be checked by jump_indirect_targets already");
+            };
+            let reg_ref = self.ir.get_var(reg, self.cur);
+            self.append_jmptbl(reg_ref, targets);
+          }
+          instr::Operand::Rel(rel) => {
+            let blkref = self.get_block(ins.rel_addr(rel));
+            self.append_jmp(blkref);
+          }
+          _ => panic!("Unsupported JMP operand for '{}'", instr_str(ins)),
+        }
       }
 
       instr::Opcode::OP_JE  => self.append_cond_jump(ins, Opcode::EqFlags),
@@ -661,6 +724,10 @@ impl IRBuilder<'_> {
       instr::Opcode::OP_JGE => self.append_cond_jump(ins, Opcode::GeqFlags),
       instr::Opcode::OP_JL  => self.append_cond_jump(ins, Opcode::LtFlags),
       instr::Opcode::OP_JLE => self.append_cond_jump(ins, Opcode::LeqFlags),
+      instr::Opcode::OP_JA  => self.append_cond_jump(ins, Opcode::UGtFlags),
+      instr::Opcode::OP_JAE => self.append_cond_jump(ins, Opcode::UGeqFlags),
+      instr::Opcode::OP_JB  => self.append_cond_jump(ins, Opcode::ULtFlags),
+      instr::Opcode::OP_JBE => self.append_cond_jump(ins, Opcode::ULeqFlags),
 
       instr::Opcode::OP_CALLF => {
         self.process_callf(ins);
@@ -668,6 +735,19 @@ impl IRBuilder<'_> {
       instr::Opcode::OP_CALL => {
         let cs_pushed = matches!(special, Some(SpecialState::PushCS));
         self.process_calln(ins, cs_pushed);
+      }
+      instr::Opcode::OP_LEA => {
+        let instr::Operand::Mem(mem) = &ins.operands[1] else {
+          panic!("Expected LEA to have a mem operand");
+        };
+
+        let addr = self.compute_mem_address(mem);
+
+        // NOTE: Another weird 8086 quirk, the sreg here is meaningless (lol).
+        //       LEA is only computing a 16-bit offset, not a full seg:off address
+        //       This is only the case because LEA strictly DOES NOT dereference.
+
+        self.append_asm_dst_operand(&ins.operands[0], addr);
       }
       instr::Opcode::OP_LES => {
         let vref = self.append_asm_src_operand(&ins.operands[2]);
@@ -731,6 +811,7 @@ impl IRBuilder<'_> {
 
     // Step 3: iterate each instruction, building each block
     for ins in self.instrs {
+      if DEBUG { println!("DEBUG: {}", instr_str(ins)); }
       if block_start.get(&ins.addr).is_some() {
         self.start_next_blk(ins.addr);
       }

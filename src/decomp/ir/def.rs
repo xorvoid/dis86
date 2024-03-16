@@ -69,14 +69,22 @@ pub enum Opcode {
   Pin,
   Ref,
   Phi,
+
   Add,
   Sub,
   Shl,
-  Shr,
+  Shr,    // signed
+  UShr,   // unsigned
   And,
   Or,
   Xor,
+  IDiv,
   UDiv,
+  IMul,
+  UMul,
+
+  Neg,
+
   SignExtTo32,
   Load8,
   Load16,
@@ -96,27 +104,44 @@ pub enum Opcode {
   Lower16,     // |n: u32| => n as u16
   Upper16,     // |n: u32| => (n >> 16) as u16
   Make32,      // |high: u16, low: u16| => (high as u32) << 16 | (low as u32)
+
   UpdateFlags,
-  EqFlags,
-  NeqFlags,
-  GtFlags,
-  GeqFlags,
-  LtFlags,
-  LeqFlags,
-  Eq,
-  Neq,
-  Gt,
-  Geq,
-  Lt,
-  Leq,
+  EqFlags,     // Maps to: JE  / JZ
+  NeqFlags,    // Maps to: JNE / JNZ
+  GtFlags,     // Maps to: JG  / JNLE
+  GeqFlags,    // Maps to: JGE / JNL
+  LtFlags,     // Maps to: JL  / JNGE
+  LeqFlags,    // Maps to: JLE / JNG
+  UGtFlags,    // Maps to: JA  / JNBE
+  UGeqFlags,   // Maps to: JAE / JNB  / JNC
+  ULtFlags,    // Maps to: JB  / JNAE / JC
+  ULeqFlags,   // Maps to: JBE / JNA
+
+  Eq,          // Operator: == (any sign)
+  Neq,         // Operator: != (any sign)
+  Gt,          // Operator: >  (signed)
+  Geq,         // Operator: >= (signed)
+  Lt,          // Operator: <  (signed)
+  Leq,         // Operator: <= (signed)
+  UGt,         // Operator: >  (unsigned)
+  UGeq,        // Operator: >= (unsigned)
+  ULt,         // Operator: <  (unsigned)
+  ULeq,        // Operator: <=  (unsigned)
+
   CallFar,
   CallNear,
   CallPtr,
   CallArgs,
+
   RetFar,
   RetNear,
+
   Jmp,
   Jne,
+  JmpTbl,
+
+  // TODO: HMMM.... Better Impl?
+  AssertEven,
 }
 
 
@@ -131,10 +156,15 @@ impl Opcode {
       Opcode::Add         => "add",
       Opcode::Shl         => "shl",
       Opcode::Shr         => "shr",
+      Opcode::UShr        => "ushr",
       Opcode::And         => "and",
       Opcode::Or          => "or",
       Opcode::Xor         => "xor",
+      Opcode::IDiv        => "idiv",
       Opcode::UDiv        => "udiv",
+      Opcode::IMul        => "imul",
+      Opcode::UMul        => "umul",
+      Opcode::Neg         => "neg",
       Opcode::SignExtTo32 => "signext32",
       //Opcode::AddrOf      => "addrof",
       Opcode::Load8       => "load8",
@@ -162,12 +192,20 @@ impl Opcode {
       Opcode::GeqFlags    => "geqf",
       Opcode::LtFlags     => "gtf",
       Opcode::LeqFlags    => "geqf",
+      Opcode::UGtFlags    => "ugtf",
+      Opcode::UGeqFlags   => "ugeqf",
+      Opcode::ULtFlags    => "ugtf",
+      Opcode::ULeqFlags   => "ugeqf",
       Opcode::Eq          => "eq",
       Opcode::Neq         => "neq",
       Opcode::Gt          => "gt",
       Opcode::Geq         => "geq",
       Opcode::Lt          => "lt",
       Opcode::Leq         => "leq",
+      Opcode::UGt         => "ugt",
+      Opcode::UGeq        => "ugeq",
+      Opcode::ULt         => "ult",
+      Opcode::ULeq        => "uleq",
       Opcode::CallFar     => "callfar",
       Opcode::CallNear    => "callnear",
       Opcode::CallPtr     => "callptr",
@@ -176,6 +214,9 @@ impl Opcode {
       Opcode::RetNear     => "retn",
       Opcode::Jmp         => "jmp",
       Opcode::Jne         => "jne",
+      Opcode::JmpTbl      => "jmptbl",
+
+      Opcode::AssertEven => "assert_even",
     }
   }
 
@@ -226,6 +267,7 @@ impl Opcode {
       Opcode::RetNear => true,
       Opcode::Jmp => true,
       Opcode::Jne => true,
+      Opcode::JmpTbl => true,
       _ => false,
     }
   }
@@ -246,6 +288,7 @@ impl Opcode {
       Opcode::RetNear => true,
       Opcode::Jmp => true,
       Opcode::Jne => true,
+      Opcode::JmpTbl => true,
       _ => false,
     }
   }
@@ -265,6 +308,7 @@ impl Opcode {
       Opcode::RetNear => true,
       Opcode::Jmp => true,
       Opcode::Jne => true,
+      Opcode::JmpTbl => true,
       _ => false,
     }
   }
