@@ -322,10 +322,15 @@ pub fn simplify_branch_conds(ir: &mut IR) {
         Opcode::GeqFlags => Opcode::Geq,
         Opcode::LtFlags  => Opcode::Lt,
         Opcode::LeqFlags => Opcode::Leq,
+        Opcode::UGtFlags  => Opcode::UGt,
+        Opcode::UGeqFlags => Opcode::UGeq,
+        Opcode::ULtFlags  => Opcode::ULt,
+        Opcode::ULeqFlags => Opcode::ULeq,
         _ => continue,
       };
 
       let opcode_eq = opcode_new == Opcode::Eq || opcode_new == Opcode::Neq;
+      let opcode_above = opcode_new == Opcode::UGt;
 
       let upd_ref = instr.operands[0];
       let upd_instr = ir.instr(upd_ref).unwrap();
@@ -335,6 +340,8 @@ pub fn simplify_branch_conds(ir: &mut IR) {
       let pred_instr = ir.instr(pred_ref).unwrap();
 
       if pred_instr.opcode == Opcode::Sub {
+        // cmp ax, bx
+        // jg <tgt>
         let lhs = pred_instr.operands[0];
         let rhs = pred_instr.operands[1];
 
@@ -344,12 +351,32 @@ pub fn simplify_branch_conds(ir: &mut IR) {
       }
 
       else if pred_instr.opcode == Opcode::And && opcode_eq {
+        // test ax, bx
+        // je <tgt>
         let z = ir.append_const(0);
         let instr = ir.instr_mut(r).unwrap();
         instr.opcode = opcode_new;
         instr.operands = vec![pred_ref, z];
       }
-    }
+
+      else if pred_instr.opcode == Opcode::Or && opcode_eq && pred_instr.operands[0] == pred_instr.operands[1] {
+        // or ax, ax
+        // je <tgt>
+        let z = ir.append_const(0);
+        let instr = ir.instr_mut(r).unwrap();
+        instr.opcode = opcode_new;
+        instr.operands = vec![pred_ref, z];
+      }
+
+      else if pred_instr.opcode == Opcode::Or && opcode_above && pred_instr.operands[0] == pred_instr.operands[1] {
+        // or ax, ax
+        // ja <tgt>   (equivalent to "jne <tgt>" after the or)
+        let z = ir.append_const(0);
+        let instr = ir.instr_mut(r).unwrap();
+        instr.opcode = opcode_new;
+        instr.operands = vec![pred_ref, z];
+      }
+}
   }
 }
 
