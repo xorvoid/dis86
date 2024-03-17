@@ -720,15 +720,6 @@ fn infer_switch(body: &mut Body, data: &mut ControlFlowData) -> bool {
       sw_cases.push(case_id);
     }
 
-    // let mut cases = vec![];
-    // let mut exits = HashSet::new();
-    // for tgt in &elem.exits {
-    //   exits.insert(*tgt);
-    //   cases.push(Case::Goto(Goto {
-    //     target: *tgt,
-    //   }));
-    // }
-
     let sw_exits = itertools::sorted(sw_exits.iter().cloned()).collect();
     let switch = Switch {
       entry: sw_entry,
@@ -975,27 +966,6 @@ pub fn format(cf: &ControlFlow) -> Result<String, std::fmt::Error> {
   for elt in cf.iter() {
     debug_dump_elem_impl(f, elt.id, elt.elem, elt.cfdata, elt.depth, false)?;
   }
-
-  //   write!(f, "{:indent$}{:?} | ", "", elt.id, indent=2*elt.depth)?;
-  //   let exits: Vec<_> = elt.elem.exits.iter().map(|x| x.0).collect();
-  //   match &elt.elem.detail {
-  //     Detail::BasicBlock(b) => writeln!(f, "BasicBlock({})", b.blkref.0)?,
-  //     Detail::Loop(lp) => {
-  //       let backedges: Vec<_> = lp.backedges.iter().cloned().map(|x| x.0).collect();
-  //       writeln!(f, "Loop [entry={}, exits={:?}, backedges={:?}]", elt.elem.entry.0, exits, backedges)?;
-  //     }
-  //     Detail::If(_) => {
-  //       writeln!(f, "If [entry={}, exits={:?}]", elt.elem.entry.0, exits)?;
-  //     }
-  //     Detail::Switch(_) => {
-  //       writeln!(f, "Switch [entry={}, exits={:?}]", elt.elem.entry.0, exits)?;
-  //     }
-  //     Detail::Goto(goto) => {
-  //       writeln!(f, "Goto [entry={}, exits={:?}] target={}", elt.elem.entry.0, exits, goto.target.0)?;
-  //     }
-  //     _ => panic!("Unknown detail type: {:?}", elt.elem.detail),
-  //   }
-  // }
   Ok(buf)
 }
 
