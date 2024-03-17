@@ -125,13 +125,13 @@ pub struct If {
 pub struct Switch {
   pub switch_val: Expr,
   pub cases: Vec<SwitchCase>,
-  pub default: Option<Vec<Stmt>>,
+  pub default: Option<Block>,
 }
 
 #[derive(Debug)]
 pub struct SwitchCase {
   pub cases: Vec<Expr>,
-  pub stmts: Vec<Stmt>,
+  pub body: Block,
 }
 
 #[derive(Debug)]
@@ -631,31 +631,44 @@ impl<'a> Builder<'a> {
         break;
       }
       assert!(elt.depth == depth+1);
+      let elt = iter.next().unwrap();
 
-      let Detail::Goto(g) = &elt.elem.detail else {
-        panic!("Expected goto inside switch body");
-      };
-
-      let label = self.make_label(g.target);
-      let case_idx = map.get(&label).cloned().unwrap_or_else(|| {
-        let case_idx = cases.len();
-        map.insert(label.clone(), case_idx);
-        cases.push(SwitchCase {
-          cases: vec![],
-          stmts: vec![Stmt::Goto(Goto { label })],
-        });
-        case_idx
-      });
-      cases[case_idx].cases.push(Expr::Const(idx as i64));
+      match &elt.elem.detail {
+        Detail::Goto(g) => {
+          let label = self.make_label(g.target);
+          let case_idx = map.get(&label).cloned().unwrap_or_else(|| {
+            let case_idx = cases.len();
+            map.insert(label.clone(), case_idx);
+            let mut body = Block::default();
+            body.push_stmt(Stmt::Goto(Goto { label }));
+            cases.push(SwitchCase {
+              cases: vec![],
+              body,
+            });
+            case_idx
+          });
+          cases[case_idx].cases.push(Expr::Const(idx as i64));
+        }
+        Detail::ElemBlock(_) => {
+          let body = self.convert_body(iter, elt.depth+1);
+          cases.push(SwitchCase {
+            cases: vec![Expr::Const(idx as i64)],
+            body,
+          });
+        }
+        _ => panic!("Unexpected elem detail type in switch body: {:?}", elt.elem),
+      }
 
       idx += 1;
-      iter.next();
     }
+
+    let mut default = Block::default();
+    default.push_stmt(Stmt::Unreachable);
 
     blk.push_stmt(Stmt::Switch(Switch {
       switch_val: select,
       cases,
-      default: Some(vec![Stmt::Unreachable]),
+      default: Some(default),
     }));
   }
 

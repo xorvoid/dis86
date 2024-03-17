@@ -277,6 +277,7 @@ impl<'a> Gen<'a> {
         self.expr(&g.cond, 0, imp)?;
         self.text(") ")?;
         self.goto(&g.label_true)?;
+        self.endline()?;
         self.text("else ")?;
         self.goto(&g.label_false)?;
         self.endline()?;
@@ -310,26 +311,27 @@ impl<'a> Gen<'a> {
         self.enter_block()?;
         self.endline()?;
         for case in &sw.cases {
-          for case_expr in &case.cases {
+          for (i, case_expr) in case.cases.iter().enumerate() {
             self.text("case ")?;
             self.expr(case_expr, 0, imp)?;
             self.text(": ")?;
-            self.endline()?;
+            if i+1 != case.cases.len() {
+              self.endline()?;
+            }
           }
-          self.enter_indent();
-          for stmt in &case.stmts {
-            self.stmt(stmt, imp)?;
-          }
-          self.leave_indent();
-        }
-        if let Some(stmts) = &sw.default {
-          self.text("default: ")?;
+          self.enter_block()?;
           self.endline()?;
-          self.enter_indent();
-          for stmt in stmts {
-            self.stmt(stmt, imp)?;
-          }
-          self.leave_indent();
+          self.block(&case.body, imp)?;
+          self.leave_block()?;
+          self.endline()?;
+        }
+        if let Some(body) = &sw.default {
+          self.text("default: ")?;
+          self.enter_block()?;
+          self.endline()?;
+          self.block(body, imp)?;
+          self.leave_block()?;
+          self.endline()?;
         }
         self.leave_block()?;
         self.endline()?;

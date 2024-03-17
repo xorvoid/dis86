@@ -897,8 +897,8 @@ fn schedule_layout_switch(elem: &mut Elem, parent: &Parent, data: &mut ControlFl
 #[must_use]
 fn schedule_layout_elem(id: ElemId, parent: &Parent, data: &mut ControlFlowData) -> Option<ElemId> {
   let mut elem = data.checkout(id);
-  println!("==============================================");
-  debug_dump_elem(id, &elem, data);
+  //println!("==============================================");
+  //debug_dump_elem(id, &elem, data);
   let next = match &elem.detail {
     Detail::BasicBlock(_) => schedule_layout_basic_block(&mut elem, &parent, data),
     Detail::Goto(_) => schedule_layout_goto(&mut elem, &parent, data),
@@ -973,7 +973,7 @@ pub fn format(cf: &ControlFlow) -> Result<String, std::fmt::Error> {
   let mut buf = String::new();
   let f = &mut buf;
   for elt in cf.iter() {
-    debug_dump_elem_impl(f, elt.id, elt.elem, elt.cfdata, elt.depth, false);
+    debug_dump_elem_impl(f, elt.id, elt.elem, elt.cfdata, elt.depth, false)?;
   }
 
   //   write!(f, "{:indent$}{:?} | ", "", elt.id, indent=2*elt.depth)?;
