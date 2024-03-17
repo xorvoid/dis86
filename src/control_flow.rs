@@ -34,10 +34,10 @@ pub struct Elem {
 pub enum Detail {
   BasicBlock(BasicBlock),
   Goto(Goto),
+  ElemBlock(ElemBlock),
   Loop(Loop),
   If(If),
   Switch(Switch),
-  //Block(Block),
 }
 
 #[derive(Debug)]
@@ -79,8 +79,10 @@ pub struct Goto {
 }
 
 #[derive(Debug)]
-pub struct Block {
-  pub body: Vec<Body>,
+pub struct ElemBlock {
+  pub entry: ElemId,
+  pub exits: Vec<ElemId>,
+  pub body: Body,
 }
 
 // #[derive(Debug)]
@@ -291,6 +293,32 @@ impl Body {
     goto_id
   }
 
+  // Insert block
+  fn insert_elem_block(&mut self, blk: ElemBlock, data: &mut ControlFlowData) -> ElemId {
+    // Step 0: Save some data
+    let blk_entry = blk.entry;
+    //let blk_body = blk.body.clone();
+
+    // Step 1: Wrap up into a proper elem
+    let new_elem = Elem {
+      entry: blk.entry,
+      exits: blk.exits.clone(),
+      jump: None,
+      detail: Detail::ElemBlock(blk),
+    };
+
+    // Step 2: Insert it into "data", assigning an ElemId
+    let blk_id = data.append(new_elem);
+
+    // Step 3: Remove any captured elems
+    self.elems.insert(blk_id);
+    self.remap.insert(blk_entry, blk_id);
+    // FIXME: NOT REMOVING "blk_body" ELEMS BEACUSE THE CONSTRUCTION TAKES THEM FROM THE
+    // PARENT'S PARENT .... HMMMM
+
+    blk_id
+  }
+
   fn exit(&self, node: ElemId, exit_idx: usize, data: &ControlFlowData) -> Option<ElemId> {
     let next = *data.get(node).exits.get(exit_idx)?;
     self.remap.get(&next).cloned().or(Some(next))
@@ -374,6 +402,7 @@ pub struct ControlFlowIter<'a> {
 pub struct ControlFlowIterElem<'a> {
   pub id: ElemId,
   pub elem: &'a Elem,
+  pub cfdata: &'a ControlFlowData,
   pub depth: usize,
 }
 
@@ -402,6 +431,7 @@ impl<'a> Iterator for ControlFlowIter<'a> {
       match &elem.detail {
         Detail::BasicBlock(_) => (),
         Detail::Goto(_) => (),
+        Detail::ElemBlock(blk) => self.state.push((&blk.body, 0)),
         Detail::Loop(lp) => self.state.push((&lp.body, 0)),
         Detail::If(ifstmt) => self.state.push((&ifstmt.then_body, 0)),
         Detail::Switch(sw) => self.state.push((&sw.body, 0)),
@@ -410,6 +440,7 @@ impl<'a> Iterator for ControlFlowIter<'a> {
 
       return Some(ControlFlowIterElem {
         id: *id,
+        cfdata: &self.cf.data,
         elem,
         depth,
       });
@@ -655,16 +686,38 @@ fn infer_switch(body: &mut Body, data: &mut ControlFlowData) -> bool {
     // Switch-stmt header should be a jump_table
     if !bb.jump_table { continue; }
 
-    let mut sw_body = Body::new(*id);
-    let mut cases = vec![];
-    let mut exits = HashSet::new();
+    let sw_entry = *id;
+    let mut sw_body = Body::new(sw_entry);
+    let mut sw_cases = vec![];
+    let mut sw_exits = HashSet::new();
     for tgt in &elem.exits.clone() {
-      exits.insert(*tgt);
-      let goto = Goto {
-        target: *tgt,
+      // Can we move the target block inside the switch??
+      let case_id = if body.elems.get(tgt).is_some() && *tgt != body.entry {
+        // Move blocks to new body
+        body.remove_elem(*tgt);
+        let mut case_body = Body::new(*tgt);
+        case_body.elems.insert(*tgt);
+
+        let exits = data.get(*tgt).exits.clone();
+        for exit in &exits {
+          sw_exits.insert(*exit);
+        }
+
+        let blk = ElemBlock {
+          entry: *tgt,
+          exits,
+          body: case_body,
+        };
+        sw_body.insert_elem_block(blk, data)
+      } else {
+        // Block is in a parent.. need a goto
+        sw_exits.insert(*tgt);
+        let goto = Goto {
+          target: *tgt,
+        };
+        sw_body.insert_goto(goto, data)
       };
-      let goto_id = sw_body.insert_goto(goto, data);
-      cases.push(goto_id);
+      sw_cases.push(case_id);
     }
 
     // let mut cases = vec![];
@@ -676,12 +729,12 @@ fn infer_switch(body: &mut Body, data: &mut ControlFlowData) -> bool {
     //   }));
     // }
 
-    let exits = itertools::sorted(exits.iter().cloned()).collect();
+    let sw_exits = itertools::sorted(sw_exits.iter().cloned()).collect();
     let switch = Switch {
-      entry: *id,
-      exits,
-      cases,
-      body: sw_body,
+      entry: sw_entry,
+      exits: sw_exits,
+      cases: sw_cases,
+      body:  sw_body,
     };
 
     body.insert_switch(switch, data);
@@ -701,18 +754,11 @@ fn infer_structure(body: &mut Body, exclude: Option<&HashSet<ElemId>>, data: &mu
     let mut elem = data.checkout(*id);
     match &mut elem.detail {
       Detail::BasicBlock(_) => (),
+      Detail::Goto(_) => (),
+      Detail::ElemBlock(blk) => infer_structure(&mut blk.body, None, data),
       Detail::Loop(lp) => infer_structure(&mut lp.body, Some(&lp.backedges), data),
       Detail::If(_ifstmt) => (), // TODO!!!
-      Detail::Switch(sw) => {
-        infer_structure(&mut sw.body, None, data);
-        // for case in &mut sw.cases {
-        //   match case {
-        //     Case::Goto(_) => (),
-        //     Case::Body(body) => infer_structure(body, None, data),
-        //   }
-        // }
-      }
-      Detail::Goto(_) => (),
+      Detail::Switch(sw) => infer_structure(&mut sw.body, None, data),
       //_ => panic!("Unknown detail type: {:?}", elem.detail),
     }
     data.release(*id, elem);
@@ -789,6 +835,16 @@ fn schedule_layout_goto(elem: &mut Elem, parent: &Parent, _data: &mut ControlFlo
 }
 
 #[must_use]
+fn schedule_layout_elem_block(elem: &mut Elem, parent: &Parent, data: &mut ControlFlowData) -> Option<ElemId> {
+  let Detail::ElemBlock(blk) = &mut elem.detail else { panic!("Expected elem block") };
+
+  let next = schedule_layout_body(&mut blk.body, Some(parent), data);
+
+  elem.jump = Some(Jump::None);
+  next
+}
+
+#[must_use]
 fn schedule_layout_loop(elem: &mut Elem, parent: &Parent, data: &mut ControlFlowData) -> Option<ElemId> {
   let Detail::Loop(lp) = &mut elem.detail else { panic!("Expected loop") };
   let _ = schedule_layout_body(&mut lp.body, None, data);
@@ -841,13 +897,16 @@ fn schedule_layout_switch(elem: &mut Elem, parent: &Parent, data: &mut ControlFl
 #[must_use]
 fn schedule_layout_elem(id: ElemId, parent: &Parent, data: &mut ControlFlowData) -> Option<ElemId> {
   let mut elem = data.checkout(id);
+  println!("==============================================");
+  debug_dump_elem(id, &elem, data);
   let next = match &elem.detail {
     Detail::BasicBlock(_) => schedule_layout_basic_block(&mut elem, &parent, data),
     Detail::Goto(_) => schedule_layout_goto(&mut elem, &parent, data),
+    Detail::ElemBlock(_) => schedule_layout_elem_block(&mut elem, &parent, data),
     Detail::Loop(_) => schedule_layout_loop(&mut elem, &parent, data),
     Detail::If(_) => schedule_layout_ifstmt(&mut elem, &parent, data),
     Detail::Switch(_) => schedule_layout_switch(&mut elem, &parent, data),
-    //_ => panic!("Unknown detail type: {:?}", elem.detail),
+    // _ => panic!("Unknown detail type: {:?}", elem.detail),
   };
   data.release(id, elem);
   next
@@ -914,25 +973,71 @@ pub fn format(cf: &ControlFlow) -> Result<String, std::fmt::Error> {
   let mut buf = String::new();
   let f = &mut buf;
   for elt in cf.iter() {
-    write!(f, "{:indent$}{:?} | ", "", elt.id, indent=2*elt.depth)?;
-    let exits: Vec<_> = elt.elem.exits.iter().map(|x| x.0).collect();
-    match &elt.elem.detail {
-      Detail::BasicBlock(b) => writeln!(f, "BasicBlock({})", b.blkref.0)?,
-      Detail::Loop(lp) => {
-        let backedges: Vec<_> = lp.backedges.iter().cloned().map(|x| x.0).collect();
-        writeln!(f, "Loop [entry={}, exits={:?}, backedges={:?}]", elt.elem.entry.0, exits, backedges)?;
-      }
-      Detail::If(_) => {
-        writeln!(f, "If [entry={}, exits={:?}]", elt.elem.entry.0, exits)?;
-      }
-      Detail::Switch(_) => {
-        writeln!(f, "Switch [entry={}, exits={:?}]", elt.elem.entry.0, exits)?;
-      }
-      Detail::Goto(goto) => {
-        writeln!(f, "Goto [entry={}, exits={:?}] target={}", elt.elem.entry.0, exits, goto.target.0)?;
-      }
-      //_ => panic!("Unknown detail type: {:?}", elt.elem.detail),
-    }
+    debug_dump_elem_impl(f, elt.id, elt.elem, elt.cfdata, elt.depth, false);
   }
+
+  //   write!(f, "{:indent$}{:?} | ", "", elt.id, indent=2*elt.depth)?;
+  //   let exits: Vec<_> = elt.elem.exits.iter().map(|x| x.0).collect();
+  //   match &elt.elem.detail {
+  //     Detail::BasicBlock(b) => writeln!(f, "BasicBlock({})", b.blkref.0)?,
+  //     Detail::Loop(lp) => {
+  //       let backedges: Vec<_> = lp.backedges.iter().cloned().map(|x| x.0).collect();
+  //       writeln!(f, "Loop [entry={}, exits={:?}, backedges={:?}]", elt.elem.entry.0, exits, backedges)?;
+  //     }
+  //     Detail::If(_) => {
+  //       writeln!(f, "If [entry={}, exits={:?}]", elt.elem.entry.0, exits)?;
+  //     }
+  //     Detail::Switch(_) => {
+  //       writeln!(f, "Switch [entry={}, exits={:?}]", elt.elem.entry.0, exits)?;
+  //     }
+  //     Detail::Goto(goto) => {
+  //       writeln!(f, "Goto [entry={}, exits={:?}] target={}", elt.elem.entry.0, exits, goto.target.0)?;
+  //     }
+  //     _ => panic!("Unknown detail type: {:?}", elt.elem.detail),
+  //   }
+  // }
   Ok(buf)
+}
+
+pub fn debug_dump_elem(id: ElemId, elem: &Elem, data: &ControlFlowData) {
+  let mut buf = String::new();
+  debug_dump_elem_impl(&mut buf, id, elem, data, 0, true).unwrap();
+  println!("{}", buf);
+}
+
+pub fn debug_dump_elem_body(f: &mut dyn Write, body: &Body, data: &ControlFlowData, indent: usize, recurse: bool) -> Result<(), std::fmt::Error> {
+  for id in itertools::sorted(body.elems.iter()) {
+    debug_dump_elem_impl(f, *id, data.get(*id), data, indent+1, recurse)?;
+  }
+  Ok(())
+}
+
+pub fn debug_dump_elem_impl(f: &mut dyn Write, id: ElemId, elem: &Elem, data: &ControlFlowData, indent: usize, recurse: bool) -> Result<(), std::fmt::Error> {
+  write!(f, "{:indent$}{:?} | ", "", id, indent=2*indent)?;
+  let exits: Vec<_> = elem.exits.iter().map(|x| x.0).collect();
+  match &elem.detail {
+    Detail::BasicBlock(b) => writeln!(f, "BasicBlock({})", b.blkref.0)?,
+    Detail::Loop(lp) => {
+      let backedges: Vec<_> = lp.backedges.iter().cloned().map(|x| x.0).collect();
+      writeln!(f, "Loop [entry={}, exits={:?}, backedges={:?}]", elem.entry.0, exits, backedges)?;
+      if recurse { debug_dump_elem_body(f, &lp.body, data, indent, recurse)?; }
+    }
+    Detail::If(ifstmt) => {
+      writeln!(f, "If [entry={}, exits={:?}]", elem.entry.0, exits)?;
+      if recurse { debug_dump_elem_body(f, &ifstmt.then_body, data, indent, recurse)?; }
+    }
+    Detail::Switch(sw) => {
+      writeln!(f, "Switch [entry={}, exits={:?}]", elem.entry.0, exits)?;
+      if recurse { debug_dump_elem_body(f, &sw.body, data, indent, recurse)?; }
+    }
+    Detail::Goto(goto) => {
+      writeln!(f, "Goto [entry={}, exits={:?}] target={}", elem.entry.0, exits, goto.target.0)?;
+    }
+    Detail::ElemBlock(blk) => {
+      writeln!(f, "ElemBlock [entry={}, exits={:?}]", elem.entry.0, exits)?;
+      if recurse { debug_dump_elem_body(f, &blk.body, data, indent, recurse)?; }
+    }
+    //_ => panic!("Unknown detail type: {:?}", elem.detail),
+  }
+  Ok(())
 }
