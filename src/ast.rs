@@ -620,6 +620,7 @@ impl<'a> Builder<'a> {
         Detail::BasicBlock(_) => self.convert_basic_block(&mut blk, iter, depth),
         Detail::Loop(_) => self.convert_loop(&mut blk, iter, depth),
         Detail::If(_) => self.convert_ifstmt(&mut blk, iter, depth),
+        _ => panic!("Unknown detail type: {:?}", elt.elem.detail),
       };
     }
 
