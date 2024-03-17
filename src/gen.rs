@@ -146,14 +146,22 @@ impl<'a> Gen<'a> {
     self.newline = false;
   }
 
+  fn enter_indent(&mut self) {
+    self.indent_level += 1;
+  }
+
+  fn leave_indent(&mut self) {
+    self.indent_level -= 1;
+  }
+
   fn enter_block(&mut self) -> fmt::Result {
     self.text("{")?;
-    self.indent_level += 1;
+    self.enter_indent();
     Ok(())
   }
 
   fn leave_block(&mut self) -> fmt::Result {
-    self.indent_level -= 1;
+    self.leave_indent();
     self.text("}")?;
     Ok(())
   }
@@ -302,20 +310,26 @@ impl<'a> Gen<'a> {
         self.enter_block()?;
         self.endline()?;
         for case in &sw.cases {
-          self.text("case ")?;
-          self.expr(&case.case_val, 0, imp)?;
-          self.text(": ")?;
-          if case.stmts.len() > 1 { self.endline()?; }
+          for case_expr in &case.cases {
+            self.text("case ")?;
+            self.expr(case_expr, 0, imp)?;
+            self.text(": ")?;
+            self.endline()?;
+          }
+          self.enter_indent();
           for stmt in &case.stmts {
             self.stmt(stmt, imp)?;
           }
+          self.leave_indent();
         }
         if let Some(stmts) = &sw.default {
           self.text("default: ")?;
-          if stmts.len() > 1 { self.endline()?; }
+          self.endline()?;
+          self.enter_indent();
           for stmt in stmts {
             self.stmt(stmt, imp)?;
           }
+          self.leave_indent();
         }
         self.leave_block()?;
         self.endline()?;

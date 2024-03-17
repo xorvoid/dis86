@@ -83,7 +83,7 @@ pub struct Assign {
   pub rhs: Expr,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Label(pub String); // fixme??
 
 #[derive(Debug)]
@@ -130,7 +130,7 @@ pub struct Switch {
 
 #[derive(Debug)]
 pub struct SwitchCase {
-  pub case_val: Expr,
+  pub cases: Vec<Expr>,
   pub stmts: Vec<Stmt>,
 }
 
@@ -543,13 +543,20 @@ impl<'a> Builder<'a> {
       }
       control_flow::Jump::Table(tgts) => {
         let idx = cond.unwrap();
+        let mut map: HashMap<Label, usize> = HashMap::new(); // Label -> case-idx
         let mut cases = vec![];
         for (i, tgt) in tgts.iter().enumerate() {
           let label = self.make_label(*tgt);
-          cases.push(SwitchCase {
-            case_val: Expr::Const(i as i64),
-            stmts: vec![Stmt::Goto(Goto { label })],
+          let case_idx = map.get(&label).cloned().unwrap_or_else(|| {
+            let case_idx = cases.len();
+            map.insert(label.clone(), case_idx);
+            cases.push(SwitchCase {
+              cases: vec![],
+              stmts: vec![Stmt::Goto(Goto { label })],
+            });
+            case_idx
           });
+          cases[case_idx].cases.push(Expr::Const(i as i64));
         }
         blk.push_stmt(Stmt::Switch(Switch {
           switch_val: idx,
