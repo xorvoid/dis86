@@ -44,6 +44,7 @@ pub enum Detail {
 pub struct BasicBlock {
   pub labeled: bool,
   pub jump_table: bool,
+  pub preds: Vec<ElemId>,
   pub blkref: ir::BlockRef,
 }
 
@@ -366,13 +367,19 @@ impl ControlFlow {
 
     for b in ir.iter_blocks() {
       let exits = ir.block(b).exits().into_iter().map(|x| ElemId(x.0)).collect();
+      let preds = ir.block(b).preds.iter().map(|x| ElemId(x.0)).collect();
       let jump_table = ir.block(b).instrs.last().unwrap().opcode == ir::Opcode::JmpTbl;
 
       cf.data.append_with_id(ElemId(b.0), Elem {
         entry: ElemId(b.0),
         exits,
         jump: None,
-        detail: Detail::BasicBlock(BasicBlock { blkref: b, labeled: false, jump_table, }),
+        detail: Detail::BasicBlock(BasicBlock {
+          blkref: b,
+          labeled: false,
+          jump_table,
+          preds,
+        }),
       });
       cf.func.body.elems.insert(ElemId(b.0));
     }
@@ -699,6 +706,19 @@ fn try_infer_case_body(entry: ElemId, parent_body: &mut Body, data: &ControlFlow
         exits.insert(exit);
         continue;
       }
+
+      //println!("exit: {:?}", exit);
+
+      // HEURISTIC: elems with a very large number of preds are probably some join-block
+      // FIXME: We only have preds on BasicBlocks, so we make that restriction
+      if let Detail::BasicBlock(bb) = &data.get(exit).detail {
+        //println!("preds: {:?}", bb.preds);
+        if bb.preds.len() > 10 { // 10 is arbitrarily chosen
+          exits.insert(exit);
+          continue;
+        }
+      }
+
       inner.insert(exit);
       search_queue.push_back(exit);
     }

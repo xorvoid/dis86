@@ -6,6 +6,12 @@ use std::collections::{HashMap, HashSet};
 type FlowIter<'a> = std::iter::Peekable<control_flow::ControlFlowIter<'a>>;
 
 #[derive(Debug)]
+pub struct VarDecl {
+  pub typ: Type,
+  pub name: String,
+}
+
+#[derive(Debug)]
 pub enum Expr {
   Unary(Box<UnaryExpr>),
   Binary(Box<BinaryExpr>),
@@ -136,7 +142,6 @@ pub struct SwitchCase {
 
 #[derive(Debug)]
 pub enum Stmt {
-  VarDecl(Type, String),
   Label(Label),
   Instr(ir::Ref),
   Expr(Expr),
@@ -154,7 +159,7 @@ pub enum Stmt {
 pub struct Function {
   pub name: String,
   pub ret: Option<Type>,
-  pub decls: Block,
+  pub decls: Vec<VarDecl>,
   pub body: Block,
 }
 
@@ -697,11 +702,11 @@ impl<'a> Builder<'a> {
     let body = self.convert_body(&mut iter, 0);
     assert!(iter.next().is_none());
 
-    let mut decls = Block(vec![]);
+    let mut decls = vec![];
     let mut names: Vec<_> = self.assigned_names.iter().cloned().collect();
     names.sort();
     for name in names {
-      decls.0.push(Stmt::VarDecl(Type::U16, name));
+      decls.push(VarDecl { typ: Type::U16, name } );
     }
 
     Function {

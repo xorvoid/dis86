@@ -250,12 +250,6 @@ impl<'a> Gen<'a> {
         self.text(&format!("{}:;", l.0))?;
         self.endline()?;
       }
-      Stmt::VarDecl(typ, name) => {
-        self.text(&format!("{} ", typ))?;
-        self.text(&name)?;
-        self.text(";")?;
-        self.endline()?;
-      }
       Stmt::Expr(expr) => {
         self.expr(expr, 0, imp)?;
         self.text(";")?;
@@ -356,12 +350,37 @@ impl<'a> Gen<'a> {
     Ok(())
   }
 
+  fn decls(&mut self, decls: &[VarDecl], _imp: &dyn FlavorImpl) -> fmt::Result {
+    let mut cur_type = None;
+    for d in decls {
+      if let Some(cur) = &cur_type {
+        if cur != &d.typ {
+          self.text(";")?;
+          self.endline()?;
+          cur_type = None
+        } else {
+          self.text(", ")?;
+        }
+      }
+      if cur_type == None {
+        self.text(&format!("{} ", d.typ))?;
+        cur_type = Some(d.typ.clone());
+      }
+      self.text(&d.name)?;
+    }
+    if cur_type.is_some() {
+      self.text(";")?;
+      self.endline()?;
+    }
+    Ok(())
+  }
+
   fn func(&mut self, func: &Function, imp: &dyn FlavorImpl) -> fmt::Result {
     imp.func_sig(self, func)?;
     self.endline()?;
     self.enter_block()?;
     self.endline()?;
-    self.block(&func.decls, imp)?;
+    self.decls(&func.decls, imp)?;
     self.endline()?;
     self.block(&func.body, imp)?;
     self.leave_block()?;
