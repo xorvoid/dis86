@@ -181,6 +181,10 @@ impl Body {
     }
   }
 
+  fn elem_is_movable_from(&self, id: ElemId) -> bool {
+    self.elems.get(&id).is_some() && id != self.entry
+  }
+
   fn remove_elem(&mut self, remove: ElemId) {
     if !self.elems.remove(&remove) {
       panic!("Cannot remove elems that are not part of this body!");
@@ -674,6 +678,27 @@ fn infer_if(body: &mut Body, data: &mut ControlFlowData) -> bool {
   true
 }
 
+fn try_infer_case_body(entry: ElemId, parent_body: &mut Body, data: &ControlFlowData) -> Option<ElemBlock> {
+  // Can we move the target block inside the switch??
+  if !parent_body.elem_is_movable_from(entry) {
+    return None;
+  }
+
+  // Move blocks to new body
+  parent_body.remove_elem(entry);
+  let mut case_body = Body::new(entry);
+  case_body.elems.insert(entry);
+
+  let exits = data.get(entry).exits.clone();
+  let blk = ElemBlock {
+    entry,
+    exits,
+    body: case_body,
+  };
+
+  Some(blk)
+}
+
 fn infer_switch(body: &mut Body, data: &mut ControlFlowData) -> bool {
   // Consider each basic block as a switch-stmt header
   //let mut found: Option<(ElemId, Vec<ElemId>, ElemId, bool)> = None;
@@ -691,26 +716,14 @@ fn infer_switch(body: &mut Body, data: &mut ControlFlowData) -> bool {
     let mut sw_cases = vec![];
     let mut sw_exits = HashSet::new();
     for tgt in &elem.exits.clone() {
-      // Can we move the target block inside the switch??
-      let case_id = if body.elems.get(tgt).is_some() && *tgt != body.entry {
-        // Move blocks to new body
-        body.remove_elem(*tgt);
-        let mut case_body = Body::new(*tgt);
-        case_body.elems.insert(*tgt);
-
-        let exits = data.get(*tgt).exits.clone();
-        for exit in &exits {
+      // Try to build up block for the case
+      let case_id = if let Some(blk) = try_infer_case_body(*tgt, body, data) {
+        for exit in &blk.exits {
           sw_exits.insert(*exit);
         }
-
-        let blk = ElemBlock {
-          entry: *tgt,
-          exits,
-          body: case_body,
-        };
         sw_body.insert_elem_block(blk, data)
       } else {
-        // Block is in a parent.. need a goto
+        // Can't move the target into a sub-block, use a goto..
         sw_exits.insert(*tgt);
         let goto = Goto {
           target: *tgt,
