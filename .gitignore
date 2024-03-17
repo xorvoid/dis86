@@ -1,6 +1,7 @@
 *~
 \#*#
 *.dSYM/
+.DS_Store
 old/v1
 /target
 /Cargo.lock
