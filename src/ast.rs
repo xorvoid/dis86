@@ -541,28 +541,29 @@ impl<'a> Builder<'a> {
         let label_false = self.make_label(tgt_false);
         blk.push_stmt(Stmt::CondGoto(CondGoto { cond, label_true, label_false }));
       }
-      control_flow::Jump::Table(tgts) => {
-        let idx = cond.unwrap();
-        let mut map: HashMap<Label, usize> = HashMap::new(); // Label -> case-idx
-        let mut cases = vec![];
-        for (i, tgt) in tgts.iter().enumerate() {
-          let label = self.make_label(*tgt);
-          let case_idx = map.get(&label).cloned().unwrap_or_else(|| {
-            let case_idx = cases.len();
-            map.insert(label.clone(), case_idx);
-            cases.push(SwitchCase {
-              cases: vec![],
-              stmts: vec![Stmt::Goto(Goto { label })],
-            });
-            case_idx
-          });
-          cases[case_idx].cases.push(Expr::Const(i as i64));
-        }
-        blk.push_stmt(Stmt::Switch(Switch {
-          switch_val: idx,
-          cases,
-          default: Some(vec![Stmt::Unreachable]),
-        }));
+      control_flow::Jump::Table(_tgts) => {
+        panic!("All JumpTable should be converted to Switch in control flow analysis");
+      //   let idx = cond.unwrap();
+      //   let mut map: HashMap<Label, usize> = HashMap::new(); // Label -> case-idx
+      //   let mut cases = vec![];
+      //   for (i, tgt) in tgts.iter().enumerate() {
+      //     let label = self.make_label(*tgt);
+      //     let case_idx = map.get(&label).cloned().unwrap_or_else(|| {
+      //       let case_idx = cases.len();
+      //       map.insert(label.clone(), case_idx);
+      //       cases.push(SwitchCase {
+      //         cases: vec![],
+      //         stmts: vec![Stmt::Goto(Goto { label })],
+      //       });
+      //       case_idx
+      //     });
+      //     cases[case_idx].cases.push(Expr::Const(i as i64));
+      //   }
+      //   blk.push_stmt(Stmt::Switch(Switch {
+      //     switch_val: idx,
+      //     cases,
+      //     default: Some(vec![Stmt::Unreachable]),
+      //   }));
       }
     }
   }
@@ -608,6 +609,56 @@ impl<'a> Builder<'a> {
     self.emit_jump(blk, ifstmt_elt.elem.jump.clone().unwrap(), None);
   }
 
+  fn convert_switch(&mut self, blk: &mut Block, iter: &mut FlowIter, depth: usize) {
+    let Some(sw_elt) = iter.next() else { panic!("expected switch element") };
+    let Detail::Switch(sw) = &sw_elt.elem.detail else { panic!("expected switch element") };
+
+    let Detail::BasicBlock(bb) = &self.cf.elem(sw.entry).detail else { panic!("expected switch entry to be a basic-block") };
+    if bb.labeled {
+      let label = self.make_label(sw.entry);
+      blk.push_stmt(Stmt::Label(label));
+    }
+    let Some(select) = self.emit_blk(blk, bb.blkref, false) else {
+      panic!("expected switch entry to end in a jump table idx expr");
+    };
+
+    let mut cases = vec![];
+    let mut map: HashMap<Label, usize> = HashMap::new(); // Label -> case-idx
+
+    let mut idx = 0;
+    while let Some(elt) = iter.peek() {
+      if elt.depth <= depth {
+        break;
+      }
+      assert!(elt.depth == depth+1);
+
+      let Detail::Goto(g) = &elt.elem.detail else {
+        panic!("Expected goto inside switch body");
+      };
+
+      let label = self.make_label(g.target);
+      let case_idx = map.get(&label).cloned().unwrap_or_else(|| {
+        let case_idx = cases.len();
+        map.insert(label.clone(), case_idx);
+        cases.push(SwitchCase {
+          cases: vec![],
+          stmts: vec![Stmt::Goto(Goto { label })],
+        });
+        case_idx
+      });
+      cases[case_idx].cases.push(Expr::Const(idx as i64));
+
+      idx += 1;
+      iter.next();
+    }
+
+    blk.push_stmt(Stmt::Switch(Switch {
+      switch_val: select,
+      cases,
+      default: Some(vec![Stmt::Unreachable]),
+    }));
+  }
+
   fn convert_body(&mut self, iter: &mut FlowIter, depth: usize) -> Block {
     let mut blk = Block::default();
 
@@ -620,6 +671,7 @@ impl<'a> Builder<'a> {
         Detail::BasicBlock(_) => self.convert_basic_block(&mut blk, iter, depth),
         Detail::Loop(_) => self.convert_loop(&mut blk, iter, depth),
         Detail::If(_) => self.convert_ifstmt(&mut blk, iter, depth),
+        Detail::Switch(_) => self.convert_switch(&mut blk, iter, depth),
         _ => panic!("Unknown detail type: {:?}", elt.elem.detail),
       };
     }

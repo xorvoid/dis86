@@ -33,10 +33,11 @@ pub struct Elem {
 #[derive(Debug)]
 pub enum Detail {
   BasicBlock(BasicBlock),
+  Goto(Goto),
   Loop(Loop),
   If(If),
   Switch(Switch),
-  //Case(Case),
+  //Block(Block),
 }
 
 #[derive(Debug)]
@@ -67,8 +68,19 @@ pub struct If {
 pub struct Switch {
   pub entry: ElemId,
   pub exits: Vec<ElemId>,
-  //pub body: Body,
-  pub cases: Vec<Case>,
+  pub cases: Vec<ElemId>,
+  pub body: Body,
+  //pub cases: Vec<Case>,
+}
+
+#[derive(Debug)]
+pub struct Goto {
+  pub target: ElemId,
+}
+
+#[derive(Debug)]
+pub struct Block {
+  pub body: Vec<Body>,
 }
 
 // #[derive(Debug)]
@@ -78,16 +90,11 @@ pub struct Switch {
 //   pub case: CaseVariant,
 // }
 
-#[derive(Debug, Clone)]
-pub enum Case {
-  Goto(Goto),
-  Body(Body),
-}
-
-#[derive(Debug, Clone)]
-pub struct Goto {
-  pub target: ElemId,
-}
+// #[derive(Debug, Clone)]
+// pub enum Case {
+//   Goto(Goto),
+//   Body(Body),
+// }
 
 #[derive(Debug, Clone)]
 pub struct Body {
@@ -110,6 +117,7 @@ impl ControlFlowData {
   fn get_mut(&mut self, id: ElemId) -> &mut Elem { self.0[id.0].as_mut().unwrap() }
   fn checkout(&mut self, id: ElemId) -> Elem { self.0[id.0].take().unwrap() }
   fn release(&mut self, id: ElemId, elem: Elem) { assert!(self.0[id.0].is_none()); self.0[id.0] = Some(elem); }
+  fn next_id(&self) -> ElemId { ElemId(self.0.len()) }
 
   fn append_with_id(&mut self, id: ElemId, elem: Elem) {
     assert!(id.0 >= self.len());
@@ -235,7 +243,7 @@ impl Body {
   fn insert_switch(&mut self, sw: Switch, data: &mut ControlFlowData) {
     // Step 0: Save some data
     let switch_entry = sw.entry;
-    let switch_cases = sw.cases.clone();
+    //let switch_cases = sw.cases.clone();
 
     // Step 1: Wrap up into a proper elem
     let new_elem = Elem {
@@ -249,15 +257,38 @@ impl Body {
     let switch_id = data.append(new_elem);
 
     // Step 3: Remove any captured elems
-    for case in &switch_cases {
-      match case {
-        Case::Goto(_) => (),
-        Case::Body(body) => self.remove_elems(&body.elems),
-      }
-    }
+
+    // FIXME!!!!
+    // for case in &switch_cases {
+    //   match case {
+    //     Case::Goto(_) => (),
+    //     Case::Body(body) => self.remove_elems(&body.elems),
+    //   }
+    // }
+
     self.remove_elem(switch_entry);
     self.elems.insert(switch_id);
     self.remap.insert(switch_entry, switch_id);
+  }
+
+  // Insert goto
+  fn insert_goto(&mut self, goto: Goto, data: &mut ControlFlowData) -> ElemId {
+    // Step 1: Wrap up into a proper elem
+    let new_elem = Elem {
+      entry: data.next_id(),
+      exits: vec![goto.target],
+      jump: None,
+      detail: Detail::Goto(goto),
+    };
+
+    // Step 2: Insert it into "data", assigning an ElemId
+    let goto_id = data.append(new_elem);
+
+    // Step 3: Remove any captured elems
+    // NOTE: Goto captures NO elems
+    self.elems.insert(goto_id);
+
+    goto_id
   }
 
   fn exit(&self, node: ElemId, exit_idx: usize, data: &ControlFlowData) -> Option<ElemId> {
@@ -370,10 +401,11 @@ impl<'a> Iterator for ControlFlowIter<'a> {
       let depth = self.state.len() - 1;
       match &elem.detail {
         Detail::BasicBlock(_) => (),
+        Detail::Goto(_) => (),
         Detail::Loop(lp) => self.state.push((&lp.body, 0)),
         Detail::If(ifstmt) => self.state.push((&ifstmt.then_body, 0)),
-        Detail::Switch(switch) => (),
-        _ => panic!("Unknown detail type: {:?}", elem.detail),
+        Detail::Switch(sw) => self.state.push((&sw.body, 0)),
+        // _ => panic!("Unknown detail type: {:?}", elem.detail),
       }
 
       return Some(ControlFlowIterElem {
@@ -623,35 +655,33 @@ fn infer_switch(body: &mut Body, data: &mut ControlFlowData) -> bool {
     // Switch-stmt header should be a jump_table
     if !bb.jump_table { continue; }
 
-    // let mut bodies = vec![];
-    // let mut exits = HashSet::new();
-    // for tgt in &elem.exits {
-    //   for tgt_exit in &data.get(*tgt).exits {
-    //     exits.insert(*tgt_exit);
-    //   }
-    //   let mut body = Body::new(*tgt);
-    //   body.elems.insert(*tgt);
-    //   bodies.push(body);
-    // }
-
-    // let entry = *tgt;
-    // let mut body = Body::new(entry);
-
+    let mut sw_body = Body::new(*id);
     let mut cases = vec![];
     let mut exits = HashSet::new();
-    for tgt in &elem.exits {
+    for tgt in &elem.exits.clone() {
       exits.insert(*tgt);
-      cases.push(Case::Goto(Goto {
+      let goto = Goto {
         target: *tgt,
-      }));
+      };
+      let goto_id = sw_body.insert_goto(goto, data);
+      cases.push(goto_id);
     }
 
-    let exits = itertools::sorted(exits.iter().cloned()).collect();
+    // let mut cases = vec![];
+    // let mut exits = HashSet::new();
+    // for tgt in &elem.exits {
+    //   exits.insert(*tgt);
+    //   cases.push(Case::Goto(Goto {
+    //     target: *tgt,
+    //   }));
+    // }
 
+    let exits = itertools::sorted(exits.iter().cloned()).collect();
     let switch = Switch {
       entry: *id,
       exits,
       cases,
+      body: sw_body,
     };
 
     body.insert_switch(switch, data);
@@ -674,13 +704,15 @@ fn infer_structure(body: &mut Body, exclude: Option<&HashSet<ElemId>>, data: &mu
       Detail::Loop(lp) => infer_structure(&mut lp.body, Some(&lp.backedges), data),
       Detail::If(_ifstmt) => (), // TODO!!!
       Detail::Switch(sw) => {
-        for case in &mut sw.cases {
-          match case {
-            Case::Goto(_) => (),
-            Case::Body(body) => infer_structure(body, None, data),
-          }
-        }
+        infer_structure(&mut sw.body, None, data);
+        // for case in &mut sw.cases {
+        //   match case {
+        //     Case::Goto(_) => (),
+        //     Case::Body(body) => infer_structure(body, None, data),
+        //   }
+        // }
       }
+      Detail::Goto(_) => (),
       //_ => panic!("Unknown detail type: {:?}", elem.detail),
     }
     data.release(*id, elem);
@@ -749,6 +781,14 @@ fn schedule_layout_basic_block(elem: &mut Elem, parent: &Parent, _data: &mut Con
 }
 
 #[must_use]
+fn schedule_layout_goto(elem: &mut Elem, parent: &Parent, _data: &mut ControlFlowData) -> Option<ElemId> {
+  let Detail::Goto(goto) = &elem.detail else { panic!("Expected goto") };
+  let next = parent.elem_avail(goto.target);
+  elem.jump = Some(Jump::UncondTarget(goto.target));
+  next
+}
+
+#[must_use]
 fn schedule_layout_loop(elem: &mut Elem, parent: &Parent, data: &mut ControlFlowData) -> Option<ElemId> {
   let Detail::Loop(lp) = &mut elem.detail else { panic!("Expected loop") };
   let _ = schedule_layout_body(&mut lp.body, None, data);
@@ -783,18 +823,18 @@ fn schedule_layout_ifstmt(elem: &mut Elem, parent: &Parent, data: &mut ControlFl
 }
 
 #[must_use]
-fn schedule_layout_switch(elem: &mut Elem, _parent: &Parent, data: &mut ControlFlowData) -> Option<ElemId> {
+fn schedule_layout_switch(elem: &mut Elem, parent: &Parent, data: &mut ControlFlowData) -> Option<ElemId> {
   let Detail::Switch(sw) = &mut elem.detail else { panic!("Expected switch") };
-  for case in &mut sw.cases {
-    match case {
-      Case::Goto(_) => (),
-      Case::Body(body) => {
-        let _ = schedule_layout_body(body, None, data);
-      }
+  for id in &sw.cases {
+    sw.body.layout.push(*id);
+    let _ = schedule_layout_elem(*id, parent, data);
+  }
+  elem.jump = Some(Jump::None);
+  for exit in elem.exits.iter().cloned() {
+    if let Some(exit) = parent.elem_avail(exit) {
+      return Some(exit);
     }
   }
-
-  elem.jump = Some(Jump::None);
   None
 }
 
@@ -803,6 +843,7 @@ fn schedule_layout_elem(id: ElemId, parent: &Parent, data: &mut ControlFlowData)
   let mut elem = data.checkout(id);
   let next = match &elem.detail {
     Detail::BasicBlock(_) => schedule_layout_basic_block(&mut elem, &parent, data),
+    Detail::Goto(_) => schedule_layout_goto(&mut elem, &parent, data),
     Detail::Loop(_) => schedule_layout_loop(&mut elem, &parent, data),
     Detail::If(_) => schedule_layout_ifstmt(&mut elem, &parent, data),
     Detail::Switch(_) => schedule_layout_switch(&mut elem, &parent, data),
@@ -886,6 +927,9 @@ pub fn format(cf: &ControlFlow) -> Result<String, std::fmt::Error> {
       }
       Detail::Switch(_) => {
         writeln!(f, "Switch [entry={}, exits={:?}]", elt.elem.entry.0, exits)?;
+      }
+      Detail::Goto(goto) => {
+        writeln!(f, "Goto [entry={}, exits={:?}] target={}", elt.elem.entry.0, exits, goto.target.0)?;
       }
       //_ => panic!("Unknown detail type: {:?}", elt.elem.detail),
     }
