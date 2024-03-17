@@ -1,5 +1,5 @@
 use crate::ir;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Write;
 
 // FIXME: THE 'remap' HERE IS REALLY CLUNKY AND FRAGILE: IT NEEDS TO BE COMPLETELY RETHOUGHT
@@ -684,16 +684,38 @@ fn try_infer_case_body(entry: ElemId, parent_body: &mut Body, data: &ControlFlow
     return None;
   }
 
-  // Move blocks to new body
-  parent_body.remove_elem(entry);
-  let mut case_body = Body::new(entry);
-  case_body.elems.insert(entry);
+  // Follow and capture all exits as long as they are in the parrent body
+  let mut inner = HashSet::new();
+  let mut exits = HashSet::new();
+  let mut search_queue = VecDeque::new();
 
-  let exits = data.get(entry).exits.clone();
+  inner.insert(entry);
+  search_queue.push_back(entry);
+
+  while let Some(id) = search_queue.pop_front() {
+    for exit in data.get(id).exits.iter().cloned() {
+      if inner.get(&exit).is_some() { continue; }
+      if !parent_body.elem_is_movable_from(exit) {
+        exits.insert(exit);
+        continue;
+      }
+      inner.insert(exit);
+      search_queue.push_back(exit);
+    }
+  }
+
+  // Move blocks to new body
+  let mut body = Body::new(entry);
+  for id in inner.into_iter() {
+    parent_body.remove_elem(id);
+    body.elems.insert(id);
+  }
+
+  let exits = itertools::sorted(exits.into_iter()).collect();
   let blk = ElemBlock {
     entry,
     exits,
-    body: case_body,
+    body,
   };
 
   Some(blk)
@@ -750,8 +772,8 @@ fn infer_switch(body: &mut Body, data: &mut ControlFlowData) -> bool {
 fn infer_structure(body: &mut Body, exclude: Option<&HashSet<ElemId>>, data: &mut ControlFlowData) {
   // infer at the top-level
   while infer_loop(body, exclude, data) {}
-  while infer_if(body, data) {}
   while infer_switch(body, data) {}
+  while infer_if(body, data) {}
 
   // recurse and infer at lower-levels
   for id in &body.elems {
