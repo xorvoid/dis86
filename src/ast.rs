@@ -506,12 +506,12 @@ impl<'a> Builder<'a> {
           let uses = self.n_uses.get(&r).cloned().unwrap_or(0);
           if uses != 1 || instr.opcode.is_call() {
             let rvalue = self.ref_to_expr(r, 0);
-            if uses > 0 {
-              let typ = self.ir.instr(r).unwrap().typ.clone();
+            let typ = self.ir.instr(r).unwrap().typ.clone();
+            if typ == Type::Void {
+              blk.push_stmt(Stmt::Expr(rvalue));
+            } else {
               let name = self.ref_name(r);
               self.assign(blk, typ, &name, rvalue);
-            } else {
-              blk.push_stmt(Stmt::Expr(rvalue));
             }
           }
         }
