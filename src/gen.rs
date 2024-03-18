@@ -351,24 +351,12 @@ impl<'a> Gen<'a> {
   }
 
   fn decls(&mut self, decls: &[VarDecl], _imp: &dyn FlavorImpl) -> fmt::Result {
-    let mut cur_type = None;
     for d in decls {
-      if let Some(cur) = &cur_type {
-        if cur != &d.typ {
-          self.text(";")?;
-          self.endline()?;
-          cur_type = None
-        } else {
-          self.text(", ")?;
-        }
+      self.text(&format!("{} ", d.typ))?;
+      for (i, name) in d.names.iter().enumerate() {
+        if i != 0 { self.text(", ")?; }
+        self.text(name)?;
       }
-      if cur_type == None {
-        self.text(&format!("{} ", d.typ))?;
-        cur_type = Some(d.typ.clone());
-      }
-      self.text(&d.name)?;
-    }
-    if cur_type.is_some() {
       self.text(";")?;
       self.endline()?;
     }

@@ -1,14 +1,14 @@
 use crate::ir;
 use crate::types::*;
 use crate::control_flow::{self, ControlFlow, Detail, ElemId};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 type FlowIter<'a> = std::iter::Peekable<control_flow::ControlFlowIter<'a>>;
 
 #[derive(Debug)]
 pub struct VarDecl {
   pub typ: Type,
-  pub name: String,
+  pub names: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -172,7 +172,7 @@ struct Builder<'a> {
   n_uses: HashMap<ir::Ref, usize>,
   temp_names: HashMap<ir::Ref, String>,
   temp_count: usize,
-  assigned_names: HashSet<String>,
+  decls: Vec<VarDecl>,
 }
 
 impl Block {
@@ -190,7 +190,7 @@ impl<'a> Builder<'a> {
       n_uses,
       temp_names: HashMap::new(),
       temp_count: 0,
-      assigned_names: HashSet::new(),
+      decls: vec![],
     }
   }
 
@@ -399,6 +399,17 @@ impl<'a> Builder<'a> {
     Label(format!("{}", self.ir.block(bb.blkref).name))
   }
 
+  fn assign(&mut self, blk: &mut Block, typ: Type, name: &str, rhs: Expr) {
+    self.decls.push(VarDecl {
+      typ,
+      names: vec![name.to_string()],
+    });
+    blk.push_stmt(Stmt::Assign(Assign {
+      lhs: Expr::Name(name.to_string()),
+      rhs,
+    }));
+  }
+
   fn emit_phis(&mut self, blk: &mut Block, src: ir::BlockRef, dst: ir::BlockRef) {
     // first, which pred is the src block?
     let mut idx = None;
@@ -417,11 +428,7 @@ impl<'a> Builder<'a> {
 
       let name = self.ref_name(r);
       let rvalue = self.ref_to_expr(instr.operands[idx], 1);
-      self.assigned_names.insert(name.clone());
-      blk.push_stmt(Stmt::Assign(Assign {
-        lhs: Expr::Name(name),
-        rhs: rvalue,
-      }));
+      self.assign(blk, instr.typ.clone(), &name, rvalue);
     }
   }
 
@@ -500,12 +507,9 @@ impl<'a> Builder<'a> {
           if uses != 1 || instr.opcode.is_call() {
             let rvalue = self.ref_to_expr(r, 0);
             if uses > 0 {
+              let typ = self.ir.instr(r).unwrap().typ.clone();
               let name = self.ref_name(r);
-              self.assigned_names.insert(name.clone());
-              blk.push_stmt(Stmt::Assign(Assign {
-                lhs: Expr::Name(name),
-                rhs: rvalue,
-              }));
+              self.assign(blk, typ, &name, rvalue);
             } else {
               blk.push_stmt(Stmt::Expr(rvalue));
             }
@@ -702,17 +706,22 @@ impl<'a> Builder<'a> {
     let body = self.convert_body(&mut iter, 0);
     assert!(iter.next().is_none());
 
+    // Group all decls by type to save codegen space
+    let mut type_map: HashMap<Type, usize> = HashMap::new();
     let mut decls = vec![];
-    let mut names: Vec<_> = self.assigned_names.iter().cloned().collect();
-    names.sort();
-    for name in names {
-      let typ = if let Some(symref) = self.ir.symbols.find_by_name(&name) {
-        symref.to_type()
-      } else {
-        println!("WARN: Unknown type for '{}' ... assuming u16", name);
-        Type::U16
+    for d in &self.decls {
+      let idx = match type_map.get(&d.typ) {
+        Some(idx) => *idx,
+        None => {
+          let idx = decls.len();
+          decls.push(VarDecl { typ: d.typ.clone(), names: vec![] });
+          type_map.insert(d.typ.clone(), idx);
+          idx
+        }
       };
-      decls.push(VarDecl { typ, name } );
+      for n in &d.names {
+        decls[idx].names.push(n.clone());
+      }
     }
 
     Function {
