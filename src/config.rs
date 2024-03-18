@@ -13,6 +13,13 @@ pub struct Func {
   pub pop_args_after_call: bool,
 }
 
+#[derive(Debug)]
+pub struct Indirect {
+  pub addr: SegOff,
+  pub ret: Type,
+  pub args: u16,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CallMode {
   Near,
@@ -44,6 +51,7 @@ pub struct Segmap {
 #[derive(Debug, Default)]
 pub struct Config {
   pub funcs: Vec<Func>,
+  pub indirects: Vec<Indirect>,
   pub globals: Vec<Global>,
   pub text_section: Vec<TextSectionRegion>,
   pub segmaps: Vec<Segmap>,
@@ -55,6 +63,16 @@ impl Config {
     for f in &self.funcs {
       if addr == f.start {
         return Some(f)
+      }
+    }
+    None
+  }
+
+  pub fn indirect_lookup(&self, addr: SegOff) -> Option<&Indirect> {
+    // TODO: Consider something better than linear search
+    for i in &self.indirects {
+      if addr == i.addr {
+        return Some(i)
       }
     }
     None
@@ -85,6 +103,7 @@ impl Config {
   pub fn from_path(path: &str) -> Result<Config, String> {
     let mut cfg = Config {
       funcs: vec![],
+      indirects: vec![],
       globals: vec![],
       text_section: vec![],
       segmaps: vec![],
@@ -124,6 +143,7 @@ impl Config {
         .ok_or_else(|| format!("No function 'args' property for '{}'", key))?;
 
       let pop_args_after_call = !f.get_str("dont_pop_args").is_some();
+      let indirect = f.get_str("indirect_call_location").is_some();
 
       let start: SegOff = start_str.parse()
         .map_err(|_| format!("Expected segoff for '{}.start', got '{}'", key, start_str))?;
@@ -141,15 +161,26 @@ impl Config {
       let ret: Type = ret_str.parse()
         .map_err(|err| format!("Expected type for '{}.ret', got '{}' | {}", key, ret_str, err))?;
 
-      self.funcs.push(Func {
-        name: key.to_string(),
-        start,
-        end,
-        mode,
-        ret,
-        args: if args >= 0 { Some(args as u16) } else { None },
-        pop_args_after_call,
-      });
+      if !indirect {
+        self.funcs.push(Func {
+          name: key.to_string(),
+          start,
+          end,
+          mode,
+          ret,
+          args: if args >= 0 { Some(args as u16) } else { None },
+          pop_args_after_call,
+        });
+      } else {
+        if mode != CallMode::Far {
+          panic!("Cannot have an indirect near call: {}", key);
+        }
+        self.indirects.push(Indirect {
+          addr: start,
+          ret,
+          args: args as u16,
+        });
+      }
     }
 
     Ok(())

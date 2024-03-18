@@ -39,6 +39,9 @@ enum SpecialState {
   PushCS, // CS register was pushed in the last instruction
 }
 
+// struct Issue {
+// };
+
 struct IRBuilder<'a> {
   instrs: &'a [instr::Instr],
   cfg: &'a Config,
@@ -46,6 +49,7 @@ struct IRBuilder<'a> {
   binary: &'a binary::Binary,
 
   ir: IR,
+  //issues: Vec<Issue>,
   addrmap: HashMap<SegOff, BlockRef>,
   cur: BlockRef,
   special: Option<SpecialState>,
@@ -204,11 +208,6 @@ impl<'a> IRBuilder<'a> {
     };
     let idx = self.ir.block_mut(self.cur).instrs.push_back(instr);
     Ref::Instr(self.cur, idx)
-  }
-
-  fn append_instr_old(&mut self, opcode: Opcode, operands: Vec<Ref>) -> Ref {
-    // OLD
-    self.append_instr(Type::Unknown, opcode, operands)
   }
 
   fn append_jmp(&mut self, next: BlockRef) {
@@ -496,19 +495,6 @@ impl IRBuilder<'_> {
     }
   }
 
-  fn process_callf_indirect(&mut self, ins: &instr::Instr) {
-    let addr = self.append_asm_src_operand(&ins.operands[0]);
-
-    let nargs = self.heuristic_infer_call_arguments_by_context(ins,
-                  &format!("Unknown ptr call from '{}'", instr_str(ins)));
-
-    let mut operands = vec![addr];
-    operands.append(&mut self.load_args_from_stack(nargs));
-    let ret = self.append_instr_old(Opcode::CallPtr, operands);
-
-    self.ir.set_var(instr::Reg::AX, self.cur, ret);
-  }
-
   fn load_args_from_stack(&mut self, n: u16) -> Vec<Ref> {
     let mut args = vec![];
     let ss = self.ir.get_var(instr::Reg::SS, self.cur);
@@ -525,6 +511,37 @@ impl IRBuilder<'_> {
     args
   }
 
+  fn save_return_value(&mut self, ret_type: &Type, ret_ref: Ref) {
+    match ret_type {
+      Type::Void => (), // nothing to do
+      Type::U16 => {
+        self.ir.set_var(instr::Reg::AX, self.cur, ret_ref);
+      }
+      Type::U32 | Type::Unknown => {  // Assume worst-case u32 for unknown
+        let (upper, lower) = self.append_upper_lower_split(ret_ref);
+        self.ir.set_var(instr::Reg::DX, self.cur, upper);
+        self.ir.set_var(instr::Reg::AX, self.cur, lower);
+      }
+      _ => panic!("Unsupported function return type: {}", ret_type),
+    }
+  }
+
+  fn process_callf_indirect(&mut self, ins: &instr::Instr) {
+    let (ret_type, args) = if let Some(indirect) = self.cfg.indirect_lookup(ins.addr) {
+      (&indirect.ret, indirect.args)
+    } else {
+      let nargs = self.heuristic_infer_call_arguments_by_context(ins, &format!(
+        "Unknown ptr call from '{}' as binary loc {}", instr_str(ins), ins.addr));
+      (&Type::Unknown, nargs)
+    };
+
+    let addr = self.append_asm_src_operand(&ins.operands[0]);
+    let mut operands = vec![addr];
+    operands.append(&mut self.load_args_from_stack(args));
+    let ret_ref = self.append_instr(ret_type.clone(), Opcode::CallPtr, operands);
+    self.save_return_value(ret_type, ret_ref);
+  }
+
   fn process_call_known(&mut self, func: &config::Func, ins: &instr::Instr) {
     let idx = self.ir.funcs.len();
     self.ir.funcs.push(func.name.to_string());
@@ -537,20 +554,8 @@ impl IRBuilder<'_> {
     let mut operands = vec![Ref::Func(idx)];
     operands.append(&mut self.load_args_from_stack(nargs));
 
-    let ret = self.append_instr(func.ret.clone(), Opcode::CallArgs, operands);
-
-    match &func.ret {
-      Type::Void => (), // nothing to do
-      Type::U16 => {
-        self.ir.set_var(instr::Reg::AX, self.cur, ret);
-      }
-      Type::U32 => {
-        let (upper, lower) = self.append_upper_lower_split(ret);
-        self.ir.set_var(instr::Reg::DX, self.cur, upper);
-        self.ir.set_var(instr::Reg::AX, self.cur, lower);
-      }
-      _ => panic!("Unsupported function return type: {}", func.ret),
-    }
+    let ret_ref = self.append_instr(func.ret.clone(), Opcode::CallArgs, operands);
+    self.save_return_value(&func.ret, ret_ref);
   }
 
   fn process_call_segoff(&mut self, addr: SegOff, mode: config::CallMode, ins: &instr::Instr) {
@@ -562,6 +567,7 @@ impl IRBuilder<'_> {
       self.process_call_known(func, ins);
     } else {
       // Unknown function
+      let ret_type = Type::Unknown;
       let nargs = self.heuristic_infer_call_arguments_by_context(ins,
                     &format!("Unknown call to {}", addr));
 
@@ -574,8 +580,8 @@ impl IRBuilder<'_> {
         config::CallMode::Far => Opcode::CallFar,
         config::CallMode::Near => Opcode::CallNear,
       };
-      let ret = self.append_instr_old(opcode, operands);
-      self.ir.set_var(instr::Reg::AX, self.cur, ret);
+      let ret_ref = self.append_instr(ret_type.clone(), opcode, operands);
+      self.save_return_value(&ret_type, ret_ref);
     }
   }
 
@@ -702,7 +708,6 @@ impl IRBuilder<'_> {
       }
       instr::Opcode::OP_MOV => {
         let vref = self.append_asm_src_operand(&ins.operands[1]);
-        //let vref = self.append_instr_old(Opcode::Ref, vec![vref]);
         self.append_asm_dst_operand(&ins.operands[0], vref);
       }
       instr::Opcode::OP_IMUL => {
