@@ -39,9 +39,6 @@ enum SpecialState {
   PushCS, // CS register was pushed in the last instruction
 }
 
-// struct Issue {
-// };
-
 struct IRBuilder<'a> {
   instrs: &'a [instr::Instr],
   cfg: &'a Config,
@@ -49,7 +46,6 @@ struct IRBuilder<'a> {
   binary: &'a binary::Binary,
 
   ir: IR,
-  //issues: Vec<Issue>,
   addrmap: HashMap<SegOff, BlockRef>,
   cur: BlockRef,
   special: Option<SpecialState>,
@@ -201,8 +197,13 @@ impl<'a> IRBuilder<'a> {
   }
 
   fn append_instr(&mut self, typ: Type, opcode: Opcode, operands: Vec<Ref>) -> Ref {
+    self.append_instr_with_attrs(typ, Attribute::NONE, opcode, operands)
+  }
+
+  fn append_instr_with_attrs(&mut self, typ: Type, attrs: u8, opcode: Opcode, operands: Vec<Ref>) -> Ref {
     let instr = Instr {
       typ,
+      attrs,
       opcode,
       operands,
     };
@@ -309,7 +310,7 @@ impl IRBuilder<'_> {
       instr::Size::Size16 => (Type::U16, Opcode::Load16),
       instr::Size::Size32 => (Type::U32, Opcode::Load32),
     };
-    self.append_instr(typ, opcode, vec![seg, addr])
+    self.append_instr_with_attrs(typ, Attribute::MAY_ESCAPE, opcode, vec![seg, addr])
   }
 
   fn append_asm_dst_mem(&mut self, mem: &instr::OperandMem, vref: Ref) {
@@ -322,7 +323,7 @@ impl IRBuilder<'_> {
       _ => panic!("32-bit stores not supported"),
     };
 
-    self.append_instr(Type::Void, opcode, vec![seg, addr, vref]);
+    self.append_instr_with_attrs(Type::Void, Attribute::MAY_ESCAPE, opcode, vec![seg, addr, vref]);
   }
 
   fn append_asm_src_imm(&mut self, imm: &instr::OperandImm) -> Ref {

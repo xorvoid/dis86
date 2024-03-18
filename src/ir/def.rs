@@ -58,9 +58,16 @@ impl From<&instr::Reg> for Name {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FullName(pub Name, pub usize);
 
+#[allow(non_snake_case)]
+pub mod Attribute {
+  pub const NONE: u8 = 0;
+  pub const MAY_ESCAPE: u8 = 1<<0;
+}
+
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Instr {
   pub typ: Type,
+  pub attrs: u8,
   pub opcode: Opcode,
   pub operands: Vec<Ref>,
 }
@@ -451,6 +458,7 @@ impl IR {
 
     let idx = self.block_mut(blk).instrs.push_front(Instr {
       typ: Type::U16, // TODO: SANITY CHECK THAT NO OTHER SIZES CAN GO THROUGH A PHI!!
+      attrs: Attribute::NONE,
       opcode: Opcode::Phi,
       operands: vec![],
     });

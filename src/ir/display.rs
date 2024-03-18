@@ -36,6 +36,14 @@ fn reg_name(r: instr::Reg) -> &'static str {
   }
 }
 
+fn attributes_string(attr: u8) -> String {
+  let mut out = String::new();
+  if (attr & Attribute::MAY_ESCAPE) != 0 {
+    out += &format!("may_escape");
+  }
+  out
+}
+
 impl fmt::Display for Name {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
@@ -131,6 +139,9 @@ impl Formatter {
     for oper in &instr.operands {
       let s = self.ref_string(ir, *oper)?;
       write!(&mut self.out, " {:<20}", s)?;
+    }
+    if instr.attrs != 0 {
+      write!(&mut self.out, " [{}]", attributes_string(instr.attrs))?;
     }
     writeln!(&mut self.out, "")?;
 

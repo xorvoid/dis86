@@ -444,6 +444,14 @@ pub fn mem_symbol_to_ref(ir: &mut IR) {
   for b in ir.iter_blocks() {
     for r in ir.iter_instrs(b) {
       let instr = ir.instr(r).unwrap();
+
+      // FIXME: THIS IS WRONG.. WE SHOULD USE THESE TO PROVE NON-ESCAPE... E.G. IF A STACK REFERENCE
+      // IS NOT MARKED "MAY_ESCAPE" IT MIGHT STILL ESCAPE IF IT ANOTHER INSTR USES THE ADDRESS AND
+      // IS MARKED "MAY_ESCAPE" ... BUT FOR NOW IT'S AN EASY WAY TO SEPERATE LOCAL VARS FROM TEMPORARY
+      // PUSH/POP STACK SLOTS (WE WANT TO PESSIMIZE THE FORMER AND OPTIMIZE THE LATER). THIS BIG
+      // COMMENT EXISTS TO REMIND THE FUTURE DEBUGGER OF PAST LAZINESS
+      if (instr.attrs & Attribute::MAY_ESCAPE) != 0 { continue }; // don't life any memory ref that might escape
+
       if instr.opcode == Opcode::WriteVar16 {
         let Ref::Symbol(symref) = instr.operands[0] else { continue };
         if ir.symbols.symbol_type(symref) != sym::SymbolType::Local { continue; }
