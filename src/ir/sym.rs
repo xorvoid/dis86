@@ -226,11 +226,12 @@ pub fn symbolize_stack(ir: &mut IR) {
       // f.fmt_instr(ir, mem_ref, mem_instr).unwrap();
       // println!("{}", f.finish());
 
+      let frame_offset = 2;
       if off > 0 {
-        let name = format!("_param_{:04}", off+2);
+        let name = format!("_param_{:04x}", off+frame_offset);
         ir.symbols.params.append(&name, off, size);
       } else {
-        let name = format!("_local_{:04}", -(off+2));
+        let name = format!("_local_{:04x}", -(off+frame_offset));
         ir.symbols.locals.append(&name, off, size);
       }
     }

@@ -30,8 +30,9 @@ fn print_help() {
   println!("EMIT MODES:");
   println!("  --emit-dis        path to emit disassembly (optional)");
   println!("  --emit-ir-initial path to emit initial unoptimized SSA IR (optional)");
-  println!("  --emit-ir-presym  path to emit symbolized SSA IR (optional)");
+  println!("  --emit-ir-presym  path to emit pre-symbolized SSA IR (optional)");
   println!("  --emit-ir-sym     path to emit symbolized SSA IR (optional)");
+  println!("  --emit-ir-fwd     path to emit memory forwarding SSA IR (optional)");
   println!("  --emit-ir-opt     path to emit optimized SSA IR (optional)");
   println!("  --emit-ir-final   path to emit final SSA IR before control-flow analysis (optional)");
   println!("  --emit-graph      path to emit a control-flow-graph dot file (optional)");
@@ -65,6 +66,7 @@ struct Args {
   emit_ir_initial: Option<String>,
   emit_ir_presym: Option<String>,
   emit_ir_sym: Option<String>,
+  emit_ir_fwd: Option<String>,
   emit_ir_opt: Option<String>,
   emit_ir_final: Option<String>,
   emit_graph: Option<String>,
@@ -106,6 +108,7 @@ fn parse_args() -> Result<Args, pico_args::Error> {
     emit_ir_opt:     pargs.opt_value_from_str("--emit-ir-opt")?,
     emit_ir_presym:  pargs.opt_value_from_str("--emit-ir-presym")?,
     emit_ir_sym:     pargs.opt_value_from_str("--emit-ir-sym")?,
+    emit_ir_fwd:     pargs.opt_value_from_str("--emit-ir-fwd")?,
     emit_ir_final:   pargs.opt_value_from_str("--emit-ir-final")?,
     emit_graph:      pargs.opt_value_from_str("--emit-graph")?,
     emit_ctrlflow:   pargs.opt_value_from_str("--emit-ctrlflow")?,
@@ -186,10 +189,13 @@ pub fn run() -> i32 {
 
   opt::forward_store_to_load(&mut ir);
   opt::optimize(&mut ir);
+  if let Some(path) = args.emit_ir_fwd.as_ref() {
+    write_to_path(path, &format!("{}", ir));
+    return 0;
+  }
 
   opt::mem_symbol_to_ref(&mut ir);
   opt::optimize(&mut ir);
-
   if let Some(path) = args.emit_ir_opt.as_ref() {
     let text = ir::display::display_ir_with_uses(&ir).unwrap();
     write_to_path(path, &format!("{}", &text));
