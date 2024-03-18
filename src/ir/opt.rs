@@ -507,7 +507,7 @@ pub fn simplify_branch_conds(ir: &mut IR) {
         // ja <tgt>   (equivalent to "jne <tgt>" after the or)
         let z = ir.append_const(0);
         let instr = ir.instr_mut(r).unwrap();
-        instr.opcode = opcode_new;
+        instr.opcode = Opcode::Neq;
         instr.operands = vec![pred_ref, z];
       }
     }
