@@ -126,6 +126,7 @@ impl Formatter {
     } else {
       write!(&mut self.out, "  {:<11}", "")?;
     }
+    write!(&mut self.out, "{:<8} ", format!("{}", instr.typ))?;
     write!(&mut self.out, "{:<10}", instr.opcode.to_string())?;
     for oper in &instr.operands {
       let s = self.ref_string(ir, *oper)?;
@@ -172,7 +173,7 @@ pub fn display_ir_with_uses(ir: &IR) -> Result<String, std::fmt::Error> {
       if instr.opcode == Opcode::Nop { continue; }
 
       let n = n_uses.get(&iref).unwrap_or(&0);
-      write!(&mut r.out, "{} | ", n)?;
+      write!(&mut r.out, "{:<3} | ", n)?;
       r.fmt_instr(ir, iref, instr)?;
     }
   }

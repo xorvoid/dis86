@@ -196,8 +196,9 @@ impl<'a> IRBuilder<'a> {
     ])
   }
 
-  fn append_instr(&mut self, opcode: Opcode, operands: Vec<Ref>) -> Ref {
+  fn append_instr(&mut self, typ: Type, opcode: Opcode, operands: Vec<Ref>) -> Ref {
     let instr = Instr {
+      typ,
       opcode,
       operands,
     };
@@ -205,15 +206,20 @@ impl<'a> IRBuilder<'a> {
     Ref::Instr(self.cur, idx)
   }
 
+  fn append_instr_old(&mut self, opcode: Opcode, operands: Vec<Ref>) -> Ref {
+    // OLD
+    self.append_instr(Type::Unknown, opcode, operands)
+  }
+
   fn append_jmp(&mut self, next: BlockRef) {
     self.ir.block_mut(next).preds.push(self.cur);
-    self.append_instr(Opcode::Jmp, vec![Ref::Block(next)]);
+    self.append_instr(Type::Void, Opcode::Jmp, vec![Ref::Block(next)]);
   }
 
   fn append_jne(&mut self, cond: Ref, true_blk: BlockRef, false_blk: BlockRef) {
     self.ir.block_mut(true_blk).preds.push(self.cur);
     self.ir.block_mut(false_blk).preds.push(self.cur);
-    self.append_instr(Opcode::Jne, vec![
+    self.append_instr(Type::Void, Opcode::Jne, vec![
       cond,
       Ref::Block(true_blk),
       Ref::Block(false_blk)]);
@@ -222,18 +228,19 @@ impl<'a> IRBuilder<'a> {
   fn append_jmptbl(&mut self, reg_ref: Ref, targets: Vec<SegOff>) {
     // NOTE: The reg value will have been scaled up to do the memory access, we need to "de-scale" it
     // This is technically not gaurenteed to be safe so we insert some "asserts"
-    self.append_instr(Opcode::AssertPos, vec![reg_ref]);
-    self.append_instr(Opcode::AssertEven, vec![reg_ref]);
+    self.append_instr(Type::Void, Opcode::AssertPos, vec![reg_ref]);
+    self.append_instr(Type::Void, Opcode::AssertEven, vec![reg_ref]);
     // Then scale it down..
     let k = self.ir.append_const(1);
-            let idx = self.append_instr(Opcode::UShr, vec![reg_ref, k]);
+    let typ = self.deduce_type_binary(reg_ref, k);
+    let idx = self.append_instr(typ, Opcode::UShr, vec![reg_ref, k]);
     let mut opers = vec![idx];
     for tgt in targets {
       let blkref = self.get_block(tgt);
       self.ir.block_mut(blkref).preds.push(self.cur);
       opers.push(Ref::Block(blkref));
     }
-    self.append_instr(Opcode::JmpTbl, opers);
+    self.append_instr(Type::Void, Opcode::JmpTbl, opers);
   }
 
   fn switch_blk(&mut self, bref: BlockRef) {
@@ -283,11 +290,14 @@ impl IRBuilder<'_> {
     if refs.len() == 1 {
       refs[0]
     } else if refs.len() == 2 {
-      self.append_instr(Opcode::Add, vec![refs[0], refs[1]])
+      let typ = self.deduce_type_binary(refs[0], refs[1]);
+      self.append_instr(typ, Opcode::Add, vec![refs[0], refs[1]])
     } else {
       assert!(refs.len() == 3);
-      let lhs = self.append_instr(Opcode::Add, vec![refs[0], refs[1]]);
-      self.append_instr(Opcode::Add, vec![lhs, refs[2]])
+      let typ = self.deduce_type_binary(refs[0], refs[1]);
+      let lhs = self.append_instr(typ, Opcode::Add, vec![refs[0], refs[1]]);
+      let typ = self.deduce_type_binary(lhs, refs[2]);
+      self.append_instr(typ, Opcode::Add, vec![lhs, refs[2]])
     }
   }
 
@@ -295,12 +305,12 @@ impl IRBuilder<'_> {
     let addr = self.compute_mem_address(mem);
     let seg = self.ir.get_var(mem.sreg, self.cur);
 
-    let opcode = match mem.sz {
-      instr::Size::Size8 => Opcode::Load8,
-      instr::Size::Size16 => Opcode::Load16,
-      instr::Size::Size32 => Opcode::Load32,
+    let (typ, opcode) = match mem.sz {
+      instr::Size::Size8 => (Type::U8, Opcode::Load8),
+      instr::Size::Size16 => (Type::U16, Opcode::Load16),
+      instr::Size::Size32 => (Type::U32, Opcode::Load32),
     };
-    self.append_instr(opcode, vec![seg, addr])
+    self.append_instr(typ, opcode, vec![seg, addr])
   }
 
   fn append_asm_dst_mem(&mut self, mem: &instr::OperandMem, vref: Ref) {
@@ -313,7 +323,7 @@ impl IRBuilder<'_> {
       _ => panic!("32-bit stores not supported"),
     };
 
-    self.append_instr(opcode, vec![seg, addr, vref]);
+    self.append_instr(Type::Void, opcode, vec![seg, addr, vref]);
   }
 
   fn append_asm_src_imm(&mut self, imm: &instr::OperandImm) -> Ref {
@@ -364,13 +374,13 @@ impl IRBuilder<'_> {
 
   fn append_update_flags(&mut self, vref: Ref) {
     let old_flags = self.get_flags();
-    let new_flags = self.append_instr(Opcode::UpdateFlags, vec![old_flags, vref]);
+    let new_flags = self.append_instr(Type::U16, Opcode::UpdateFlags, vec![old_flags, vref]);
     self.set_flags(new_flags);
   }
 
   fn pin_register(&mut self, reg: instr::Reg) {
     let vref = self.ir.get_var(reg, self.cur);
-    let pin = self.append_instr(Opcode::Pin, vec![vref]);
+    let pin = self.append_instr(Type::Void, Opcode::Pin, vec![vref]);
     self.ir.set_var(reg, self.cur, pin);
   }
 
@@ -421,11 +431,11 @@ impl IRBuilder<'_> {
     let k = self.ir.append_const(2);
 
     // decrement SP
-    let sp = self.append_instr(Opcode::Sub, vec![sp, k]);
+    let sp = self.append_instr(Type::U16, Opcode::Sub, vec![sp, k]);
     self.ir.set_var(instr::Reg::SP, self.cur, sp);
 
     // store to SS:SP
-    self.append_instr(Opcode::Store16, vec![ss, sp, vref]);
+    self.append_instr(Type::Void, Opcode::Store16, vec![ss, sp, vref]);
   }
 
   fn append_pop(&mut self) -> Ref {
@@ -433,8 +443,8 @@ impl IRBuilder<'_> {
     let sp = self.ir.get_var(instr::Reg::SP, self.cur);
     let k = self.ir.append_const(2);
 
-    let val = self.append_instr(Opcode::Load16, vec![ss, sp]);
-    let sp = self.append_instr(Opcode::Add, vec![sp, k]);
+    let val = self.append_instr(Type::U16, Opcode::Load16, vec![ss, sp]);
+    let sp = self.append_instr(Type::U16, Opcode::Add, vec![sp, k]);
     self.ir.set_var(instr::Reg::SP, self.cur, sp);
 
     val
@@ -494,7 +504,7 @@ impl IRBuilder<'_> {
 
     let mut operands = vec![addr];
     operands.append(&mut self.load_args_from_stack(nargs));
-    let ret = self.append_instr(Opcode::CallPtr, operands);
+    let ret = self.append_instr_old(Opcode::CallPtr, operands);
 
     self.ir.set_var(instr::Reg::AX, self.cur, ret);
   }
@@ -507,9 +517,9 @@ impl IRBuilder<'_> {
       let mut off = sp;
       if i != 0 {
         let k = self.ir.append_const(2*i);
-        off = self.append_instr(Opcode::Add, vec![sp, k]);
+        off = self.append_instr(Type::U16, Opcode::Add, vec![sp, k]);
       }
-      let val = self.append_instr(Opcode::Load16, vec![ss, off]);
+      let val = self.append_instr(Type::U16, Opcode::Load16, vec![ss, off]);
       args.push(val);
     }
     args
@@ -526,7 +536,8 @@ impl IRBuilder<'_> {
 
     let mut operands = vec![Ref::Func(idx)];
     operands.append(&mut self.load_args_from_stack(nargs));
-    let ret = self.append_instr(Opcode::CallArgs, operands);
+
+    let ret = self.append_instr(func.ret.clone(), Opcode::CallArgs, operands);
 
     match &func.ret {
       Type::Void => (), // nothing to do
@@ -534,10 +545,8 @@ impl IRBuilder<'_> {
         self.ir.set_var(instr::Reg::AX, self.cur, ret);
       }
       Type::U32 => {
-        let upper = self.append_instr(Opcode::Upper16, vec![ret]);
+        let (upper, lower) = self.append_upper_lower_split(ret);
         self.ir.set_var(instr::Reg::DX, self.cur, upper);
-
-        let lower = self.append_instr(Opcode::Lower16, vec![ret]);
         self.ir.set_var(instr::Reg::AX, self.cur, lower);
       }
       _ => panic!("Unsupported function return type: {}", func.ret),
@@ -565,7 +574,7 @@ impl IRBuilder<'_> {
         config::CallMode::Far => Opcode::CallFar,
         config::CallMode::Near => Opcode::CallNear,
       };
-      let ret = self.append_instr(opcode, operands);
+      let ret = self.append_instr_old(opcode, operands);
       self.ir.set_var(instr::Reg::AX, self.cur, ret);
     }
   }
@@ -603,9 +612,33 @@ impl IRBuilder<'_> {
     let true_blk = self.get_block(ins.rel_addr(rel));
 
     let flags = self.get_flags();
-    let cond = self.append_instr(compare_opcode, vec![flags]);
+    let cond = self.append_instr(Type::U16, compare_opcode, vec![flags]);
 
     self.append_jne(cond, true_blk, false_blk);
+  }
+
+  fn append_upper_lower_split(&mut self, r: Ref) -> (Ref, Ref) {
+    let upper = self.append_instr(Type::U16, Opcode::Upper16, vec![r]);
+    let lower = self.append_instr(Type::U16, Opcode::Lower16, vec![r]);
+    (upper, lower)
+  }
+
+  fn deduce_type_unary(&mut self, a: Ref) -> Type {
+    //println!("a: {:?}", a);
+    match a {
+      Ref::Instr(_, _) => self.ir.instr(a).unwrap().typ.clone(),
+      Ref::Init(_) => Type::U16,
+      _ => Type::Unknown,
+    }
+  }
+
+  fn deduce_type_binary(&mut self, a: Ref, b: Ref) -> Type {
+    let a_typ = self.deduce_type_unary(a);
+    let b_typ = self.deduce_type_unary(b);
+    if a_typ == b_typ { a_typ }
+    else if a_typ == Type::Unknown { b_typ }
+    else if b_typ == Type::Unknown { a_typ }
+    else { Type::Unknown }
   }
 
   fn append_asm_instr(&mut self, ins: &instr::Instr) {
@@ -617,7 +650,8 @@ impl IRBuilder<'_> {
     // process simple unary operations
     if let Some(opcode) = simple_unary_operation(ins.opcode) {
       let a = self.append_asm_src_operand(&ins.operands[0]);
-      let vref = self.append_instr(opcode, vec![a]);
+      let typ = self.deduce_type_unary(a);
+      let vref = self.append_instr(typ, opcode, vec![a]);
       self.append_asm_dst_operand(&ins.operands[0], vref);
       return;
     }
@@ -626,7 +660,8 @@ impl IRBuilder<'_> {
     if let Some(opcode) = simple_binary_operation(ins.opcode) {
       let a = self.append_asm_src_operand(&ins.operands[0]);
       let b = self.append_asm_src_operand(&ins.operands[1]);
-      let vref = self.append_instr(opcode, vec![a, b]);
+      let typ = self.deduce_type_binary(a, b);
+      let vref = self.append_instr(typ, opcode, vec![a, b]);
       self.append_asm_dst_operand(&ins.operands[0], vref);
       self.append_update_flags(vref);
       return;
@@ -657,17 +692,17 @@ impl IRBuilder<'_> {
       instr::Opcode::OP_RETF => {
         self.pin_registers();
         let ret_vals = self.return_vals();
-        self.append_instr(Opcode::RetFar, ret_vals);
+        self.append_instr(Type::Void, Opcode::RetFar, ret_vals);
 
       }
       instr::Opcode::OP_RET => {
         self.pin_registers();
         let ret_vals = self.return_vals();
-        self.append_instr(Opcode::RetNear, ret_vals);
+        self.append_instr(Type::Void, Opcode::RetNear, ret_vals);
       }
       instr::Opcode::OP_MOV => {
         let vref = self.append_asm_src_operand(&ins.operands[1]);
-        //let vref = self.append_instr(Opcode::Ref, vec![vref]);
+        //let vref = self.append_instr_old(Opcode::Ref, vec![vref]);
         self.append_asm_dst_operand(&ins.operands[0], vref);
       }
       instr::Opcode::OP_IMUL => {
@@ -679,20 +714,23 @@ impl IRBuilder<'_> {
 
         let lhs = self.append_asm_src_operand(&ins.operands[1]);
         let rhs = self.append_asm_src_operand(&ins.operands[2]);
-        let res = self.append_instr(Opcode::IMul, vec![lhs, rhs]);
+        let typ = self.deduce_type_binary(lhs, rhs);
+        let res = self.append_instr(typ, Opcode::IMul, vec![lhs, rhs]);
         self.append_asm_dst_operand(&ins.operands[0], res);
      }
       instr::Opcode::OP_INC => {
         let one = self.ir.append_const(1);
         let vref = self.append_asm_src_operand(&ins.operands[0]);
-        let vref = self.append_instr(Opcode::Add, vec![vref, one]);
+        let typ = self.deduce_type_binary(vref, one);
+        let vref = self.append_instr(typ, Opcode::Add, vec![vref, one]);
         self.append_asm_dst_operand(&ins.operands[0], vref);
         self.append_update_flags(vref);
       }
       instr::Opcode::OP_DEC => {
         let one = self.ir.append_const(1);
         let vref = self.append_asm_src_operand(&ins.operands[0]);
-        let vref = self.append_instr(Opcode::Sub, vec![vref, one]);
+        let typ = self.deduce_type_binary(vref, one);
+        let vref = self.append_instr(typ, Opcode::Sub, vec![vref, one]);
         self.append_asm_dst_operand(&ins.operands[0], vref);
         self.append_update_flags(vref);
       }
@@ -750,39 +788,37 @@ impl IRBuilder<'_> {
       }
       instr::Opcode::OP_LES => {
         let vref = self.append_asm_src_operand(&ins.operands[2]);
-
-        let upper = self.append_instr(Opcode::Upper16, vec![vref]);
+        let (upper, lower) = self.append_upper_lower_split(vref);
         self.append_asm_dst_operand(&ins.operands[0], upper);
-
-        let lower = self.append_instr(Opcode::Lower16, vec![vref]);
         self.append_asm_dst_operand(&ins.operands[1], lower);
       }
       instr::Opcode::OP_TEST => {
         let a = self.append_asm_src_operand(&ins.operands[0]);
         let b = self.append_asm_src_operand(&ins.operands[1]);
-        let vref = self.append_instr(Opcode::And, vec![a, b]);
+        let typ = self.deduce_type_binary(a, b);
+        let vref = self.append_instr(typ, Opcode::And, vec![a, b]);
         self.append_update_flags(vref);
       }
       instr::Opcode::OP_CMP => {
         let a = self.append_asm_src_operand(&ins.operands[0]);
         let b = self.append_asm_src_operand(&ins.operands[1]);
-        let vref = self.append_instr(Opcode::Sub, vec![a, b]);
+        let typ = self.deduce_type_binary(a, b);
+        let vref = self.append_instr(typ, Opcode::Sub, vec![a, b]);
         self.append_update_flags(vref);
       }
       instr::Opcode::OP_CWD => {
         let src = self.append_asm_src_operand(&ins.operands[1]);
-        let vref = self.append_instr(Opcode::SignExtTo32, vec![src]);
-        let upper = self.append_instr(Opcode::Upper16, vec![vref]);
+        let vref = self.append_instr(Type::U32, Opcode::SignExtTo32, vec![src]);
+        let upper = self.append_instr(Type::U16, Opcode::Upper16, vec![vref]);
         self.append_asm_dst_operand(&ins.operands[0], upper);
       }
       instr::Opcode::OP_DIV => {
         let upper_in = self.append_asm_src_operand(&ins.operands[0]);
         let lower_in = self.append_asm_src_operand(&ins.operands[1]);
         let divisor = self.append_asm_src_operand(&ins.operands[2]);
-        let dividend = self.append_instr(Opcode::Make32, vec![upper_in, lower_in]);
-        let quotient = self.append_instr(Opcode::UDiv, vec![dividend, divisor]);
-        let upper_out = self.append_instr(Opcode::Upper16, vec![quotient]);
-        let lower_out = self.append_instr(Opcode::Lower16, vec![quotient]);
+        let dividend = self.append_instr(Type::U32, Opcode::Make32, vec![upper_in, lower_in]);
+        let quotient = self.append_instr(Type::U32, Opcode::UDiv, vec![dividend, divisor]);
+        let (upper_out, lower_out) = self.append_upper_lower_split(quotient);
         self.append_asm_dst_operand(&ins.operands[0], upper_out);
         self.append_asm_dst_operand(&ins.operands[1], lower_out);
       }

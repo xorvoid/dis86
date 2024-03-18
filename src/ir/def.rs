@@ -1,5 +1,6 @@
 use crate::asm::instr;
 use crate::ir::sym;
+use crate::types::Type;
 use crate::util::dvec::{DVec, DVecIndex};
 use std::collections::HashMap;
 
@@ -59,6 +60,7 @@ pub struct FullName(pub Name, pub usize);
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct Instr {
+  pub typ: Type,
   pub opcode: Opcode,
   pub operands: Vec<Ref>,
 }
@@ -448,6 +450,7 @@ impl IR {
     // create phi node (without operands) to terminate recursion
 
     let idx = self.block_mut(blk).instrs.push_front(Instr {
+      typ: Type::U16, // TODO: SANITY CHECK THAT NO OTHER SIZES CAN GO THROUGH A PHI!!
       opcode: Opcode::Phi,
       operands: vec![],
     });

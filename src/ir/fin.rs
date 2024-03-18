@@ -42,6 +42,7 @@ impl Finalizer {
 
     // have the new block jump to the original destination
     new_blk.instrs.push_back(Instr {
+      typ: crate::types::Type::Void,
       opcode: Opcode::Jmp,
       operands: vec![dest_blkref],
     });
