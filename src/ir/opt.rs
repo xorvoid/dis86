@@ -11,6 +11,15 @@ fn operand_propagate(ir: &IR, mut r: Ref) -> Ref {
   }
 }
 
+/*
+From:
+--------------------------------------------
+  t2 = xor t1 t1
+
+To:
+--------------------------------------------
+  t2 = #0
+*/
 pub fn reduce_xor(ir: &mut IR) {
   for b in ir.iter_blocks() {
     for r in ir.iter_instrs(b) {
@@ -22,6 +31,29 @@ pub fn reduce_xor(ir: &mut IR) {
       let instr = ir.instr_mut(r).unwrap();
       instr.opcode = Opcode::Ref;
       instr.operands = vec![k];
+    }
+  }
+}
+
+/*
+From:
+--------------------------------------------
+  t2 = xor t1 t1
+
+To:
+--------------------------------------------
+  t2 = ref t1
+*/
+pub fn reduce_trivial_or(ir: &mut IR) {
+  for b in ir.iter_blocks() {
+    for r in ir.iter_instrs(b) {
+      let instr = ir.instr(r).unwrap();
+      if instr.opcode != Opcode::Or || instr.operands[0] != instr.operands[1] {
+        continue;
+      }
+      let instr = ir.instr_mut(r).unwrap();
+      instr.opcode = Opcode::Ref;
+      instr.operands = vec![instr.operands[0]];
     }
   }
 }
@@ -523,6 +555,8 @@ pub fn optimize(ir: &mut IR) {
     reduce_phi_single_ref(ir);
     reduce_phi_common_subexpr(ir);
     simplify_branch_conds(ir);
+    // note: reduce_trivial_or() after simplify_branch_conds() is important
+    reduce_trivial_or(ir);
     arithmetic_accumulation(ir);
     value_propagation(ir);
     common_subexpression_elimination(ir);
