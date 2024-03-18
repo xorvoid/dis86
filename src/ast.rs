@@ -27,7 +27,17 @@ pub enum Expr {
 
 #[derive(Debug)]
 pub enum UnaryOperator {
-  Addr, Not,
+  Addr, Not, Neg,
+}
+
+impl UnaryOperator {
+  pub fn as_operator_str(&self) -> &'static str {
+    match self {
+      UnaryOperator::Addr => "(u8*)&",
+      UnaryOperator::Not => "!",
+      UnaryOperator::Neg => "-",
+    }
+  }
 }
 
 #[derive(Debug)]
@@ -211,8 +221,28 @@ impl<'a> Builder<'a> {
     name
   }
 
-  // depth==0 instruction itself (must generate)
-  // depth==1 operand of another instruction (may generate)
+  fn ref_to_unary_expr(&mut self, r: ir::Ref, depth: usize, _inverted: &mut bool) -> Option<Expr> {
+    let instr = self.ir.instr(r).unwrap();
+
+    let (ast_op, signed) = match instr.opcode {
+      ir::Opcode::Neg  => (UnaryOperator::Neg, false),
+      _ => return None,
+    };
+
+    // TODO: IMPLEMENT INVERTED FOR UNARY EXPR
+
+    let mut rhs = self.ref_to_expr(instr.operands[0], depth+1);
+
+    if signed {
+      rhs = Expr::Cast(Type::I16, Box::new(rhs));
+    }
+
+    Some(Expr::Unary(Box::new(UnaryExpr {
+      op: ast_op,
+      rhs,
+    })))
+  }
+
   fn ref_to_binary_expr(&mut self, r: ir::Ref, depth: usize, inverted: &mut bool) -> Option<Expr> {
     let instr = self.ir.instr(r).unwrap();
 
@@ -280,6 +310,8 @@ impl<'a> Builder<'a> {
     expr
   }
 
+  // depth==0 instruction itself (must generate)
+  // depth==1 operand of another instruction (may generate)
   // FIXME: CLEANUP AND RENAME
   fn ref_to_expr_3(&mut self, r: ir::Ref, depth: usize, inverted: &mut bool) -> Expr {
     match self.ir.lookup_const(r) {
@@ -297,6 +329,9 @@ impl<'a> Builder<'a> {
     }
 
     assert!(matches!(r, ir::Ref::Instr(_, _)));
+    if let Some(expr) = self.ref_to_unary_expr(r, depth, inverted) {
+      return expr;
+    }
     if let Some(expr) = self.ref_to_binary_expr(r, depth, inverted) {
       return expr;
     }

@@ -167,11 +167,7 @@ impl<'a> Gen<'a> {
   }
 
   fn unary_oper(&mut self, oper: &UnaryOperator) -> fmt::Result {
-    let s = match oper {
-      UnaryOperator::Addr => "(u8*)&",
-      UnaryOperator::Not => "!",
-    };
-    self.text(s)
+    self.text(oper.as_operator_str())
   }
 
   fn binary_oper(&mut self, oper: &BinaryOperator) -> fmt::Result {
