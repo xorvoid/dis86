@@ -4,6 +4,8 @@ use std::fmt::Write;
 
 // FIXME: THE 'remap' HERE IS REALLY CLUNKY AND FRAGILE: IT NEEDS TO BE COMPLETELY RETHOUGHT
 
+const LABEL_BLOCKS_ALWAYS: bool = true;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ElemId(pub usize);
 
@@ -983,6 +985,22 @@ fn schedule_layout_body(body: &mut Body, parent: Option<&Parent>, data: &mut Con
 }
 
 fn label_blocks(cf: &mut ControlFlow) {
+  if LABEL_BLOCKS_ALWAYS {
+    label_blocks_always(cf);
+  } else {
+    label_blocks_by_demand(cf);
+  }
+}
+
+fn label_blocks_always(cf: &mut ControlFlow) {
+  for i in 0..cf.data.len() {
+    let Some(elem) = &mut cf.data.0[i] else { continue };
+    let Detail::BasicBlock(bb) = &mut elem.detail else { continue };
+    bb.labeled = true;
+  }
+}
+
+fn label_blocks_by_demand(cf: &mut ControlFlow) {
   // Two phase to avoid an immutable ref <=> mutable ref collision
 
   // Phase 1: Iterate the full controlflow, collecting all jump targets

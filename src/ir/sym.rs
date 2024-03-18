@@ -57,6 +57,17 @@ impl SymbolMap {
   }
 }
 
+impl SymbolRef {
+  pub fn to_type(&self) -> Type {
+    match self.sz {
+      1 => Type::U8,
+      2 => Type::U16,
+      4 => Type::U32,
+      _ => panic!("Unsupported type size: {}", self.sz),
+    }
+  }
+}
+
 impl SymbolTable {
   pub fn new() -> Self {
     Self {
@@ -113,6 +124,16 @@ impl SymbolTable {
     //   }
     // }
   }
+
+  pub fn find_by_name(&self, name: &str) -> Option<(usize, &Symbol)> {
+    // FIXME: Avoid O(n) search
+    for (i, sym) in self.symbols.iter().enumerate() {
+      if name == sym.name.as_str() {
+        return Some((i, sym));
+      }
+    }
+    None
+  }
 }
 
 impl SymbolMap {
@@ -122,6 +143,19 @@ impl SymbolMap {
       SymbolType::Local  => &self.locals,
       SymbolType::Global => &self.globals,
     }
+  }
+
+  pub fn find_by_name(&self, name: &str) -> Option<SymbolRef> {
+    if let Some((idx, sym)) = self.params.find_by_name(name) {
+      return Some(SymbolRef { typ: SymbolType::Param, idx, off: 0, sz: sym.size })
+    }
+    if let Some((idx, sym)) = self.locals.find_by_name(name) {
+      return Some(SymbolRef { typ: SymbolType::Local, idx, off: 0, sz: sym.size })
+    }
+    if let Some((idx, sym)) = self.globals.find_by_name(name) {
+      return Some(SymbolRef { typ: SymbolType::Global, idx, off: 0, sz: sym.size })
+    }
+    None
   }
 
   pub fn find_ref(&self, typ: SymbolType, off: i32, sz: u32) -> Option<SymbolRef> {

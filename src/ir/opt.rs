@@ -142,6 +142,9 @@ pub fn reduce_phi_common_subexpr(ir: &mut IR) {
       let Some(common) = common else { continue };
       let Some(common_instr) = ir.instr(common).cloned() else { continue };
 
+      // need to pessimize around side-effecting operations
+      if common_instr.opcode.has_side_effects() { continue; }
+
       // see if all non-trivial operands match
       let mut all_match = true;
       for oper in &operands {
@@ -178,6 +181,10 @@ fn arith_const_oper(ir: &IR, vref: Ref) -> Option<(Ref, i32)> {
 pub fn arithmetic_accumulation(ir: &mut IR) {
   for b in ir.iter_blocks() {
     for vref in ir.iter_instrs(b) {
+      // let Some(name) = ir.names.get(&vref) else { continue };
+      // let Name::Reg(reg) = &name.0 else { continue };
+      // if *reg != crate::asm::instr::Reg::SP && *reg != crate::asm::instr::Reg::BP { continue };
+
       let Some((_, a)) = arith_const_oper(ir, vref) else { continue };
 
       let instr = ir.instr(vref).unwrap();
@@ -300,6 +307,42 @@ fn allow_cse(opcode: Opcode) -> bool {
   match opcode {
     Opcode::Add => true,
     Opcode::Sub => true,
+    Opcode::Shl => true,
+    Opcode::Shr => true,
+    Opcode::UShr => true,
+    Opcode::And => true,
+    Opcode::Or => true,
+    Opcode::Xor => true,
+    Opcode::IMul => true,
+    Opcode::UMul => true,
+    Opcode::IDiv => true,
+    Opcode::UDiv => true,
+    Opcode::Neg => true,
+    Opcode::SignExtTo32 => true,
+    Opcode::Lower16 => true,
+    Opcode::Upper16 => true,
+    Opcode::Make32 => true,
+    Opcode::UpdateFlags => true,
+    Opcode::EqFlags => true,
+    Opcode::NeqFlags => true,
+    Opcode::GtFlags => true,
+    Opcode::GeqFlags => true,
+    Opcode::LtFlags => true,
+    Opcode::LeqFlags => true,
+    Opcode::UGtFlags => true,
+    Opcode::UGeqFlags => true,
+    Opcode::ULtFlags => true,
+    Opcode::ULeqFlags => true,
+    Opcode::Eq => true,
+    Opcode::Neq => true,
+    Opcode::Gt => true,
+    Opcode::Geq => true,
+    Opcode::Lt => true,
+    Opcode::Leq => true,
+    Opcode::UGt => true,
+    Opcode::UGeq => true,
+    Opcode::ULt => true,
+    Opcode::ULeq => true,
     _ => false,
   }
 }

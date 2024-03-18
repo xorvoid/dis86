@@ -706,7 +706,13 @@ impl<'a> Builder<'a> {
     let mut names: Vec<_> = self.assigned_names.iter().cloned().collect();
     names.sort();
     for name in names {
-      decls.push(VarDecl { typ: Type::U16, name } );
+      let typ = if let Some(symref) = self.ir.symbols.find_by_name(&name) {
+        symref.to_type()
+      } else {
+        println!("WARN: Unknown type for '{}' ... assuming u16", name);
+        Type::U16
+      };
+      decls.push(VarDecl { typ, name } );
     }
 
     Function {
