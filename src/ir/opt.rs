@@ -97,6 +97,33 @@ pub fn reduce_make_32_signext_32(ir: &mut IR) {
 /*
 From:
 --------------------------------------------
+  t2 = upper t1
+  t3 = lower t1
+  t4 = make32 t2 t3
+
+To:
+--------------------------------------------
+  t4 = ref t1
+*/
+pub fn reduce_uppper_lower_make32(ir: &mut IR) {
+  for b in ir.iter_blocks() {
+    for r in ir.iter_instrs(b) {
+      let Some((make32_instr, make32_ref)) = ir.instr_matches(r, Opcode::Make32) else {continue};
+      let Some((upper_instr, upper_ref)) = ir.instr_matches(make32_instr.operands[0], Opcode::Upper16) else {continue};
+      let Some((lower_instr, lower_ref)) = ir.instr_matches(make32_instr.operands[1], Opcode::Lower16) else {continue};
+      if upper_instr.operands[0] != lower_instr.operands[0] { continue }
+
+      let src = upper_instr.operands[0];
+      let instr = ir.instr_mut(make32_ref).unwrap();
+      instr.opcode = Opcode::Ref;
+      instr.operands = vec![src];
+    }
+  }
+}
+
+/*
+From:
+--------------------------------------------
   t5 = phi t5 t1 t1 t5 t5
 To:
 --------------------------------------------
@@ -558,6 +585,7 @@ pub fn optimize(ir: &mut IR) {
   for _ in 0..N_OPT_PASSES {
     reduce_xor(ir);
     reduce_make_32_signext_32(ir);
+    //reduce_uppper_lower_make32(ir);
     reduce_phi_single_ref(ir);
     reduce_phi_common_subexpr(ir);
     simplify_branch_conds(ir);
