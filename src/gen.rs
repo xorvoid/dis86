@@ -304,9 +304,11 @@ impl<'a> Gen<'a> {
           for (i, case_expr) in case.cases.iter().enumerate() {
             self.text("case ")?;
             self.expr(case_expr, 0, imp)?;
-            self.text(": ")?;
+            self.text(":")?;
             if i+1 != case.cases.len() {
               self.endline()?;
+            } else {
+              self.text(" ")?;
             }
           }
           self.enter_block()?;
@@ -357,7 +359,7 @@ impl<'a> Gen<'a> {
 
   fn varmaps_undef(&mut self, maps: &[VarMap], imp: &dyn FlavorImpl) -> fmt::Result {
     for d in maps {
-      self.text(&format!("#undef {} ", d.name))?;
+      self.text(&format!("#undef {}", d.name))?;
       self.endline()?;
     }
     Ok(())

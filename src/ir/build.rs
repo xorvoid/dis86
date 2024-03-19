@@ -288,7 +288,7 @@ impl IRBuilder<'_> {
       refs.push(self.ir.get_var(reg, self.cur));
     }
     if let Some(off) = mem.off {
-      refs.push(self.ir.append_const((off as i16).into()));
+      refs.push(self.ir.append_const(off as i16));
     }
 
     let mut attr = if mem.sreg == instr::Reg::SS { Attribute::STACK_PTR } else { Attribute::NONE };
@@ -334,12 +334,12 @@ impl IRBuilder<'_> {
 
   fn append_asm_src_imm(&mut self, imm: &instr::OperandImm) -> Ref {
     // TODO: Is it okay to sign-ext away the size here??
-    let k: i32 = match imm.sz {
-      instr::Size::Size8 => (imm.val as i8).into(),
-      instr::Size::Size16 => (imm.val as i16).into(),
-      _ => panic!("32-bit immediates not supported"),
-    };
-    self.ir.append_const(k)
+    // let k: i32 = match imm.sz {
+    //   instr::Size::Size8 => (imm.val as i8).into(),
+    //   instr::Size::Size16 => (imm.val as i16).into(),
+    //   _ => panic!("32-bit immediates not supported"),
+    // };
+    self.ir.append_const(imm.val as i16)
   }
 
   fn append_asm_src_rel(&mut self, _rel: &instr::OperandRel) -> Ref {
@@ -506,10 +506,10 @@ impl IRBuilder<'_> {
     let mut args = vec![];
     let ss = self.ir.get_var(instr::Reg::SS, self.cur);
     let sp = self.ir.get_var(instr::Reg::SP, self.cur);
-    for i in 0..(n as i32) {
+    for i in 0..n {
       let mut off = sp;
       if i != 0 {
-        let k = self.ir.append_const(2*i);
+        let k = self.ir.append_const((2*i) as i16);
         off = self.append_instr_with_attrs(Type::U16, Attribute::STACK_PTR, Opcode::Add, vec![sp, k]);
       }
       let val = self.append_instr(Type::U16, Opcode::Load16, vec![ss, off]);
@@ -578,8 +578,8 @@ impl IRBuilder<'_> {
       let nargs = self.heuristic_infer_call_arguments_by_context(ins,
                     &format!("Unknown call to {}", addr));
 
-      let seg = self.ir.append_const(addr.seg.into());
-      let off = self.ir.append_const(addr.off.into());
+      let seg = self.ir.append_const(addr.seg as i16);
+      let off = self.ir.append_const(addr.off as i16);
 
       let mut operands = vec![seg, off];
       operands.append(&mut self.load_args_from_stack(nargs));

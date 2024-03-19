@@ -196,7 +196,7 @@ pub fn reduce_phi_common_subexpr(ir: &mut IR) {
   }
 }
 
-fn stack_ptr_const_oper(ir: &IR, vref: Ref) -> Option<(Ref, i32)> {
+fn stack_ptr_const_oper(ir: &IR, vref: Ref) -> Option<(Ref, i16)> {
   let instr = ir.instr(vref)?;
   if instr.operands.len() != 2 { return None; }
   if (instr.attrs & Attribute::STACK_PTR) == 0 { return None; }

@@ -17,23 +17,24 @@ pub enum SymbolRegion {
 pub struct SymbolRef {
   pub region: SymbolRegion,
   pub idx: usize /* id */,
-  pub off: i32, /* off-adjust */
-  pub sz: u32, /* size */
+  pub off: i16, /* off-adjust */
+  pub sz: u16, /* size */
 }
 
 #[derive(Debug, Clone)]
 pub struct Symbol {
   pub name: String,
-  pub off: i32,
-  pub size: u32,
+  pub off: i16,
+  pub size: u16,
 }
 
 impl Symbol {
-  fn start(&self) -> i32 {
+  fn start(&self) -> i16 {
     self.off
   }
-  fn end(&self) -> i32 {
-    self.off + (self.size as i32)
+  fn end(&self) -> i16 {
+    let size: i16 = self.size.try_into().unwrap();
+    self.off + size
   }
 }
 
@@ -77,7 +78,7 @@ impl SymbolTable {
     }
   }
 
-  pub fn append(&mut self, name: &str, off: i32, size: u32) {
+  pub fn append(&mut self, name: &str, off: i16, size: u16) {
     self.symbols.push(Symbol {
       name: name.to_string(),
       off,
@@ -160,7 +161,7 @@ impl SymbolMap {
     None
   }
 
-  pub fn find_ref(&self, region: SymbolRegion, off: i32, sz: u32) -> Option<SymbolRef> {
+  pub fn find_ref(&self, region: SymbolRegion, off: i16, sz: u16) -> Option<SymbolRef> {
     // FIXME: This is sorted: can use binary search
     let tbl = self.region(region);
     for (i, sym) in tbl.symbols.iter().enumerate() {
@@ -221,8 +222,6 @@ pub fn symbolize_stack(ir: &mut IR) {
 
       let size = mem_instr.opcode.operation_size();
 
-      var_mem_refs.push((mem_ref, off, size));
-
       // let mut f = crate::ir::display::Formatter::new();
       // f.fmt_instr(ir, addr_ref, addr_instr).unwrap();
       // f.fmt_instr(ir, mem_ref, mem_instr).unwrap();
@@ -232,9 +231,11 @@ pub fn symbolize_stack(ir: &mut IR) {
       if off > 0 {
         let name = format!("_param_{:04x}", off+frame_offset);
         ir.symbols.params.append(&name, off, size);
+        var_mem_refs.push((mem_ref, SymbolRegion::Param, off, size));
       } else {
         let name = format!("_local_{:04x}", -(off+frame_offset));
         ir.symbols.locals.append(&name, off, size);
+        var_mem_refs.push((mem_ref, SymbolRegion::Local, off, size));
       }
     }
   }
@@ -244,9 +245,7 @@ pub fn symbolize_stack(ir: &mut IR) {
   ir.symbols.locals.coalesce();
 
   // Update the IR
-  for (mem_ref, off, sz) in var_mem_refs {
-    let region = if off > 0 { SymbolRegion::Param } else { SymbolRegion::Local };
-    //let size = ir.instr(mem_ref).unwrap().opcode.operation_size();
+  for (mem_ref, region, off, sz) in var_mem_refs {
     let sym = ir.symbols.find_ref(region, off, sz).unwrap();
 
     let instr = ir.instr_mut(mem_ref).unwrap();
@@ -276,7 +275,7 @@ pub fn populate_globals(ir: &mut IR, cfg: &Config) {
       eprintln!("WARN: Unsupported type '{}' for {} ... assuming u32", g.typ, g.name);
       Type::U32.size_in_bytes().unwrap()
     });
-    ir.symbols.globals.append(&g.name, g.offset.into(), size as u32);
+    ir.symbols.globals.append(&g.name, g.offset as i16, size as u16);
   }
   ir.symbols.globals.finalize_non_overlaping();
 }

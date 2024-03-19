@@ -256,7 +256,7 @@ impl Opcode {
     }
   }
 
-  pub fn operation_size(&self) -> u32 {
+  pub fn operation_size(&self) -> u16 {
     match self {
       Opcode::Load8 => 1,
       Opcode::Load16 => 2,
@@ -340,7 +340,7 @@ pub struct Block {
 
 #[derive(Debug)]
 pub struct IR {
-  pub consts: Vec<i32>,
+  pub consts: Vec<i16>,
   pub symbols: sym::SymbolMap,
   pub funcs: Vec<String>,
   pub names: HashMap<Ref, FullName>,
@@ -413,7 +413,7 @@ impl IR {
 }
 
 impl IR {
-  pub fn append_const(&mut self, val: i32) -> Ref {
+  pub fn append_const(&mut self, val: i16) -> Ref {
     // Search existing constants for a duplicate (TODO: Make this into a hash-tbl if it gets slow)
     for (i, constval) in self.consts.iter().enumerate() {
       if val == *constval {
@@ -427,7 +427,7 @@ impl IR {
     Ref::Const(ConstRef(idx))
   }
 
-  pub fn lookup_const(&self, k: Ref) -> Option<i32> {
+  pub fn lookup_const(&self, k: Ref) -> Option<i16> {
     if let Ref::Const(ConstRef(i)) = k {
       Some(self.consts[i])
     } else {
