@@ -5,10 +5,11 @@ use std::collections::HashMap;
 
 type FlowIter<'a> = std::iter::Peekable<control_flow::ControlFlowIter<'a>>;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VarDecl {
   pub typ: Type,
   pub names: Vec<String>,
+  pub mem_mapping: Option<String>,
 }
 
 #[derive(Debug)]
@@ -407,8 +408,17 @@ impl<'a> Builder<'a> {
     }
   }
 
-  fn symbol_to_expr(&self, symref: ir::sym::SymbolRef) -> Expr {
+  fn symbol_to_expr(&mut self, symref: ir::sym::SymbolRef) -> Expr {
     let sym = self.ir.symbols.symbol(symref);
+
+    if self.ir.symbols.symbol_region(symref) == ir::sym::SymbolRegion::Local {
+      self.decls.push(VarDecl {
+        typ: symref.to_type(),
+        names: vec![sym.name.clone()],
+        mem_mapping: Some(format!("SS:{} (ISSUE: NEED TO IMPL)", sym.off)),
+      })
+    }
+
     let mut expr = Expr::Name(sym.name.clone());
     if symref.off != 0 ||  symref.sz != sym.size {
       expr = Expr::Unary(Box::new(UnaryExpr {
@@ -438,6 +448,7 @@ impl<'a> Builder<'a> {
     self.decls.push(VarDecl {
       typ,
       names: vec![name.to_string()],
+      mem_mapping: None,
     });
     blk.push_stmt(Stmt::Assign(Assign {
       lhs: Expr::Name(name.to_string()),
@@ -744,12 +755,21 @@ impl<'a> Builder<'a> {
     // Group all decls by type to save codegen space
     let mut type_map: HashMap<Type, usize> = HashMap::new();
     let mut decls = vec![];
+    let mut mem_mapped: HashMap<String, VarDecl> = HashMap::new();
     for d in &self.decls {
+      if d.mem_mapping.is_some() {
+        assert!(d.names.len() == 1);
+        let name = &d.names[0];
+        if mem_mapped.get(name).is_none() {
+          mem_mapped.insert(name.clone(), d.clone());
+        }
+        continue;
+      }
       let idx = match type_map.get(&d.typ) {
         Some(idx) => *idx,
         None => {
           let idx = decls.len();
-          decls.push(VarDecl { typ: d.typ.clone(), names: vec![] });
+          decls.push(VarDecl { typ: d.typ.clone(), names: vec![], mem_mapping: None });
           type_map.insert(d.typ.clone(), idx);
           idx
         }
@@ -757,6 +777,9 @@ impl<'a> Builder<'a> {
       for n in &d.names {
         decls[idx].names.push(n.clone());
       }
+    }
+    for n in itertools::sorted(mem_mapped.keys()) {
+      decls.push(mem_mapped.get(n).unwrap().clone());
     }
 
     Function {

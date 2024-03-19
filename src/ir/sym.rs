@@ -4,8 +4,10 @@ use crate::ir::def::*;
 use crate::types::Type;
 use std::cmp::Ordering;
 
+// FIXME THIS WHOLE MODULE IS A MESS OF BAD DESIGN
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum SymbolType {
+pub enum SymbolRegion {
   Param,
   Local,
   Global,
@@ -13,7 +15,7 @@ pub enum SymbolType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SymbolRef {
-  pub typ: SymbolType,
+  pub region: SymbolRegion,
   pub idx: usize /* id */,
   pub off: i32, /* off-adjust */
   pub sz: u32, /* size */
@@ -137,34 +139,34 @@ impl SymbolTable {
 }
 
 impl SymbolMap {
-  fn get_table(&self, typ: SymbolType) -> &SymbolTable {
-    match typ {
-      SymbolType::Param  => &self.params,
-      SymbolType::Local  => &self.locals,
-      SymbolType::Global => &self.globals,
+  fn region(&self, region: SymbolRegion) -> &SymbolTable {
+    match region {
+      SymbolRegion::Param  => &self.params,
+      SymbolRegion::Local  => &self.locals,
+      SymbolRegion::Global => &self.globals,
     }
   }
 
   pub fn find_by_name(&self, name: &str) -> Option<SymbolRef> {
     if let Some((idx, sym)) = self.params.find_by_name(name) {
-      return Some(SymbolRef { typ: SymbolType::Param, idx, off: 0, sz: sym.size })
+      return Some(SymbolRef { region: SymbolRegion::Param, idx, off: 0, sz: sym.size })
     }
     if let Some((idx, sym)) = self.locals.find_by_name(name) {
-      return Some(SymbolRef { typ: SymbolType::Local, idx, off: 0, sz: sym.size })
+      return Some(SymbolRef { region: SymbolRegion::Local, idx, off: 0, sz: sym.size })
     }
     if let Some((idx, sym)) = self.globals.find_by_name(name) {
-      return Some(SymbolRef { typ: SymbolType::Global, idx, off: 0, sz: sym.size })
+      return Some(SymbolRef { region: SymbolRegion::Global, idx, off: 0, sz: sym.size })
     }
     None
   }
 
-  pub fn find_ref(&self, typ: SymbolType, off: i32, sz: u32) -> Option<SymbolRef> {
+  pub fn find_ref(&self, region: SymbolRegion, off: i32, sz: u32) -> Option<SymbolRef> {
     // FIXME: This is sorted: can use binary search
-    let tbl = self.get_table(typ);
+    let tbl = self.region(region);
     for (i, sym) in tbl.symbols.iter().enumerate() {
       if sym.start() <= off && off < sym.end() {
         return Some(SymbolRef {
-          typ,
+          region,
           idx: i,
           off: off - sym.start(),
           sz,
@@ -175,11 +177,11 @@ impl SymbolMap {
   }
 
   pub fn symbol(&self, r: SymbolRef) -> &Symbol {
-    &self.get_table(r.typ).symbols[r.idx]
+    &self.region(r.region).symbols[r.idx]
   }
 
-  pub fn symbol_type(&self, r: SymbolRef) -> SymbolType {
-    r.typ
+  pub fn symbol_region(&self, r: SymbolRef) -> SymbolRegion {
+    r.region
   }
 
   pub fn symbol_name(&self, r: SymbolRef) -> String {
@@ -243,9 +245,9 @@ pub fn symbolize_stack(ir: &mut IR) {
 
   // Update the IR
   for (mem_ref, off, sz) in var_mem_refs {
-    let typ = if off > 0 { SymbolType::Param } else { SymbolType::Local };
+    let region = if off > 0 { SymbolRegion::Param } else { SymbolRegion::Local };
     //let size = ir.instr(mem_ref).unwrap().opcode.operation_size();
-    let sym = ir.symbols.find_ref(typ, off, sz).unwrap();
+    let sym = ir.symbols.find_ref(region, off, sz).unwrap();
 
     let instr = ir.instr_mut(mem_ref).unwrap();
     if instr.opcode.is_load() {
@@ -292,7 +294,7 @@ pub fn symbolize_globals(ir: &mut IR, cfg: &Config) {
       let off_ref = instr.operands[1];
       let size = instr.opcode.operation_size();
       let Some(off) = ir.lookup_const(off_ref) else { continue };
-      let Some(sym) = ir.symbols.find_ref(SymbolType::Global, off, size) else {
+      let Some(sym) = ir.symbols.find_ref(SymbolRegion::Global, off, size) else {
         eprintln!("WARN: Could not find global for DS:{:04x}", off);
         continue;
       };

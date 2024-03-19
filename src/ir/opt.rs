@@ -454,7 +454,7 @@ pub fn mem_symbol_to_ref(ir: &mut IR) {
 
       if instr.opcode == Opcode::WriteVar16 {
         let Ref::Symbol(symref) = instr.operands[0] else { continue };
-        if ir.symbols.symbol_type(symref) != sym::SymbolType::Local { continue; }
+        if ir.symbols.symbol_region(symref) != sym::SymbolRegion::Local { continue; }
         if ir.symbols.symbol(symref).size != 2 { continue; }
 
         let name = Name::Var(ir.symbols.symbol_name(symref));
@@ -467,7 +467,7 @@ pub fn mem_symbol_to_ref(ir: &mut IR) {
         ir.set_var(name, b, r);
       } else if instr.opcode == Opcode::ReadVar16 {
         let Ref::Symbol(symref) = instr.operands[0] else { continue };
-        if ir.symbols.symbol_type(symref) != sym::SymbolType::Local { continue; }
+        if ir.symbols.symbol_region(symref) != sym::SymbolRegion::Local { continue; }
         if ir.symbols.symbol(symref).size != 2 { continue; }
 
         let name = Name::Var(ir.symbols.symbol_name(symref));

@@ -354,6 +354,9 @@ impl<'a> Gen<'a> {
         self.text(name)?;
       }
       self.text(";")?;
+      if let Some(mapping) = &d.mem_mapping {
+        self.text(&format!("  // {}", mapping))?;
+      }
       self.endline()?;
     }
     Ok(())
