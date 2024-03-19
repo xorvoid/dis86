@@ -585,7 +585,7 @@ pub fn optimize(ir: &mut IR) {
   for _ in 0..N_OPT_PASSES {
     reduce_xor(ir);
     reduce_make_32_signext_32(ir);
-    //reduce_uppper_lower_make32(ir);
+    reduce_uppper_lower_make32(ir);
     reduce_phi_single_ref(ir);
     reduce_phi_common_subexpr(ir);
     simplify_branch_conds(ir);
