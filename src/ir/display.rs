@@ -39,7 +39,12 @@ fn reg_name(r: instr::Reg) -> &'static str {
 fn attributes_string(attr: u8) -> String {
   let mut out = String::new();
   if (attr & Attribute::MAY_ESCAPE) != 0 {
+    if out.len() > 0 { out += ","; }
     out += &format!("may_escape");
+  }
+  if (attr & Attribute::STACK_PTR) != 0 {
+    if out.len() > 0 { out += ","; }
+    out += &format!("stack_ptr");
   }
   out
 }

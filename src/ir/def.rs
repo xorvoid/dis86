@@ -62,6 +62,7 @@ pub struct FullName(pub Name, pub usize);
 pub mod Attribute {
   pub const NONE: u8 = 0;
   pub const MAY_ESCAPE: u8 = 1<<0;
+  pub const STACK_PTR: u8 = 1<<1;
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]

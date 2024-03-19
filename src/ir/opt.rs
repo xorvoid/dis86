@@ -196,9 +196,10 @@ pub fn reduce_phi_common_subexpr(ir: &mut IR) {
   }
 }
 
-fn arith_const_oper(ir: &IR, vref: Ref) -> Option<(Ref, i32)> {
+fn stack_ptr_const_oper(ir: &IR, vref: Ref) -> Option<(Ref, i32)> {
   let instr = ir.instr(vref)?;
   if instr.operands.len() != 2 { return None; }
+  if (instr.attrs & Attribute::STACK_PTR) == 0 { return None; }
 
   let (nref, cref) = (instr.operands[0], instr.operands[1]);
   let Ref::Const(_) = cref else { return None };
@@ -210,17 +211,13 @@ fn arith_const_oper(ir: &IR, vref: Ref) -> Option<(Ref, i32)> {
   }
 }
 
-pub fn arithmetic_accumulation(ir: &mut IR) {
+pub fn stack_ptr_accumulation(ir: &mut IR) {
   for b in ir.iter_blocks() {
     for vref in ir.iter_instrs(b) {
-      // let Some(name) = ir.names.get(&vref) else { continue };
-      // let Name::Reg(reg) = &name.0 else { continue };
-      // if *reg != crate::asm::instr::Reg::SP && *reg != crate::asm::instr::Reg::BP { continue };
-
-      let Some((_, a)) = arith_const_oper(ir, vref) else { continue };
+      let Some((_, a)) = stack_ptr_const_oper(ir, vref) else { continue };
 
       let instr = ir.instr(vref).unwrap();
-      let Some((nref, b)) = arith_const_oper(ir, instr.operands[0]) else { continue };
+      let Some((nref, b)) = stack_ptr_const_oper(ir, instr.operands[0]) else { continue };
 
       let k = a+b;
       if k > 0 {
@@ -565,7 +562,7 @@ pub fn optimize(ir: &mut IR) {
     simplify_branch_conds(ir);
     // note: reduce_trivial_or() after simplify_branch_conds() is important
     reduce_trivial_or(ir);
-    arithmetic_accumulation(ir);
+    stack_ptr_accumulation(ir);
     value_propagation(ir);
     common_subexpression_elimination(ir);
     value_propagation(ir);

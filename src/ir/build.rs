@@ -13,6 +13,10 @@ fn instr_str(ins: &instr::Instr) -> String {
   crate::asm::intel_syntax::format(ins, &[], false).unwrap()
 }
 
+fn operand_is_stack_reg(operand: &instr::Operand) -> bool {
+  let instr::Operand::Reg(instr::OperandReg(reg)) = operand else { return false };
+  reg == &instr::Reg::SP || reg == &instr::Reg::BP
+}
 
 fn simple_binary_operation(opcode: instr::Opcode) -> Option<Opcode> {
   match opcode {
@@ -287,17 +291,19 @@ impl IRBuilder<'_> {
       refs.push(self.ir.append_const((off as i16).into()));
     }
 
+    let mut attr = if mem.sreg == instr::Reg::SS { Attribute::STACK_PTR } else { Attribute::NONE };
+
     if refs.len() == 1 {
       refs[0]
     } else if refs.len() == 2 {
       let typ = self.deduce_type_binary(refs[0], refs[1]);
-      self.append_instr(typ, Opcode::Add, vec![refs[0], refs[1]])
+      self.append_instr_with_attrs(typ, attr, Opcode::Add, vec![refs[0], refs[1]])
     } else {
       assert!(refs.len() == 3);
       let typ = self.deduce_type_binary(refs[0], refs[1]);
-      let lhs = self.append_instr(typ, Opcode::Add, vec![refs[0], refs[1]]);
+      let lhs = self.append_instr_with_attrs(typ, attr, Opcode::Add, vec![refs[0], refs[1]]);
       let typ = self.deduce_type_binary(lhs, refs[2]);
-      self.append_instr(typ, Opcode::Add, vec![lhs, refs[2]])
+      self.append_instr_with_attrs(typ, attr, Opcode::Add, vec![lhs, refs[2]])
     }
   }
 
@@ -431,7 +437,7 @@ impl IRBuilder<'_> {
     let k = self.ir.append_const(2);
 
     // decrement SP
-    let sp = self.append_instr(Type::U16, Opcode::Sub, vec![sp, k]);
+    let sp = self.append_instr_with_attrs(Type::U16, Attribute::STACK_PTR, Opcode::Sub, vec![sp, k]);
     self.ir.set_var(instr::Reg::SP, self.cur, sp);
 
     // store to SS:SP
@@ -444,7 +450,7 @@ impl IRBuilder<'_> {
     let k = self.ir.append_const(2);
 
     let val = self.append_instr(Type::U16, Opcode::Load16, vec![ss, sp]);
-    let sp = self.append_instr(Type::U16, Opcode::Add, vec![sp, k]);
+    let sp = self.append_instr_with_attrs(Type::U16, Attribute::STACK_PTR, Opcode::Add, vec![sp, k]);
     self.ir.set_var(instr::Reg::SP, self.cur, sp);
 
     val
@@ -504,7 +510,7 @@ impl IRBuilder<'_> {
       let mut off = sp;
       if i != 0 {
         let k = self.ir.append_const(2*i);
-        off = self.append_instr(Type::U16, Opcode::Add, vec![sp, k]);
+        off = self.append_instr_with_attrs(Type::U16, Attribute::STACK_PTR, Opcode::Add, vec![sp, k]);
       }
       let val = self.append_instr(Type::U16, Opcode::Load16, vec![ss, off]);
       args.push(val);
@@ -665,10 +671,11 @@ impl IRBuilder<'_> {
 
     // process simple binary operations
     if let Some(opcode) = simple_binary_operation(ins.opcode) {
+      let mut attr = if operand_is_stack_reg(&ins.operands[0]) { Attribute::STACK_PTR } else { Attribute::NONE };
       let a = self.append_asm_src_operand(&ins.operands[0]);
       let b = self.append_asm_src_operand(&ins.operands[1]);
       let typ = self.deduce_type_binary(a, b);
-      let vref = self.append_instr(typ, opcode, vec![a, b]);
+      let vref = self.append_instr_with_attrs(typ, attr, opcode, vec![a, b]);
       self.append_asm_dst_operand(&ins.operands[0], vref);
       self.append_update_flags(vref);
       return;
@@ -725,18 +732,20 @@ impl IRBuilder<'_> {
         self.append_asm_dst_operand(&ins.operands[0], res);
      }
       instr::Opcode::OP_INC => {
+        let mut attr = if operand_is_stack_reg(&ins.operands[0]) { Attribute::STACK_PTR } else { Attribute::NONE };
         let one = self.ir.append_const(1);
         let vref = self.append_asm_src_operand(&ins.operands[0]);
         let typ = self.deduce_type_binary(vref, one);
-        let vref = self.append_instr(typ, Opcode::Add, vec![vref, one]);
+        let vref = self.append_instr_with_attrs(typ, attr, Opcode::Add, vec![vref, one]);
         self.append_asm_dst_operand(&ins.operands[0], vref);
         self.append_update_flags(vref);
       }
       instr::Opcode::OP_DEC => {
+        let mut attr = if operand_is_stack_reg(&ins.operands[0]) { Attribute::STACK_PTR } else { Attribute::NONE };
         let one = self.ir.append_const(1);
         let vref = self.append_asm_src_operand(&ins.operands[0]);
         let typ = self.deduce_type_binary(vref, one);
-        let vref = self.append_instr(typ, Opcode::Sub, vec![vref, one]);
+        let vref = self.append_instr_with_attrs(typ, attr, Opcode::Sub, vec![vref, one]);
         self.append_asm_dst_operand(&ins.operands[0], vref);
         self.append_update_flags(vref);
       }
