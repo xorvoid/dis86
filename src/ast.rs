@@ -454,7 +454,14 @@ impl<'a> Builder<'a> {
       //   mem_mapping: Some(Expr::Deref(Box::new(Expr::Abstract("PTR_16", vec![seg, off])))),
       // })
 
-      let impl_expr = Expr::Deref(Box::new(Expr::Abstract("PTR_16", vec![seg, off])));
+      let typ = symref.to_type();
+      let ptr_sz = match typ {
+        Type::U16 => "PTR_16",
+        Type::U32 => "PTR_32",
+        _ => panic!("Unsupported type: {:?}", typ),
+      };
+
+      let impl_expr = Expr::Deref(Box::new(Expr::Abstract(ptr_sz, vec![seg, off])));
       self.mappings.insert(sym.name.clone(), (symref.to_type(), impl_expr));
     }
 
