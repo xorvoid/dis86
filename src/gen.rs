@@ -193,14 +193,11 @@ impl<'a> Gen<'a> {
           self.text(")")?;
         }
       }
-      Expr::Const(k) => {
-        let s = if *k > 64 || *k < -64 {
-          let k = *k as u32;
-          format!("0x{:x}", k)
-        } else {
-          format!("{}", k)
-        };
-        self.text(&s)?;
+      Expr::HexConst(k) => {
+        self.text(&format!("0x{:x}", k))?
+      }
+      Expr::DecimalConst(k) => {
+        self.text(&format!("{}", k))?
       }
       Expr::Name(n) => {
         self.text(n)?;

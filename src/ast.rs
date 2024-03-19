@@ -22,7 +22,8 @@ pub struct VarMap {
 pub enum Expr {
   Unary(Box<UnaryExpr>),
   Binary(Box<BinaryExpr>),
-  Const(i64),
+  HexConst(u16),
+  DecimalConst(i16),
   Name(String),
   Call(Box<Expr>, Vec<Expr>),
   Abstract(&'static str, Vec<Expr>),
@@ -234,7 +235,7 @@ impl<'a> Builder<'a> {
     name
   }
 
-  fn ref_to_unary_expr(&mut self, r: ir::Ref, depth: usize, _inverted: &mut bool) -> Option<Expr> {
+  fn ref_to_unary_expr(&mut self, r: ir::Ref, depth: usize, hex_const: bool, _inverted: &mut bool) -> Option<Expr> {
     let instr = self.ir.instr(r).unwrap();
 
     let (ast_op, signed) = match instr.opcode {
@@ -244,7 +245,7 @@ impl<'a> Builder<'a> {
 
     // TODO: IMPLEMENT INVERTED FOR UNARY EXPR
 
-    let mut rhs = self.ref_to_expr(instr.operands[0], depth+1);
+    let mut rhs = self.ref_to_expr_hex(instr.operands[0], depth+1, hex_const);
 
     if signed {
       rhs = Expr::Cast(Type::I16, Box::new(rhs));
@@ -256,7 +257,7 @@ impl<'a> Builder<'a> {
     })))
   }
 
-  fn ref_to_binary_expr(&mut self, r: ir::Ref, depth: usize, inverted: &mut bool) -> Option<Expr> {
+  fn ref_to_binary_expr(&mut self, r: ir::Ref, depth: usize, hex_const: bool, inverted: &mut bool) -> Option<Expr> {
     let instr = self.ir.instr(r).unwrap();
 
     let (mut ast_op, signed) = match instr.opcode {
@@ -293,8 +294,8 @@ impl<'a> Builder<'a> {
       }
     }
 
-    let mut lhs = self.ref_to_expr(instr.operands[0], depth+1);
-    let mut rhs = self.ref_to_expr(instr.operands[1], depth+1);
+    let mut lhs = self.ref_to_expr_hex(instr.operands[0], depth+1, hex_const);
+    let mut rhs = self.ref_to_expr_hex(instr.operands[1], depth+1, hex_const);
 
     if signed {
       lhs = Expr::Cast(Type::I16, Box::new(lhs));
@@ -312,9 +313,14 @@ impl<'a> Builder<'a> {
     self.ref_to_expr_2(r, depth, false)
   }
 
+  fn ref_to_expr_hex(&mut self, r: ir::Ref, depth: usize, hex_const: bool) -> Expr {
+    let mut inverted = false;
+    self.ref_to_expr_impl(r, depth, hex_const, &mut inverted)
+  }
+
   // FIXME: CLEANUP AND RENAME
   fn ref_to_expr_2(&mut self, r: ir::Ref, depth: usize, mut inverted: bool) -> Expr {
-    let expr = self.ref_to_expr_3(r, depth, &mut inverted);
+    let expr = self.ref_to_expr_impl(r, depth, false, &mut inverted);
     let expr = if inverted {
       Expr::Unary(Box::new(UnaryExpr{op: UnaryOperator::Not, rhs: expr}))
     } else {
@@ -326,9 +332,15 @@ impl<'a> Builder<'a> {
   // depth==0 instruction itself (must generate)
   // depth==1 operand of another instruction (may generate)
   // FIXME: CLEANUP AND RENAME
-  fn ref_to_expr_3(&mut self, r: ir::Ref, depth: usize, inverted: &mut bool) -> Expr {
+  fn ref_to_expr_impl(&mut self, r: ir::Ref, depth: usize, hex_const: bool, inverted: &mut bool) -> Expr {
     match self.ir.lookup_const(r) {
-      Some(k) => return Expr::Const(k as i64),
+      Some(k) => {
+        if hex_const || k >= 256 || k <= -256 {
+          return Expr::HexConst(k as u16);
+        } else {
+          return Expr::DecimalConst(k as i16);
+        }
+      }
       None => (),
     }
     if let ir::Ref::Init(reg) = r {
@@ -342,34 +354,34 @@ impl<'a> Builder<'a> {
     }
 
     assert!(matches!(r, ir::Ref::Instr(_, _)));
-    if let Some(expr) = self.ref_to_unary_expr(r, depth, inverted) {
+    if let Some(expr) = self.ref_to_unary_expr(r, depth, hex_const, inverted) {
       return expr;
     }
-    if let Some(expr) = self.ref_to_binary_expr(r, depth, inverted) {
+    if let Some(expr) = self.ref_to_binary_expr(r, depth, hex_const, inverted) {
       return expr;
     }
 
     match instr.opcode {
       ir::Opcode::Load16 => {
-        let seg = self.ref_to_expr(instr.operands[0], depth+1);
-        let off = self.ref_to_expr(instr.operands[1], depth+1);
+        let seg = self.ref_to_expr_hex(instr.operands[0], depth+1, true);
+        let off = self.ref_to_expr_hex(instr.operands[1], depth+1, true);
         Expr::Deref(Box::new(Expr::Abstract("PTR_16", vec![seg, off])))
       }
       ir::Opcode::Load32 => {
-        let seg = self.ref_to_expr(instr.operands[0], depth+1);
-        let off = self.ref_to_expr(instr.operands[1], depth+1);
+        let seg = self.ref_to_expr_hex(instr.operands[0], depth+1, true);
+        let off = self.ref_to_expr_hex(instr.operands[1], depth+1, true);
         Expr::Deref(Box::new(Expr::Abstract("PTR_32", vec![seg, off])))
       }
       ir::Opcode::Upper16 => {
-        let lhs = self.ref_to_expr(instr.operands[0], depth+1);
+        let lhs = self.ref_to_expr_hex(instr.operands[0], depth+1, hex_const);
         Expr::Binary(Box::new(BinaryExpr {
           op: BinaryOperator::Shr,
           lhs,
-          rhs: Expr::Const(16),
+          rhs: Expr::DecimalConst(16),
         }))
       }
       ir::Opcode::Lower16 => {
-        let lhs = self.ref_to_expr(instr.operands[0], depth+1);
+        let lhs = self.ref_to_expr_hex(instr.operands[0], depth+1, hex_const);
         lhs
       }
       ir::Opcode::ReadVar16 => {
@@ -433,7 +445,7 @@ impl<'a> Builder<'a> {
       let off = Expr::Binary(Box::new(BinaryExpr {
         op: BinaryOperator::Add,
         lhs: Expr::Name(sp.info().name.to_string()),
-        rhs: Expr::Const(sym.off as i64),
+        rhs: Expr::HexConst(sym.off as u16),
       }));
 
       // self.decls.push(VarDecl {
@@ -456,7 +468,7 @@ impl<'a> Builder<'a> {
         expr = Expr::Binary(Box::new(BinaryExpr {
           op: BinaryOperator::Add,
           lhs: expr,
-          rhs: Expr::Const(symref.off as i64),
+          rhs: Expr::HexConst(symref.off as u16),
         }));
       }
       expr = Expr::Cast(Type::ptr(Type::U16), Box::new(expr));
@@ -551,8 +563,8 @@ impl<'a> Builder<'a> {
           blk.push_stmt(Stmt::Assign(Assign { decltype: None, lhs, rhs }));
         }
         ir::Opcode::Store16 => {
-          let seg = self.ref_to_expr(instr.operands[0], 1);
-          let off = self.ref_to_expr(instr.operands[1], 1);
+          let seg = self.ref_to_expr_hex(instr.operands[0], 1, true);
+          let off = self.ref_to_expr_hex(instr.operands[1], 1, true);
           let lhs = Expr::Deref(Box::new(Expr::Abstract("PTR_16", vec![seg, off])));
           let rhs = self.ref_to_expr(instr.operands[2], 1);
           blk.push_stmt(Stmt::Assign(Assign { decltype: None, lhs, rhs }));
@@ -564,9 +576,9 @@ impl<'a> Builder<'a> {
             lhs: Expr::Binary(Box::new(BinaryExpr {
               op: BinaryOperator::Mod,
               lhs: val,
-              rhs: Expr::Const(2),
+              rhs: Expr::DecimalConst(2),
             })),
-            rhs: Expr::Const(0),
+            rhs: Expr::DecimalConst(0),
           }));
           blk.push_stmt(Stmt::Expr(Expr::Abstract("assert", vec![cond])));
         }
@@ -575,7 +587,7 @@ impl<'a> Builder<'a> {
           let cond = Expr::Binary(Box::new(BinaryExpr {
             op: BinaryOperator::Geq,
             lhs: Expr::Cast(Type::I16, Box::new(val)),
-            rhs: Expr::Const(0),
+            rhs: Expr::DecimalConst(0),
           }));
           blk.push_stmt(Stmt::Expr(Expr::Abstract("assert", vec![cond])));
         }
@@ -733,12 +745,12 @@ impl<'a> Builder<'a> {
             });
             case_idx
           });
-          cases[case_idx].cases.push(Expr::Const(idx as i64));
+          cases[case_idx].cases.push(Expr::DecimalConst(idx as i16));
         }
         Detail::ElemBlock(_) => {
           let body = self.convert_body(iter, elt.depth+1);
           cases.push(SwitchCase {
-            cases: vec![Expr::Const(idx as i64)],
+            cases: vec![Expr::DecimalConst(idx as i16)],
             body,
           });
         }
