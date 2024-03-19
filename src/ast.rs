@@ -9,10 +9,16 @@ type FlowIter<'a> = std::iter::Peekable<control_flow::ControlFlowIter<'a>>;
 pub struct VarDecl {
   pub typ: Type,
   pub names: Vec<String>,
-  pub mem_mapping: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub struct VarMap {
+  pub typ: Type,
+  pub name: String,
+  pub mapping_expr: Expr,
+}
+
+#[derive(Debug, Clone)]
 pub enum Expr {
   Unary(Box<UnaryExpr>),
   Binary(Box<BinaryExpr>),
@@ -26,7 +32,7 @@ pub enum Expr {
   UnimplPin,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum UnaryOperator {
   Addr, Not, Neg,
 }
@@ -41,7 +47,7 @@ impl UnaryOperator {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UnaryExpr {
   pub op: UnaryOperator,
   pub rhs: Expr,
@@ -87,14 +93,14 @@ impl BinaryOperator {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BinaryExpr {
   pub op: BinaryOperator,
   pub lhs: Expr,
   pub rhs: Expr,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Assign {
   pub lhs: Expr,
   pub rhs: Expr,
@@ -103,55 +109,55 @@ pub struct Assign {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Label(pub String); // fixme??
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CondGoto {
   pub cond: Expr,
   pub label_true: Label,
   pub label_false: Label,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Goto {
   pub label: Label,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ReturnType {
   Far,
   Near,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Return {
   pub rt: ReturnType,
   pub vals: Vec<Expr>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Loop {
   pub body: Block,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct If {
   pub cond: Expr,
   pub then_body: Block,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Switch {
   pub switch_val: Expr,
   pub cases: Vec<SwitchCase>,
   pub default: Option<Block>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SwitchCase {
   pub cases: Vec<Expr>,
   pub body: Block,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Stmt {
   Label(Label),
   Instr(ir::Ref),
@@ -166,15 +172,16 @@ pub enum Stmt {
   Unreachable,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Function {
   pub name: String,
   pub ret: Option<Type>,
-  pub decls: Vec<VarDecl>,
+  pub vardecls: Vec<VarDecl>,
+  pub varmaps: Vec<VarMap>,
   pub body: Block,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Block(pub Vec<Stmt>);
 
 struct Builder<'a> {
@@ -183,7 +190,9 @@ struct Builder<'a> {
   n_uses: HashMap<ir::Ref, usize>,
   temp_names: HashMap<ir::Ref, String>,
   temp_count: usize,
-  decls: Vec<VarDecl>,
+
+  assigns: Vec<(String, Type)>,
+  mappings: HashMap<String, (Type, Expr)>,
 }
 
 impl Block {
@@ -201,7 +210,9 @@ impl<'a> Builder<'a> {
       n_uses,
       temp_names: HashMap::new(),
       temp_count: 0,
-      decls: vec![],
+
+      assigns: vec![],
+      mappings: HashMap::new(),
     }
   }
 
@@ -411,12 +422,27 @@ impl<'a> Builder<'a> {
   fn symbol_to_expr(&mut self, symref: ir::sym::SymbolRef) -> Expr {
     let sym = self.ir.symbols.symbol(symref);
 
-    if self.ir.symbols.symbol_region(symref) == ir::sym::SymbolRegion::Local {
-      self.decls.push(VarDecl {
-        typ: symref.to_type(),
-        names: vec![sym.name.clone()],
-        mem_mapping: Some(format!("SS:{} (ISSUE: NEED TO IMPL)", sym.off)),
-      })
+    if (self.ir.symbols.symbol_region(symref) == ir::sym::SymbolRegion::Local ||
+        self.ir.symbols.symbol_region(symref) == ir::sym::SymbolRegion::Param) &&
+      self.mappings.get(&sym.name).is_none()
+    {
+      let ss = crate::asm::instr::Reg::SS;
+      let sp = crate::asm::instr::Reg::SP;
+      let seg = Expr::Name(ss.info().name.to_string());
+      let off = Expr::Binary(Box::new(BinaryExpr {
+        op: BinaryOperator::Add,
+        lhs: Expr::Name(sp.info().name.to_string()),
+        rhs: Expr::Const(sym.off as i64),
+      }));
+
+      // self.decls.push(VarDecl {
+      //   typ: symref.to_type(),
+      //   names: vec![sym.name.clone()],
+      //   mem_mapping: Some(Expr::Deref(Box::new(Expr::Abstract("PTR_16", vec![seg, off])))),
+      // })
+
+      let impl_expr = Expr::Deref(Box::new(Expr::Abstract("PTR_16", vec![seg, off])));
+      self.mappings.insert(sym.name.clone(), (symref.to_type(), impl_expr));
     }
 
     let mut expr = Expr::Name(sym.name.clone());
@@ -445,11 +471,14 @@ impl<'a> Builder<'a> {
   }
 
   fn assign(&mut self, blk: &mut Block, typ: Type, name: &str, rhs: Expr) {
-    self.decls.push(VarDecl {
-      typ,
-      names: vec![name.to_string()],
-      mem_mapping: None,
-    });
+    self.assigns.push((name.to_string(), typ));
+
+
+    //   VarDecl {
+    //   typ,
+    //   names: vec![name.to_string()],
+    //   mem_mapping: None,
+    // });
     blk.push_stmt(Stmt::Assign(Assign {
       lhs: Expr::Name(name.to_string()),
       rhs,
@@ -753,39 +782,65 @@ impl<'a> Builder<'a> {
     assert!(iter.next().is_none());
 
     // Group all decls by type to save codegen space
+    // let mut type_map: HashMap<Type, usize> = HashMap::new();
+    // let mut decls = vec![];
+    // let mut mem_mapped: HashMap<String, VarDecl> = HashMap::new();
+    // for d in &self.decls {
+    //   if d.mem_mapping.is_some() {
+    //     assert!(d.names.len() == 1);
+    //     let name = &d.names[0];
+    //     if mem_mapped.get(name).is_none() {
+    //       mem_mapped.insert(name.clone(), d.clone());
+    //     }
+    //     continue;
+    //   }
+    //   let idx = match type_map.get(&d.typ) {
+    //     Some(idx) => *idx,
+    //     None => {
+    //       let idx = decls.len();
+    //       decls.push(VarDecl { typ: d.typ.clone(), names: vec![], mem_mapping: None });
+    //       type_map.insert(d.typ.clone(), idx);
+    //       idx
+    //     }
+    //   };
+    //   for n in &d.names {
+    //     decls[idx].names.push(n.clone());
+    //   }
+    // }
+    // for n in itertools::sorted(mem_mapped.keys()) {
+    //   decls.push(mem_mapped.get(n).unwrap().clone());
+    // }
+
+    let mut vardecls = vec![];
     let mut type_map: HashMap<Type, usize> = HashMap::new();
-    let mut decls = vec![];
-    let mut mem_mapped: HashMap<String, VarDecl> = HashMap::new();
-    for d in &self.decls {
-      if d.mem_mapping.is_some() {
-        assert!(d.names.len() == 1);
-        let name = &d.names[0];
-        if mem_mapped.get(name).is_none() {
-          mem_mapped.insert(name.clone(), d.clone());
-        }
-        continue;
-      }
-      let idx = match type_map.get(&d.typ) {
+    for (name, typ) in std::mem::replace(&mut self.assigns, vec![]) {
+      let idx = match type_map.get(&typ) {
         Some(idx) => *idx,
         None => {
-          let idx = decls.len();
-          decls.push(VarDecl { typ: d.typ.clone(), names: vec![], mem_mapping: None });
-          type_map.insert(d.typ.clone(), idx);
+          let idx = vardecls.len();
+          vardecls.push(VarDecl { typ: typ.clone(), names: vec![] });
+          type_map.insert(typ, idx);
           idx
         }
       };
-      for n in &d.names {
-        decls[idx].names.push(n.clone());
-      }
+      vardecls[idx].names.push(name);
     }
-    for n in itertools::sorted(mem_mapped.keys()) {
-      decls.push(mem_mapped.get(n).unwrap().clone());
+
+    let mut varmaps = vec![];
+    for name in itertools::sorted(self.mappings.keys()) {
+      let (typ, expr) = self.mappings.get(name).unwrap();
+      varmaps.push(VarMap {
+        typ: typ.clone(),
+        name: name.to_string(),
+        mapping_expr: expr.clone(),
+      });
     }
 
     Function {
       name: name.to_string(),
       ret,
-      decls,
+      vardecls,
+      varmaps,
       body,
     }
   }

@@ -346,7 +346,24 @@ impl<'a> Gen<'a> {
     Ok(())
   }
 
-  fn decls(&mut self, decls: &[VarDecl], _imp: &dyn FlavorImpl) -> fmt::Result {
+  fn varmaps_def(&mut self, maps: &[VarMap], imp: &dyn FlavorImpl) -> fmt::Result {
+    for d in maps {
+      self.text(&format!("#define {} ", d.name))?;
+      self.expr(&d.mapping_expr, 0, imp)?;
+      self.endline()?;
+    }
+    Ok(())
+  }
+
+  fn varmaps_undef(&mut self, maps: &[VarMap], imp: &dyn FlavorImpl) -> fmt::Result {
+    for d in maps {
+      self.text(&format!("#undef {} ", d.name))?;
+      self.endline()?;
+    }
+    Ok(())
+  }
+
+  fn vardecls(&mut self, decls: &[VarDecl], imp: &dyn FlavorImpl) -> fmt::Result {
     for d in decls {
       self.text(&format!("{} ", d.typ))?;
       for (i, name) in d.names.iter().enumerate() {
@@ -354,9 +371,6 @@ impl<'a> Gen<'a> {
         self.text(name)?;
       }
       self.text(";")?;
-      if let Some(mapping) = &d.mem_mapping {
-        self.text(&format!("  // {}", mapping))?;
-      }
       self.endline()?;
     }
     Ok(())
@@ -367,9 +381,13 @@ impl<'a> Gen<'a> {
     self.endline()?;
     self.enter_block()?;
     self.endline()?;
-    self.decls(&func.decls, imp)?;
+    self.varmaps_def(&func.varmaps, imp)?;
+    self.endline()?;
+    self.vardecls(&func.vardecls, imp)?;
     self.endline()?;
     self.block(&func.body, imp)?;
+    self.endline()?;
+    self.varmaps_undef(&func.varmaps, imp)?;
     self.leave_block()?;
     Ok(())
   }
