@@ -291,7 +291,7 @@ impl IRBuilder<'_> {
       refs.push(self.ir.append_const(off as i16));
     }
 
-    let mut attr = if mem.sreg == instr::Reg::SS { Attribute::STACK_PTR } else { Attribute::NONE };
+    let attr = if mem.sreg == instr::Reg::SS { Attribute::STACK_PTR } else { Attribute::NONE };
 
     if refs.len() == 1 {
       refs[0]
@@ -671,7 +671,7 @@ impl IRBuilder<'_> {
 
     // process simple binary operations
     if let Some(opcode) = simple_binary_operation(ins.opcode) {
-      let mut attr = if operand_is_stack_reg(&ins.operands[0]) { Attribute::STACK_PTR } else { Attribute::NONE };
+      let attr = if operand_is_stack_reg(&ins.operands[0]) { Attribute::STACK_PTR } else { Attribute::NONE };
       let a = self.append_asm_src_operand(&ins.operands[0]);
       let b = self.append_asm_src_operand(&ins.operands[1]);
       let typ = self.deduce_type_binary(a, b);
@@ -732,7 +732,7 @@ impl IRBuilder<'_> {
         self.append_asm_dst_operand(&ins.operands[0], res);
      }
       instr::Opcode::OP_INC => {
-        let mut attr = if operand_is_stack_reg(&ins.operands[0]) { Attribute::STACK_PTR } else { Attribute::NONE };
+        let attr = if operand_is_stack_reg(&ins.operands[0]) { Attribute::STACK_PTR } else { Attribute::NONE };
         let one = self.ir.append_const(1);
         let vref = self.append_asm_src_operand(&ins.operands[0]);
         let typ = self.deduce_type_binary(vref, one);
@@ -741,7 +741,7 @@ impl IRBuilder<'_> {
         self.append_update_flags(vref);
       }
       instr::Opcode::OP_DEC => {
-        let mut attr = if operand_is_stack_reg(&ins.operands[0]) { Attribute::STACK_PTR } else { Attribute::NONE };
+        let attr = if operand_is_stack_reg(&ins.operands[0]) { Attribute::STACK_PTR } else { Attribute::NONE };
         let one = self.ir.append_const(1);
         let vref = self.append_asm_src_operand(&ins.operands[0]);
         let typ = self.deduce_type_binary(vref, one);

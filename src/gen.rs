@@ -357,7 +357,7 @@ impl<'a> Gen<'a> {
     Ok(())
   }
 
-  fn varmaps_undef(&mut self, maps: &[VarMap], imp: &dyn FlavorImpl) -> fmt::Result {
+  fn varmaps_undef(&mut self, maps: &[VarMap], _imp: &dyn FlavorImpl) -> fmt::Result {
     for d in maps {
       self.text(&format!("#undef {}", d.name))?;
       self.endline()?;
@@ -365,7 +365,7 @@ impl<'a> Gen<'a> {
     Ok(())
   }
 
-  fn vardecls(&mut self, decls: &[VarDecl], imp: &dyn FlavorImpl) -> fmt::Result {
+  fn vardecls(&mut self, decls: &[VarDecl], _imp: &dyn FlavorImpl) -> fmt::Result {
     for d in decls {
       self.text(&format!("{} ", d.typ))?;
       for (i, name) in d.names.iter().enumerate() {
