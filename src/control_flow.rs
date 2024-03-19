@@ -4,7 +4,7 @@ use std::fmt::Write;
 
 // FIXME: THE 'remap' HERE IS REALLY CLUNKY AND FRAGILE: IT NEEDS TO BE COMPLETELY RETHOUGHT
 
-const LABEL_BLOCKS_ALWAYS: bool = true;
+const LABEL_BLOCKS_ALWAYS: bool = false;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ElemId(pub usize);

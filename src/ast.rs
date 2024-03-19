@@ -374,15 +374,15 @@ impl<'a> Builder<'a> {
       }
       ir::Opcode::Upper16 => {
         let lhs = self.ref_to_expr_hex(instr.operands[0], depth+1, hex_const);
-        Expr::Binary(Box::new(BinaryExpr {
+        Expr::Cast(Type::U16, Box::new(Expr::Binary(Box::new(BinaryExpr {
           op: BinaryOperator::Shr,
           lhs,
           rhs: Expr::DecimalConst(16),
-        }))
+        }))))
       }
       ir::Opcode::Lower16 => {
         let lhs = self.ref_to_expr_hex(instr.operands[0], depth+1, hex_const);
-        lhs
+        Expr::Cast(Type::U16, Box::new(lhs))
       }
       ir::Opcode::ReadVar16 => {
         self.symbol_to_expr(instr.operands[0].unwrap_symbol())
@@ -471,6 +471,7 @@ impl<'a> Builder<'a> {
           rhs: Expr::HexConst(symref.off as u16),
         }));
       }
+      assert!(symref.sz == 2); // FIXME
       expr = Expr::Cast(Type::ptr(Type::U16), Box::new(expr));
       expr = Expr::Deref(Box::new(expr));
     }
@@ -558,6 +559,11 @@ impl<'a> Builder<'a> {
           return Some(idx);
         }
         ir::Opcode::WriteVar16 => {
+          let lhs = self.symbol_to_expr(instr.operands[0].unwrap_symbol());
+          let rhs = self.ref_to_expr(instr.operands[1], 1);
+          blk.push_stmt(Stmt::Assign(Assign { decltype: None, lhs, rhs }));
+        }
+        ir::Opcode::WriteVar32 => {
           let lhs = self.symbol_to_expr(instr.operands[0].unwrap_symbol());
           let rhs = self.ref_to_expr(instr.operands[1], 1);
           blk.push_stmt(Stmt::Assign(Assign { decltype: None, lhs, rhs }));

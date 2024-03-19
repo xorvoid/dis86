@@ -3,7 +3,7 @@ use crate::binary::Binary;
 use crate::segoff::SegOff;
 use crate::asm::decode::Decoder;
 use crate::asm::intel_syntax;
-use crate::ir::{self, opt, sym};
+use crate::ir::{self, opt, sym, fuse};
 use crate::config::Config;
 use crate::gen;
 use crate::ast;
@@ -201,6 +201,9 @@ pub fn run() -> i32 {
     write_to_path(path, &format!("{}", &text));
     return 0;
   }
+
+  fuse::fuse_mem(&mut ir);
+  opt::optimize(&mut ir);
 
   ir::fin::finalize(&mut ir);
   if let Some(path) = args.emit_ir_final.as_ref() {

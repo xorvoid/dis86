@@ -195,3 +195,10 @@ pub fn display_ir_with_uses(ir: &IR) -> Result<String, std::fmt::Error> {
   }
   Ok(r.finish())
 }
+
+pub fn instr_to_string(ir: &IR, iref: Ref) -> String {
+  let mut r = Formatter::new();
+  let instr = ir.instr(iref).unwrap();
+  r.fmt_instr(ir, iref, instr).unwrap();
+  r.finish()
+}
