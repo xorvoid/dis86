@@ -102,6 +102,7 @@ pub struct BinaryExpr {
 
 #[derive(Debug, Clone)]
 pub struct Assign {
+  pub decltype: Option<Type>,
   pub lhs: Expr,
   pub rhs: Expr,
 }
@@ -471,7 +472,7 @@ impl<'a> Builder<'a> {
   }
 
   fn assign(&mut self, blk: &mut Block, typ: Type, name: &str, rhs: Expr) {
-    self.assigns.push((name.to_string(), typ));
+    //self.assigns.push((name.to_string(), typ));
 
 
     //   VarDecl {
@@ -480,6 +481,7 @@ impl<'a> Builder<'a> {
     //   mem_mapping: None,
     // });
     blk.push_stmt(Stmt::Assign(Assign {
+      decltype: Some(typ),
       lhs: Expr::Name(name.to_string()),
       rhs,
     }));
@@ -546,14 +548,14 @@ impl<'a> Builder<'a> {
         ir::Opcode::WriteVar16 => {
           let lhs = self.symbol_to_expr(instr.operands[0].unwrap_symbol());
           let rhs = self.ref_to_expr(instr.operands[1], 1);
-          blk.push_stmt(Stmt::Assign(Assign { lhs, rhs }));
+          blk.push_stmt(Stmt::Assign(Assign { decltype: None, lhs, rhs }));
         }
         ir::Opcode::Store16 => {
           let seg = self.ref_to_expr(instr.operands[0], 1);
           let off = self.ref_to_expr(instr.operands[1], 1);
           let lhs = Expr::Deref(Box::new(Expr::Abstract("PTR_16", vec![seg, off])));
           let rhs = self.ref_to_expr(instr.operands[2], 1);
-          blk.push_stmt(Stmt::Assign(Assign { lhs, rhs }));
+          blk.push_stmt(Stmt::Assign(Assign { decltype: None, lhs, rhs }));
         }
         ir::Opcode::AssertEven => {
           let val = self.ref_to_expr(instr.operands[0], 1);

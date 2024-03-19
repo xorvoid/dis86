@@ -252,6 +252,9 @@ impl<'a> Gen<'a> {
         self.endline()?;
       }
       Stmt::Assign(s) => {
+        if let Some(typ) = &s.decltype {
+          self.text(&format!("{} ", typ))?;
+        }
         self.expr(&s.lhs, 0, imp)?;
         self.text(" = ")?;
         self.expr(&s.rhs, 0, imp)?;
