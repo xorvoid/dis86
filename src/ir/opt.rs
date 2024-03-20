@@ -1,6 +1,5 @@
 use crate::ir::def::*;
 use crate::ir::sym;
-use crate::types::Type;
 use std::collections::{hash_map, HashMap, HashSet, VecDeque};
 
 // Propagate operand through any ref opcodes
@@ -109,8 +108,8 @@ pub fn reduce_uppper_lower_make32(ir: &mut IR) {
   for b in ir.iter_blocks() {
     for r in ir.iter_instrs(b) {
       let Some((make32_instr, make32_ref)) = ir.instr_matches(r, Opcode::Make32) else {continue};
-      let Some((upper_instr, upper_ref)) = ir.instr_matches(make32_instr.operands[0], Opcode::Upper16) else {continue};
-      let Some((lower_instr, lower_ref)) = ir.instr_matches(make32_instr.operands[1], Opcode::Lower16) else {continue};
+      let Some((upper_instr, _)) = ir.instr_matches(make32_instr.operands[0], Opcode::Upper16) else {continue};
+      let Some((lower_instr, _)) = ir.instr_matches(make32_instr.operands[1], Opcode::Lower16) else {continue};
       if upper_instr.operands[0] != lower_instr.operands[0] { continue }
 
       let src = upper_instr.operands[0];

@@ -2,13 +2,18 @@ use crate::asm::instr;
 use crate::ir::def::*;
 use crate::ir::sym;
 use crate::types::Type;
-use crate::util::dvec::DVec;
+use crate::util::dvec::{DVec, DVecIndex};
 use std::collections::HashMap;
 
 impl Ref {
   pub fn is_const(self) -> bool {
     let Ref::Const(_) = self else { return false };
     true
+  }
+
+  pub fn unwrap_instr(self) -> (BlockRef, DVecIndex) {
+    let Ref::Instr(b, i) = self else { panic!("expected instr ref") };
+    (b, i)
   }
 
   pub fn unwrap_block(self) -> BlockRef {

@@ -102,7 +102,7 @@ pub fn fuse_make32_load16_to_load32(ir: &mut IR) {
 
       // Need to check that the load16's are in the same block and no other memory references
       // are between them and the make32 (otherwise we could have aliasing and break everything)
-      let Ref::Instr(make32_b, make32_i) = make32_ref else { unreachable!() };
+      let Ref::Instr(make32_b, _) = make32_ref else { unreachable!() };
       let Ref::Instr(high_b, high_i) = high_ref else { unreachable!() };
       let Ref::Instr(low_b, low_i) = low_ref else { unreachable!() };
       if make32_b != high_b { continue }
