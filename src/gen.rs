@@ -151,6 +151,7 @@ impl<'a> Gen<'a> {
   }
 
   fn leave_indent(&mut self) {
+    assert!(self.indent_level >= 1);
     self.indent_level -= 1;
   }
 
@@ -239,7 +240,10 @@ impl<'a> Gen<'a> {
   fn stmt(&mut self, stmt: &Stmt, imp: &dyn FlavorImpl) -> fmt::Result {
     match stmt {
       Stmt::Label(l) => {
-        self.suppress_indent();
+        // label is unindented one level
+        self.leave_indent();
+        self.text("")?;
+        self.enter_indent();
         self.text(&format!("{}:;", l.0))?;
         self.endline()?;
       }

@@ -654,28 +654,8 @@ impl<'a> Builder<'a> {
       }
       control_flow::Jump::Table(_tgts) => {
         panic!("All JumpTable should be converted to Switch in control flow analysis");
-      //   let idx = cond.unwrap();
-      //   let mut map: HashMap<Label, usize> = HashMap::new(); // Label -> case-idx
-      //   let mut cases = vec![];
-      //   for (i, tgt) in tgts.iter().enumerate() {
-      //     let label = self.make_label(*tgt);
-      //     let case_idx = map.get(&label).cloned().unwrap_or_else(|| {
-      //       let case_idx = cases.len();
-      //       map.insert(label.clone(), case_idx);
-      //       cases.push(SwitchCase {
-      //         cases: vec![],
-      //         stmts: vec![Stmt::Goto(Goto { label })],
-      //       });
-      //       case_idx
-      //     });
-      //     cases[case_idx].cases.push(Expr::Const(i as i64));
-      //   }
-      //   blk.push_stmt(Stmt::Switch(Switch {
-      //     switch_val: idx,
-      //     cases,
-      //     default: Some(vec![Stmt::Unreachable]),
-      //   }));
       }
+      //control_flow::Jump::Continue => {}
     }
   }
 

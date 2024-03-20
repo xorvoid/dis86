@@ -18,6 +18,7 @@ pub enum Jump {
   CondTargetFalse(ElemId),        // jne false tgt needed, true elided, fallthrough
   CondTargetBoth(ElemId, ElemId), // jne not elided
   Table(Vec<ElemId>),             // jmptbl not elided
+  //Continue,                       // uncond "continue" loop backedge
 }
 
 impl Jump {
@@ -1021,6 +1022,7 @@ fn label_blocks_by_demand(cf: &mut ControlFlow) {
           targets.insert(*tgt);
         }
       }
+      //Jump::Continue => (),
     }
   }
 
