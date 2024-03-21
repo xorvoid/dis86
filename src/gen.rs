@@ -142,10 +142,6 @@ impl<'a> Gen<'a> {
     self.f.write_str(txt)
   }
 
-  fn suppress_indent(&mut self) {
-    self.newline = false;
-  }
-
   fn enter_indent(&mut self) {
     self.indent_level += 1;
   }

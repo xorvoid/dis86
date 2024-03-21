@@ -1,7 +1,9 @@
 use crate::ir;
 use crate::types::*;
 use crate::control_flow::{self, ControlFlow, Detail, ElemId};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+
+const OPT_DEFINE_TEMPS_AT_USE: bool = false;
 
 type FlowIter<'a> = std::iter::Peekable<control_flow::ControlFlowIter<'a>>;
 
@@ -194,6 +196,7 @@ struct Builder<'a> {
   temp_count: usize,
 
   assigns: Vec<(String, Type)>,
+  assigned: HashSet<String>,
   mappings: HashMap<String, (Type, Expr)>,
 }
 
@@ -214,6 +217,7 @@ impl<'a> Builder<'a> {
       temp_count: 0,
 
       assigns: vec![],
+      assigned: HashSet::new(),
       mappings: HashMap::new(),
     }
   }
@@ -492,16 +496,18 @@ impl<'a> Builder<'a> {
   }
 
   fn assign(&mut self, blk: &mut Block, typ: Type, name: &str, rhs: Expr) {
-    //self.assigns.push((name.to_string(), typ));
+    let decltype = if OPT_DEFINE_TEMPS_AT_USE {
+      Some(typ)
+    } else {
+      if self.assigned.get(name).is_none() {
+        self.assigns.push((name.to_string(), typ));
+        self.assigned.insert(name.to_string());
+      }
+      None
+    };
 
-
-    //   VarDecl {
-    //   typ,
-    //   names: vec![name.to_string()],
-    //   mem_mapping: None,
-    // });
     blk.push_stmt(Stmt::Assign(Assign {
-      decltype: Some(typ),
+      decltype,
       lhs: Expr::Name(name.to_string()),
       rhs,
     }));
