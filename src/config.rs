@@ -10,7 +10,7 @@ pub struct Func {
   pub mode: CallMode,
   pub ret: Type,
   pub args: Option<u16>,  // None means "unknown", Some(0) means "no args"
-  pub pop_args_after_call: bool,
+  pub dont_pop_args: bool,
 }
 
 #[derive(Debug)]
@@ -142,7 +142,7 @@ impl Config {
       let args_str = f.get_str("args")
         .ok_or_else(|| format!("No function 'args' property for '{}'", key))?;
 
-      let pop_args_after_call = !f.get_str("dont_pop_args").is_some();
+      let dont_pop_args = f.get_str("dont_pop_args").is_some();
       let indirect = f.get_str("indirect_call_location").is_some();
 
       let start: SegOff = start_str.parse()
@@ -169,7 +169,7 @@ impl Config {
           mode,
           ret,
           args: if args >= 0 { Some(args as u16) } else { None },
-          pop_args_after_call,
+          dont_pop_args,
         });
       } else {
         if mode != CallMode::Far {

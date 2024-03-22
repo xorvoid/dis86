@@ -563,6 +563,13 @@ impl IRBuilder<'_> {
 
     let ret_ref = self.append_instr(func.ret.clone(), Opcode::CallArgs, operands);
     self.save_return_value(&func.ret, ret_ref);
+
+    if func.dont_pop_args {
+      let sp = self.ir.get_var(instr::Reg::SP, self.cur);
+      let k = self.ir.append_const((2*nargs) as i16);
+      let sp = self.append_instr_with_attrs(Type::U16, Attribute::STACK_PTR, Opcode::Add, vec![sp, k]);
+      self.ir.set_var(instr::Reg::SP, self.cur, sp);
+    }
   }
 
   fn process_call_segoff(&mut self, addr: SegOff, mode: config::CallMode, ins: &instr::Instr) {
