@@ -690,6 +690,7 @@ impl IRBuilder<'_> {
 
     // handle less standard operations
     match &ins.opcode {
+      instr::Opcode::OP_NOP => (),
       instr::Opcode::OP_PUSH => {
         if matches!(ins.operands[0], instr::Operand::Reg(instr::OperandReg(instr::Reg::CS))) {
           assert!(self.special.is_none());
