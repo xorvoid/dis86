@@ -1,6 +1,10 @@
 # Dis86
 
-Dis86 is a decompiler for 16-bit real-mode x86 DOS binaries. It has been built for doing reverse-engineering work such as
+Dis86 is a decompiler for 16-bit real-mode x86 DOS binaries.
+
+# Purpose
+
+Dis86 has been built for doing reverse-engineering work such as
 analyzing and re-implementing old DOS videogames from the early 1990s. The project is a work-in-progress and the development team makes no gaurentees
 it will work or be useful out-of-the-box for any applications other than their own. Features and improvements are made on-demand as needed.
 
@@ -110,8 +114,8 @@ Feature wishlist
 
 ## Prehistoric versions
 
-Dis86 began life as a simple disassembler and 1-to-1 instruction => C-statement decompiler. Overtime it gained complexity to the point that
-it was then rearchitected with a proper SSA IR and series of transformations.
+Dis86 began life as a simple disassembler and 1-to-1 instruction => C-statement decompiler that integrated well with the Hydra Runtime. Over time it gained complexity and it became difficult to implement more
+sophisticated transformations. So, it was rebuilt and rearchitected with a proper SSA IR.
 
 The older versions remain in the repo under `old/`. In particular, `old/v2` was much less sophisticated albiet more complete in terms of the input machine-code it could handle.
 
