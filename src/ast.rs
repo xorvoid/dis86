@@ -37,15 +37,16 @@ pub enum Expr {
 
 #[derive(Debug, Clone)]
 pub enum UnaryOperator {
-  Addr, Not, Neg,
+  Addr, Neg, LogicalNot, BitwiseNot,
 }
 
 impl UnaryOperator {
   pub fn as_operator_str(&self) -> &'static str {
     match self {
       UnaryOperator::Addr => "(u8*)&",
-      UnaryOperator::Not => "!",
       UnaryOperator::Neg => "-",
+      UnaryOperator::LogicalNot => "!",
+      UnaryOperator::BitwiseNot => "~",
     }
   }
 }
@@ -200,6 +201,14 @@ struct Builder<'a> {
   mappings: HashMap<String, (Type, Expr)>,
 }
 
+fn unary_expr(op: UnaryOperator, rhs: Expr) -> Expr {
+  Expr::Unary(Box::new(UnaryExpr { op, rhs }))
+}
+
+fn binary_expr(op: BinaryOperator, lhs: Expr, rhs: Expr) -> Expr {
+  Expr::Binary(Box::new(BinaryExpr { op, lhs, rhs }))
+}
+
 impl Block {
   fn push_stmt(&mut self, stmt: Stmt) {
     self.0.push(stmt);
@@ -244,6 +253,7 @@ impl<'a> Builder<'a> {
 
     let (ast_op, signed) = match instr.opcode {
       ir::Opcode::Neg  => (UnaryOperator::Neg, false),
+      ir::Opcode::Not  => (UnaryOperator::BitwiseNot, false),
       _ => return None,
     };
 
@@ -326,7 +336,7 @@ impl<'a> Builder<'a> {
   fn ref_to_expr_2(&mut self, r: ir::Ref, depth: usize, mut inverted: bool) -> Expr {
     let expr = self.ref_to_expr_impl(r, depth, false, &mut inverted);
     let expr = if inverted {
-      Expr::Unary(Box::new(UnaryExpr{op: UnaryOperator::Not, rhs: expr}))
+      Expr::Unary(Box::new(UnaryExpr{op: UnaryOperator::LogicalNot, rhs: expr}))
     } else {
       expr
     };
@@ -429,6 +439,12 @@ impl<'a> Builder<'a> {
         let rhs = self.ref_to_expr(instr.operands[0], depth+1);
         // TODO: VERIFY THIS IS A U16
         Expr::Cast(Type::I32, Box::new(Expr::Cast(Type::I16, Box::new(rhs))))
+      }
+      ir::Opcode::Signed => {
+        let lhs = self.ref_to_expr(instr.operands[0], depth+1);
+        binary_expr(BinaryOperator::Neq,
+                    binary_expr(BinaryOperator::Shr, lhs, Expr::DecimalConst(15)),
+                    Expr::DecimalConst(0))
       }
       opcode @ _ => {
         panic!("Unimplemented {:?} in ast converter", opcode);
@@ -648,8 +664,7 @@ impl<'a> Builder<'a> {
         let label = self.make_label(tgt);
         let goto = Stmt::Goto(Goto{label});
         let then_body = Block(vec![goto]);
-        // NOTE: cond already inverted befroe call!
-        //let cond_inv = Expr::Unary(Box::new(UnaryExpr{op: UnaryOperator::Not, rhs: cond}));
+        // NOTE: cond already inverted before call!
         blk.push_stmt(Stmt::If(If {cond: cond, then_body }));
       }
       control_flow::Jump::CondTargetBoth(tgt_true, tgt_false) => {

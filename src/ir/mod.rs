@@ -1,3 +1,4 @@
+mod opcode;
 mod def;
 mod helpers;
 pub use def::*;

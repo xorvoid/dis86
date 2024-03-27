@@ -38,7 +38,7 @@ pub fn reduce_xor(ir: &mut IR) {
 /*
 From:
 --------------------------------------------
-  t2 = xor t1 t1
+  t2 = or t1 t1
 
 To:
 --------------------------------------------
@@ -204,6 +204,9 @@ pub fn reduce_phi_common_subexpr(ir: &mut IR) {
       // need to pessimize around side-effecting operations
       if common_instr.opcode.has_side_effects() { continue; }
 
+      // Don't forward phis
+      if common_instr.opcode == Opcode::Phi { continue; }
+
       // see if all non-trivial operands match
       let mut all_match = true;
       for oper in &operands {
@@ -217,7 +220,9 @@ pub fn reduce_phi_common_subexpr(ir: &mut IR) {
 
       // re-write the phi
       if all_match {
+        //print!("\nRewrite '{}' to", crate::ir::display::instr_to_string(ir, r));
         *ir.instr_mut(r).unwrap() = common_instr;
+        //print!(" ... '{}'", crate::ir::display::instr_to_string(ir, r));
       }
     }
   }
@@ -529,6 +534,7 @@ pub fn simplify_branch_conds(ir: &mut IR) {
 
       let opcode_eq = opcode_new == Opcode::Eq || opcode_new == Opcode::Neq;
       let opcode_above = opcode_new == Opcode::UGt;
+      let opcode_lt = opcode_new == Opcode::Lt;
 
       let upd_ref = instr.operands[0];
       let upd_instr = ir.instr(upd_ref).unwrap();
@@ -538,7 +544,7 @@ pub fn simplify_branch_conds(ir: &mut IR) {
       let pred_instr = ir.instr(pred_ref).unwrap();
 
       if pred_instr.opcode == Opcode::Sub {
-        // cmp ax, bx
+        // cmp <a>, <b>
         // jg <tgt>
         let lhs = pred_instr.operands[0];
         let rhs = pred_instr.operands[1];
@@ -549,7 +555,7 @@ pub fn simplify_branch_conds(ir: &mut IR) {
       }
 
       else if pred_instr.opcode == Opcode::And && opcode_eq {
-        // test ax, bx
+        // test <a>, <b>
         // je <tgt>
         let z = ir.append_const(0);
         let instr = ir.instr_mut(r).unwrap();
@@ -557,8 +563,8 @@ pub fn simplify_branch_conds(ir: &mut IR) {
         instr.operands = vec![pred_ref, z];
       }
 
-      else if pred_instr.opcode == Opcode::Or && opcode_eq && pred_instr.operands[0] == pred_instr.operands[1] {
-        // or ax, ax
+      else if pred_instr.opcode == Opcode::Or && opcode_eq { //&& pred_instr.operands[0] == pred_instr.operands[1] {
+        // or <a>, <b>
         // je <tgt>
         let z = ir.append_const(0);
         let instr = ir.instr_mut(r).unwrap();
@@ -566,12 +572,21 @@ pub fn simplify_branch_conds(ir: &mut IR) {
         instr.operands = vec![pred_ref, z];
       }
 
-      else if pred_instr.opcode == Opcode::Or && opcode_above && pred_instr.operands[0] == pred_instr.operands[1] {
-        // or ax, ax
+      else if pred_instr.opcode == Opcode::Or && opcode_above { //&& pred_instr.operands[0] == pred_instr.operands[1] {
+        // or <a>, <b>
         // ja <tgt>   (equivalent to "jne <tgt>" after the or)
         let z = ir.append_const(0);
         let instr = ir.instr_mut(r).unwrap();
         instr.opcode = Opcode::Neq;
+        instr.operands = vec![pred_ref, z];
+      }
+
+      else if pred_instr.opcode == Opcode::Or && opcode_lt { //&& pred_instr.operands[0] == pred_instr.operands[1] {
+        // or <a>, <b>
+        // jl <tgt>   (equivalent to "jump if signed")
+        let z = ir.append_const(0);
+        let instr = ir.instr_mut(r).unwrap();
+        instr.opcode = Opcode::Signed;
         instr.operands = vec![pred_ref, z];
       }
     }

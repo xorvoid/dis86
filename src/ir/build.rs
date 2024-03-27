@@ -35,6 +35,7 @@ fn simple_binary_operation(opcode: instr::Opcode) -> Option<Opcode> {
 fn simple_unary_operation(opcode: instr::Opcode) -> Option<Opcode> {
   match opcode {
     instr::Opcode::OP_NEG => Some(Opcode::Neg),
+    instr::Opcode::OP_NOT => Some(Opcode::Not),
     _ => None,
   }
 }
