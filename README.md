@@ -5,7 +5,7 @@ Dis86 is a decompiler for 16-bit real-mode x86 DOS binaries.
 # Purpose
 
 Dis86 has been built for doing reverse-engineering work such as
-analyzing and re-implementing old DOS videogames from the early 1990s. The project is a work-in-progress and the development team makes no gaurentees
+analyzing and re-implementing old DOS video games from the early 1990s. The project is a work-in-progress and the development team makes no guarantees
 it will work or be useful out-of-the-box for any applications other than their own. Features and improvements are made on-demand as needed.
 
 ## Goals and Non-goals
@@ -14,7 +14,7 @@ Goals:
 
 - Support reverse-engineering 16-bit real-mode x86 DOS binaries
 - Generate code that is semantically correct (in so far as practical)
-- Generate code that integrates will with a hybrid-runtime system (Hdyra) [currently unreleased]
+- Generate code that integrates will with a hybrid-runtime system (Hydra) [currently unreleased]
 - Avoid making many assumptions or using heuristics that can lead to broken decompiled code
 - Be hackable and easy to extend as required
 - Automate away common manual transformations and let a human reverser focus on the subjective tasks a computer cannot do well (e.g. naming things)
@@ -22,7 +22,7 @@ Goals:
 Non-goals:
 
 - Output code beauty (semantic correctness is more important)
-- Re-compilable to eqivalent binaries
+- Re-compilable to equivalent binaries
 
 Also, we generally prefer manual configuration/annotation tables to flawed heuristics that will generate incorrect code.
 
@@ -58,7 +58,7 @@ Emit final (optimized) Intermediate Representation (IR):
 ./target/debug/dis86 --config <your_config.bsl> --binary <raw_text_segment> --name <function_name> --emit-ir-final <output-file>
 ```
 
-Visualize the control-flow grpah with graphviz:
+Visualize the control-flow graph with graphviz:
 
 ```
 ./target/debug/dis86 --config <your_config.bsl> --binary <raw_text_segment> --name <function_name> --emit-graph /tmp/ctrlflow.dot
@@ -86,8 +86,8 @@ Emit C code:
 
 ## Caveats & Limitations
 
-Primary development goal is to support an ongoing reverse-engineering and reimplementation project. The decompilier is also designed to
-emit code that integrates well with a hybrid runtime system (called Hydra) that is used to run a partially-decompiled / reimplemnented
+Primary development goal is to support an ongoing reverse-engineering and reimplementation project. The decompiler is also designed to
+emit code that integrates well with a hybrid runtime system (called Hydra) that is used to run a partially-decompiled / reimplemented
 project. As such, uses that fall out of this scope have been unconsidered and may have numerous unknown issues.
 
 Some specific known limitations:
@@ -117,6 +117,6 @@ Feature wishlist
 Dis86 began life as a simple disassembler and 1-to-1 instruction => C-statement decompiler that integrated well with the Hydra Runtime. Over time it gained complexity and it became difficult to implement more
 sophisticated transformations. So, it was rebuilt and rearchitected with a proper SSA IR.
 
-The older versions remain in the repo under `old/`. In particular, `old/v2` was much less sophisticated albiet more complete in terms of the input machine-code it could handle.
+The older versions remain in the repo under `old/`. In particular, `old/v2` was much less sophisticated albeit more complete in terms of the input machine-code it could handle.
 
 These versions remain as sometimes they are still useful when the latest version is missing some feature.
