@@ -867,6 +867,14 @@ impl IRBuilder<'_> {
         self.append_asm_dst_operand(&ins.operands[0], upper_out);
         self.append_asm_dst_operand(&ins.operands[1], lower_out);
       }
+      instr::Opcode::OP_STOS => {
+        let src = self.append_asm_src_operand(&ins.operands[1]);
+        self.append_asm_dst_operand(&ins.operands[0], src);
+      }
+      instr::Opcode::OP_LODS => {
+        let src = self.append_asm_src_operand(&ins.operands[1]);
+        self.append_asm_dst_operand(&ins.operands[0], src);
+      }
       _ => panic!("Unimpl opcode: {:?}", ins.opcode),
     }
   }

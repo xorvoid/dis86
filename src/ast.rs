@@ -597,6 +597,13 @@ impl<'a> Builder<'a> {
           let rhs = self.ref_to_expr(instr.operands[1], 1);
           blk.push_stmt(Stmt::Assign(Assign { decltype: None, lhs, rhs }));
         }
+        ir::Opcode::Store8 => {
+          let seg = self.ref_to_expr_hex(instr.operands[0], 1, true);
+          let off = self.ref_to_expr_hex(instr.operands[1], 1, true);
+          let lhs = Expr::Deref(Box::new(Expr::Abstract("PTR_8", vec![seg, off])));
+          let rhs = self.ref_to_expr(instr.operands[2], 1);
+          blk.push_stmt(Stmt::Assign(Assign { decltype: None, lhs, rhs }));
+        }
         ir::Opcode::Store16 => {
           let seg = self.ref_to_expr_hex(instr.operands[0], 1, true);
           let off = self.ref_to_expr_hex(instr.operands[1], 1, true);
