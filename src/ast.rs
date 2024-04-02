@@ -626,6 +626,10 @@ impl<'a> Builder<'a> {
           }));
           blk.push_stmt(Stmt::Expr(Expr::Abstract("assert", vec![cond])));
         }
+        ir::Opcode::Int => {
+          let num = self.ref_to_expr_hex(instr.operands[0], 0, true);
+          blk.push_stmt(Stmt::Expr(Expr::Abstract("INT", vec![num])));
+        }
         _ => {
           let uses = self.n_uses.get(&r).cloned().unwrap_or(0);
           if uses != 1 || instr.opcode.is_call() {

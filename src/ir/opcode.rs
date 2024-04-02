@@ -72,6 +72,7 @@ pub enum Opcode {
   CallNear,
   CallPtr,
   CallArgs,
+  Int,
 
   RetFar,
   RetNear,
@@ -155,6 +156,7 @@ impl Opcode {
       Opcode::CallNear    => "callnear",
       Opcode::CallPtr     => "callptr",
       Opcode::CallArgs    => "callargs",
+      Opcode::Int         => "int",
       Opcode::RetFar      => "retf",
       Opcode::RetNear     => "retn",
       Opcode::Jmp         => "jmp",

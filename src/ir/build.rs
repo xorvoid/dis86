@@ -814,6 +814,10 @@ impl IRBuilder<'_> {
         let cs_pushed = matches!(special, Some(SpecialState::PushCS));
         self.process_calln(ins, cs_pushed);
       }
+      instr::Opcode::OP_INT => {
+        let num = self.append_asm_src_operand(&ins.operands[0]);
+        self.append_instr(Type::Void, Opcode::Int, vec![num]);
+      }
       instr::Opcode::OP_LEA => {
         let instr::Operand::Mem(mem) = &ins.operands[1] else {
           panic!("Expected LEA to have a mem operand");
