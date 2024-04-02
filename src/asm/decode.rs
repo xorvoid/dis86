@@ -180,13 +180,22 @@ pub fn decode_one<'a>(bin: &mut RegionIter<'a>) -> Option<(Instr, &'a [u8])> {
     let b = bin.peek();
     opcode2 = Some(modrm_op2(b));
     ret = instr_fmt::lookup(opcode1, opcode2);
+  } else if ret.err() == Some(instr_fmt::Error::NeedOpcode2Ext0F) {
+    let b = bin.peek();
+    bin.advance();
+    opcode2 = Some(b);
+    ret = instr_fmt::lookup(opcode1, opcode2);
   }
 
   // Unpack
   let fmt = match ret {
     Ok(fmt) => fmt,
-    Err(_) => panic!("Failed to find instruction fmt for opcode1={:?}, opcode2={:?}", opcode1, opcode2),
+    Err(_) => panic!("Failed to find instruction fmt for opcode1={:?}, opcode2={:?} at {}", opcode1, opcode2, start_addr),
   };
+
+  if fmt.op == Opcode::OP_INVAL {
+    panic!("Unsupported or invalid instruction at {}", start_addr);
+  }
 
   // Do we need a modrm?
   let mut modrm = 0;

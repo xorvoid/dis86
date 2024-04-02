@@ -638,6 +638,12 @@ impl IRBuilder<'_> {
     self.append_jne(cond, true_blk, false_blk);
   }
 
+  fn append_cond_set(&mut self, ins: &instr::Instr, compare_opcode: Opcode) {
+    let flags = self.get_flags();
+    let cond = self.append_instr(Type::U8, compare_opcode, vec![flags]);
+    self.append_asm_dst_operand(&ins.operands[0], cond);
+  }
+
   fn append_upper_lower_split(&mut self, r: Ref) -> (Ref, Ref) {
     let upper = self.append_instr(Type::U16, Opcode::Upper16, vec![r]);
     let lower = self.append_instr(Type::U16, Opcode::Lower16, vec![r]);
@@ -789,6 +795,17 @@ impl IRBuilder<'_> {
       instr::Opcode::OP_JAE => self.append_cond_jump(ins, Opcode::UGeqFlags),
       instr::Opcode::OP_JB  => self.append_cond_jump(ins, Opcode::ULtFlags),
       instr::Opcode::OP_JBE => self.append_cond_jump(ins, Opcode::ULeqFlags),
+
+      instr::Opcode::OP_SETE  => self.append_cond_set(ins, Opcode::EqFlags),
+      instr::Opcode::OP_SETNE => self.append_cond_set(ins, Opcode::NeqFlags),
+      instr::Opcode::OP_SETG  => self.append_cond_set(ins, Opcode::GtFlags),
+      instr::Opcode::OP_SETGE => self.append_cond_set(ins, Opcode::GeqFlags),
+      instr::Opcode::OP_SETL  => self.append_cond_set(ins, Opcode::LtFlags),
+      instr::Opcode::OP_SETLE => self.append_cond_set(ins, Opcode::LeqFlags),
+      instr::Opcode::OP_SETA  => self.append_cond_set(ins, Opcode::UGtFlags),
+      instr::Opcode::OP_SETAE => self.append_cond_set(ins, Opcode::UGeqFlags),
+      instr::Opcode::OP_SETB  => self.append_cond_set(ins, Opcode::ULtFlags),
+      instr::Opcode::OP_SETBE => self.append_cond_set(ins, Opcode::ULeqFlags),
 
       instr::Opcode::OP_CALLF => {
         self.process_callf(ins);

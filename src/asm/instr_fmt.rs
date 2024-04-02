@@ -157,6 +157,22 @@ pub enum Opcode {
   OP_SAR,
   OP_SBB,
   OP_SCAS,
+  OP_SETO,
+  OP_SETNO,
+  OP_SETA,
+  OP_SETAE,
+  OP_SETB,
+  OP_SETBE,
+  OP_SETE,
+  OP_SETG,
+  OP_SETGE,
+  OP_SETL,
+  OP_SETLE,
+  OP_SETP,
+  OP_SETS,
+  OP_SETNE,
+  OP_SETNP,
+  OP_SETNS,
   OP_SHL,
   OP_SHR,
   OP_STC,
@@ -255,6 +271,22 @@ impl Opcode {
       Opcode::OP_SAR =>     "sar",
       Opcode::OP_SBB =>     "sbb",
       Opcode::OP_SCAS =>    "scas",
+      Opcode::OP_SETO =>    "seto",
+      Opcode::OP_SETNO =>   "setno",
+      Opcode::OP_SETB =>    "setb",
+      Opcode::OP_SETAE =>   "setae",
+      Opcode::OP_SETE =>    "sete",
+      Opcode::OP_SETNE =>   "setne",
+      Opcode::OP_SETBE =>   "setbe",
+      Opcode::OP_SETA =>    "seta",
+      Opcode::OP_SETS =>    "sets",
+      Opcode::OP_SETNS =>   "setns",
+      Opcode::OP_SETP =>    "setp",
+      Opcode::OP_SETNP =>   "setnp",
+      Opcode::OP_SETL =>    "setl",
+      Opcode::OP_SETGE =>   "setge",
+      Opcode::OP_SETLE =>   "setle",
+      Opcode::OP_SETG =>    "setg",
       Opcode::OP_SHL =>     "shl",
       Opcode::OP_SHR =>     "shr",
       Opcode::OP_STC =>     "stc",
@@ -270,6 +302,7 @@ impl Opcode {
   }
 }
 
+#[derive(Debug)]
 pub struct InstrFmt {
   pub op:    Opcode,
   pub op1:   i16, // byte or -1 if not used
@@ -313,7 +346,22 @@ const INSTR_TBL: &[InstrFmt] = &[
   InstrFmt {  op: Opcode::OP_OR,        op1: 0x0c,     op2: -1,   oper: [Oper::OPER_AL,      Oper::OPER_IMM8,    Oper::OPER_NONE],      hidden: 0x0 },
   InstrFmt {  op: Opcode::OP_OR,        op1: 0x0d,     op2: -1,   oper: [Oper::OPER_AX,      Oper::OPER_IMM16,   Oper::OPER_NONE],      hidden: 0x0 },
   InstrFmt {  op: Opcode::OP_PUSH,      op1: 0x0e,     op2: -1,   oper: [Oper::OPER_CS,      Oper::OPER_NONE,    Oper::OPER_NONE],      hidden: 0x0 },
-  InstrFmt {  op: Opcode::OP_INVAL,     op1: 0x0f,     op2: -1,   oper: [Oper::OPER_NONE,    Oper::OPER_NONE,    Oper::OPER_NONE],      hidden: 0x0 },
+  InstrFmt {  op: Opcode::OP_SETO,      op1: 0x0f,     op2: 0x90, oper: [Oper::OPER_RM8,     Oper::OPER_NONE,    Oper::OPER_NONE],      hidden: 0x0 },
+  InstrFmt {  op: Opcode::OP_SETNO,     op1: 0x0f,     op2: 0x91, oper: [Oper::OPER_RM8,     Oper::OPER_NONE,    Oper::OPER_NONE],      hidden: 0x0 },
+  InstrFmt {  op: Opcode::OP_SETB,      op1: 0x0f,     op2: 0x92, oper: [Oper::OPER_RM8,     Oper::OPER_NONE,    Oper::OPER_NONE],      hidden: 0x0 },
+  InstrFmt {  op: Opcode::OP_SETAE,     op1: 0x0f,     op2: 0x93, oper: [Oper::OPER_RM8,     Oper::OPER_NONE,    Oper::OPER_NONE],      hidden: 0x0 },
+  InstrFmt {  op: Opcode::OP_SETE,      op1: 0x0f,     op2: 0x94, oper: [Oper::OPER_RM8,     Oper::OPER_NONE,    Oper::OPER_NONE],      hidden: 0x0 },
+  InstrFmt {  op: Opcode::OP_SETNE,     op1: 0x0f,     op2: 0x95, oper: [Oper::OPER_RM8,     Oper::OPER_NONE,    Oper::OPER_NONE],      hidden: 0x0 },
+  InstrFmt {  op: Opcode::OP_SETBE,     op1: 0x0f,     op2: 0x96, oper: [Oper::OPER_RM8,     Oper::OPER_NONE,    Oper::OPER_NONE],      hidden: 0x0 },
+  InstrFmt {  op: Opcode::OP_SETA,      op1: 0x0f,     op2: 0x97, oper: [Oper::OPER_RM8,     Oper::OPER_NONE,    Oper::OPER_NONE],      hidden: 0x0 },
+  InstrFmt {  op: Opcode::OP_SETS,      op1: 0x0f,     op2: 0x98, oper: [Oper::OPER_RM8,     Oper::OPER_NONE,    Oper::OPER_NONE],      hidden: 0x0 },
+  InstrFmt {  op: Opcode::OP_SETNS,     op1: 0x0f,     op2: 0x99, oper: [Oper::OPER_RM8,     Oper::OPER_NONE,    Oper::OPER_NONE],      hidden: 0x0 },
+  InstrFmt {  op: Opcode::OP_SETP,      op1: 0x0f,     op2: 0x9a, oper: [Oper::OPER_RM8,     Oper::OPER_NONE,    Oper::OPER_NONE],      hidden: 0x0 },
+  InstrFmt {  op: Opcode::OP_SETNP,     op1: 0x0f,     op2: 0x9b, oper: [Oper::OPER_RM8,     Oper::OPER_NONE,    Oper::OPER_NONE],      hidden: 0x0 },
+  InstrFmt {  op: Opcode::OP_SETL,      op1: 0x0f,     op2: 0x9c, oper: [Oper::OPER_RM8,     Oper::OPER_NONE,    Oper::OPER_NONE],      hidden: 0x0 },
+  InstrFmt {  op: Opcode::OP_SETGE,     op1: 0x0f,     op2: 0x9d, oper: [Oper::OPER_RM8,     Oper::OPER_NONE,    Oper::OPER_NONE],      hidden: 0x0 },
+  InstrFmt {  op: Opcode::OP_SETLE,     op1: 0x0f,     op2: 0x9e, oper: [Oper::OPER_RM8,     Oper::OPER_NONE,    Oper::OPER_NONE],      hidden: 0x0 },
+  InstrFmt {  op: Opcode::OP_SETG,      op1: 0x0f,     op2: 0x9f, oper: [Oper::OPER_RM8,     Oper::OPER_NONE,    Oper::OPER_NONE],      hidden: 0x0 },
   InstrFmt {  op: Opcode::OP_ADC,       op1: 0x10,     op2: -1,   oper: [Oper::OPER_RM8,     Oper::OPER_R8,      Oper::OPER_NONE],      hidden: 0x0 },
   InstrFmt {  op: Opcode::OP_ADC,       op1: 0x11,     op2: -1,   oper: [Oper::OPER_RM16,    Oper::OPER_R16,     Oper::OPER_NONE],      hidden: 0x0 },
   InstrFmt {  op: Opcode::OP_ADC,       op1: 0x12,     op2: -1,   oper: [Oper::OPER_R8,      Oper::OPER_RM8,     Oper::OPER_NONE],      hidden: 0x0 },
@@ -656,6 +704,7 @@ const INSTR_TBL: &[InstrFmt] = &[
 pub enum Error {
   NotFound,
   NeedOpcode2,
+  NeedOpcode2Ext0F,
 }
 
 pub fn lookup(opcode1: u8, opcode2: Option<u8>) -> Result<&'static InstrFmt, Error> {
@@ -681,7 +730,11 @@ pub fn lookup(opcode1: u8, opcode2: Option<u8>) -> Result<&'static InstrFmt, Err
   }
 
   if op1_found && op2 == -1 {
-    return Err(Error::NeedOpcode2)
+    if op1 != 0x0f {
+      return Err(Error::NeedOpcode2)
+    } else {
+      return Err(Error::NeedOpcode2Ext0F)
+    }
   }
 
   Err(Error::NotFound)
