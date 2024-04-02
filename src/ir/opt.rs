@@ -300,7 +300,7 @@ pub fn deadcode_elimination(ir: &mut IR) {
   for b in ir.iter_blocks() {
     for r in ir.iter_instrs(b) {
       let instr = ir.instr(r).unwrap();
-      if instr.opcode.has_side_effects() {
+      if instr.opcode.has_side_effects() || (instr.attrs & Attribute::PIN) != 0 {
         unprocessed.push_back(r);
       }
     }

@@ -40,6 +40,9 @@ fn print_help() {
   println!("  --emit-ast        path to emit the constructed AST (optional)");
   println!("  --emit-code       path to emit c code (optional)");
   println!("");
+  println!("IR BUILD FLAGS:");
+  println!("  --build-pin-all");
+  println!("");
   println!("CODEGEN FLAGS:");
   println!("  --codegen-hydra   emit code that integrates well with the hydra runtime (optional)");
 }
@@ -74,6 +77,7 @@ struct Args {
   emit_ast: Option<String>,
   emit_code: Option<String>,
 
+  build_pin_all: bool,
   codegen_hydra: bool,
 }
 
@@ -114,10 +118,12 @@ fn parse_args() -> Result<Args, pico_args::Error> {
     emit_ctrlflow:   pargs.opt_value_from_str("--emit-ctrlflow")?,
     emit_ast:        pargs.opt_value_from_str("--emit-ast")?,
     emit_code:       pargs.opt_value_from_str("--emit-code")?,
+    build_pin_all:   false,
     codegen_hydra:   false,
   };
 
   let mut remaining = pargs.finish();
+  args.build_pin_all = match_flag(&mut remaining, "--build-pin-all");
   args.codegen_hydra = match_flag(&mut remaining, "--codegen-hydra");
 
   // It's up to the caller what to do with the remaining arguments.
@@ -169,7 +175,7 @@ pub fn run() -> i32 {
     return 0;
   }
 
-  let mut ir = ir::IR::from_instrs(&instr_list, &cfg, &spec, &binary);
+  let mut ir = ir::IR::from_instrs(&instr_list, &cfg, &spec, &binary, args.build_pin_all);
   if let Some(path) = args.emit_ir_initial.as_ref() {
     write_to_path(path, &format!("{}", ir));
     return 0;

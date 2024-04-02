@@ -376,6 +376,9 @@ impl<'a> Builder<'a> {
     }
 
     match instr.opcode {
+      ir::Opcode::Ref => {
+        self.ref_to_expr(instr.operands[0], depth+1)
+      }
       ir::Opcode::Load16 => {
         let seg = self.ref_to_expr_hex(instr.operands[0], depth+1, true);
         let off = self.ref_to_expr_hex(instr.operands[1], depth+1, true);

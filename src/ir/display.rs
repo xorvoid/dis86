@@ -46,6 +46,10 @@ fn attributes_string(attr: u8) -> String {
     if out.len() > 0 { out += ","; }
     out += &format!("stack_ptr");
   }
+  if (attr & Attribute::PIN) != 0 {
+    if out.len() > 0 { out += ","; }
+    out += &format!("pin");
+  }
   out
 }
 

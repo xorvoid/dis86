@@ -54,10 +54,12 @@ struct IRBuilder<'a> {
   addrmap: HashMap<SegOff, BlockRef>,
   cur: BlockRef,
   special: Option<SpecialState>,
+
+  pin_all: bool,
 }
 
 impl<'a> IRBuilder<'a> {
-  fn new(cfg: &'a Config, instrs: &'a [instr::Instr], spec: &'a spec::Spec, binary: &'a binary::Binary) -> Self {
+  fn new(cfg: &'a Config, instrs: &'a [instr::Instr], spec: &'a spec::Spec, binary: &'a binary::Binary, pin_all: bool) -> Self {
     let mut this = Self {
       instrs,
       cfg,
@@ -68,6 +70,8 @@ impl<'a> IRBuilder<'a> {
       addrmap: HashMap::new(),
       cur: BlockRef(0),
       special: None,
+
+      pin_all,
     };
 
     // Create and seal the entry block
@@ -276,7 +280,10 @@ impl IRBuilder<'_> {
     self.ir.get_var(reg.0, self.cur)
   }
 
-  fn append_asm_dst_reg(&mut self, reg: &instr::OperandReg, vref: Ref) {
+  fn append_asm_dst_reg(&mut self, reg: &instr::OperandReg, mut vref: Ref) {
+    if self.pin_all {
+      vref = self.append_instr_with_attrs(Type::U16, Attribute::PIN, Opcode::Ref, vec![vref]);
+    }
     self.ir.set_var(reg.0, self.cur, vref);
   }
 
@@ -330,7 +337,11 @@ impl IRBuilder<'_> {
       _ => panic!("32-bit stores not supported"),
     };
 
-    self.append_instr_with_attrs(Type::Void, Attribute::MAY_ESCAPE, opcode, vec![seg, addr, vref]);
+    let mut attr = Attribute::MAY_ESCAPE;
+    if self.pin_all {
+      attr |= Attribute::PIN;
+    }
+    self.append_instr_with_attrs(Type::Void, attr, opcode, vec![seg, addr, vref]);
   }
 
   fn append_asm_src_imm(&mut self, imm: &instr::OperandImm) -> Ref {
@@ -409,12 +420,14 @@ impl IRBuilder<'_> {
   }
 
   fn pin_registers(&mut self) {
-    // Caller-saved: so don't bother..
-    //self.pin_register(instr::Reg::AX);
-    //self.pin_register(instr::Reg::CX);
-    //self.pin_register(instr::Reg::DX);
-    //self.pin_register(instr::Reg::BX);
-    //self.pin_register(instr::Reg::ES);
+    // Caller-saved: so don't bother.. unless pin_all
+    if self.pin_all {
+      self.pin_register(instr::Reg::AX);
+      self.pin_register(instr::Reg::CX);
+      self.pin_register(instr::Reg::DX);
+      self.pin_register(instr::Reg::BX);
+      self.pin_register(instr::Reg::ES);
+    }
 
     self.pin_register(instr::Reg::SP);
     self.pin_register(instr::Reg::BP);
@@ -934,8 +947,8 @@ fn offset_from<T>(slice: &[T], elt: &T) -> usize {
 }
 
 impl IR {
-  pub fn from_instrs(instrs: &[instr::Instr], cfg: &Config, spec: &spec::Spec<'_>, binary: &binary::Binary) -> IR {
-    let mut bld = IRBuilder::new(cfg, instrs, spec, binary);
+  pub fn from_instrs(instrs: &[instr::Instr], cfg: &Config, spec: &spec::Spec<'_>, binary: &binary::Binary, pin_all: bool) -> IR {
+    let mut bld = IRBuilder::new(cfg, instrs, spec, binary, pin_all);
     bld.build();
     bld.ir
   }
