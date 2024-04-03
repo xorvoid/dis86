@@ -275,16 +275,86 @@ impl<'a> IRBuilder<'a> {
 
 /////////////////////////////////////////////////////////////////////////////////////
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Loc {
+  Full,
+  High,
+  Low,
+}
+
+fn reg_resolve(reg: instr::Reg) -> (instr::Reg, instr::Size, Loc) {
+  match reg {
+    instr::Reg::AX => (instr::Reg::AX, instr::Size::Size16, Loc::Full),
+    instr::Reg::CX => (instr::Reg::CX, instr::Size::Size16, Loc::Full),
+    instr::Reg::DX => (instr::Reg::DX, instr::Size::Size16, Loc::Full),
+    instr::Reg::BX => (instr::Reg::BX, instr::Size::Size16, Loc::Full),
+    instr::Reg::SP => (instr::Reg::SP, instr::Size::Size16, Loc::Full),
+    instr::Reg::BP => (instr::Reg::BP, instr::Size::Size16, Loc::Full),
+    instr::Reg::SI => (instr::Reg::SI, instr::Size::Size16, Loc::Full),
+    instr::Reg::DI => (instr::Reg::DI, instr::Size::Size16, Loc::Full),
+    instr::Reg::AL => (instr::Reg::AX, instr::Size::Size8, Loc::Low),
+    instr::Reg::CL => (instr::Reg::CX, instr::Size::Size8, Loc::Low),
+    instr::Reg::DL => (instr::Reg::DX, instr::Size::Size8, Loc::Low),
+    instr::Reg::BL => (instr::Reg::BX, instr::Size::Size8, Loc::Low),
+    instr::Reg::AH => (instr::Reg::AX, instr::Size::Size8, Loc::High),
+    instr::Reg::CH => (instr::Reg::CX, instr::Size::Size8, Loc::High),
+    instr::Reg::DH => (instr::Reg::DX, instr::Size::Size8, Loc::High),
+    instr::Reg::BH => (instr::Reg::BX, instr::Size::Size8, Loc::High),
+    instr::Reg::ES => (instr::Reg::ES, instr::Size::Size16, Loc::Full),
+    instr::Reg::CS => (instr::Reg::CS, instr::Size::Size16, Loc::Full),
+    instr::Reg::SS => (instr::Reg::SS, instr::Size::Size16, Loc::Full),
+    instr::Reg::DS => (instr::Reg::DS, instr::Size::Size16, Loc::Full),
+    instr::Reg::IP => (instr::Reg::IP, instr::Size::Size16, Loc::Full),
+    instr::Reg::FLAGS => (instr::Reg::FLAGS, instr::Size::Size16, Loc::Full),
+  }
+}
+
 impl IRBuilder<'_> {
   fn append_asm_src_reg(&mut self, reg: &instr::OperandReg) -> Ref {
-    self.ir.get_var(reg.0, self.cur)
+    let (r, sz, loc) = reg_resolve(reg.0);
+    if loc == Loc::Full {
+      assert!(sz == instr::Size::Size16);
+      self.ir.get_var(r, self.cur)
+    } else {
+      let vref = self.ir.get_var(r, self.cur);
+      let op = match loc {
+        Loc::High => Opcode::Upper8,
+        Loc::Low => Opcode::Lower8,
+        _ => unreachable!(),
+      };
+      let res = self.append_instr(Type::U8, op, vec![vref]);
+      self.ir.set_name(&Name::Reg(reg.0), res);
+      res
+    }
   }
 
   fn append_asm_dst_reg(&mut self, reg: &instr::OperandReg, mut vref: Ref) {
     if self.pin_all {
       vref = self.append_instr_with_attrs(Type::U16, Attribute::PIN, Opcode::Ref, vec![vref]);
     }
-    self.ir.set_var(reg.0, self.cur, vref);
+    let (r, sz, loc) = reg_resolve(reg.0);
+    if loc == Loc::Full {
+      assert!(sz == instr::Size::Size16);
+      self.ir.set_var(reg.0, self.cur, vref)
+    } else {
+      // We need to do a very awkward partial-register update
+      let original = self.ir.get_var(r, self.cur);
+      let updated = match loc {
+        Loc::High => {
+          // Load the original low8 and merge with the new high8
+          let low8 = self.append_instr(Type::U8, Opcode::Lower8, vec![original]);
+          self.append_instr(Type::U16, Opcode::Make16, vec![vref, low8])
+        }
+        Loc::Low => {
+          // Load the original high8 and merge with the new low8
+          let high8 = self.append_instr(Type::U8, Opcode::Upper8, vec![original]);
+          self.append_instr(Type::U16, Opcode::Make16, vec![high8, vref])
+        }
+        _ => unreachable!(),
+      };
+      // set the var
+      self.ir.set_var(r, self.cur, updated)
+    }
   }
 
   fn compute_mem_address(&mut self, mem: &instr::OperandMem) -> Ref {

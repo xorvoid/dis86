@@ -334,7 +334,9 @@ impl IR {
       phi
     } else {
       let preds = &self.block(blk).preds;
-      if preds.len() == 1 {
+      if preds.len() == 0 {
+        panic!("Block has no preds in get_var(), cannot lookup var: {}", sym);
+      } else if preds.len() == 1 {
         let parent = preds[0];
         self.get_var(sym, parent)
       } else {
@@ -373,7 +375,7 @@ impl IR {
     }
   }
 
-  fn set_name(&mut self, name: &Name, r: Ref) {
+  pub fn set_name(&mut self, name: &Name, r: Ref) {
    let idx_ref = self.name_next.entry(name.clone()).or_insert(1);
    let idx = *idx_ref;
    *idx_ref = idx+1;

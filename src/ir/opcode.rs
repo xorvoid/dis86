@@ -40,6 +40,11 @@ pub enum Opcode {
   ReadArr32,
   WriteArr8,
   WriteArr16,
+
+  Lower8,      // |n: u16| => n as u8
+  Upper8,      // |n: u16| => (n >> 8) as u8
+  Make16,      // |high: u8, low: u8| => (high as u16) << 8 | (low as u16)
+
   Lower16,     // |n: u32| => n as u16
   Upper16,     // |n: u32| => (n >> 16) as u16
   Make32,      // |high: u16, low: u16| => (high as u32) << 16 | (low as u32)
@@ -127,6 +132,9 @@ impl Opcode {
       Opcode::ReadArr32   => "readarr32",
       Opcode::WriteArr8   => "writearr8",
       Opcode::WriteArr16  => "writearr16",
+      Opcode::Lower8      => "lower8",
+      Opcode::Upper8      => "upper8",
+      Opcode::Make16      => "make16",
       Opcode::Lower16     => "lower16",
       Opcode::Upper16     => "upper16",
       Opcode::Make32      => "make32",

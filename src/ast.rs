@@ -401,6 +401,18 @@ impl<'a> Builder<'a> {
         let lhs = self.ref_to_expr_hex(instr.operands[0], depth+1, hex_const);
         Expr::Cast(Type::U16, Box::new(lhs))
       }
+      ir::Opcode::Upper8 => {
+        let lhs = self.ref_to_expr_hex(instr.operands[0], depth+1, hex_const);
+        Expr::Cast(Type::U8, Box::new(Expr::Binary(Box::new(BinaryExpr {
+          op: BinaryOperator::Shr,
+          lhs,
+          rhs: Expr::DecimalConst(8),
+        }))))
+      }
+      ir::Opcode::Lower8 => {
+        let lhs = self.ref_to_expr_hex(instr.operands[0], depth+1, hex_const);
+        Expr::Cast(Type::U8, Box::new(lhs))
+      }
       ir::Opcode::ReadVar16 => {
         self.symbol_to_expr(instr.operands[0].unwrap_symbol())
       }
@@ -432,6 +444,10 @@ impl<'a> Builder<'a> {
         // generally handled by jmp, but other expressions that use a phi might end up here
         // so, we can simply return our refname
         Expr::Name(self.ref_name(r))
+      }
+      ir::Opcode::Make16 => {
+        let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, depth+1)).collect();
+        Expr::Abstract("MAKE_16", exprs)
       }
       ir::Opcode::Make32 => {
         let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, depth+1)).collect();
