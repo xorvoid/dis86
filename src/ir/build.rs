@@ -450,12 +450,17 @@ impl IRBuilder<'_> {
     let sp = self.ir.get_var(instr::Reg::SP, self.cur);
     let k = self.ir.append_const(2);
 
+    let mut attrs = 0;
+    if self.pin_all {
+      attrs |= Attribute::PIN;
+    }
+    
     // decrement SP
-    let sp = self.append_instr_with_attrs(Type::U16, Attribute::STACK_PTR, Opcode::Sub, vec![sp, k]);
+    let sp = self.append_instr_with_attrs(Type::U16, attrs | Attribute::STACK_PTR, Opcode::Sub, vec![sp, k]);
     self.ir.set_var(instr::Reg::SP, self.cur, sp);
 
     // store to SS:SP
-    self.append_instr(Type::Void, Opcode::Store16, vec![ss, sp, vref]);
+    self.append_instr_with_attrs(Type::Void, attrs, Opcode::Store16, vec![ss, sp, vref]);
   }
 
   fn append_pop(&mut self) -> Ref {
@@ -463,8 +468,13 @@ impl IRBuilder<'_> {
     let sp = self.ir.get_var(instr::Reg::SP, self.cur);
     let k = self.ir.append_const(2);
 
-    let val = self.append_instr(Type::U16, Opcode::Load16, vec![ss, sp]);
-    let sp = self.append_instr_with_attrs(Type::U16, Attribute::STACK_PTR, Opcode::Add, vec![sp, k]);
+    let mut attrs = 0;
+    if self.pin_all {
+      attrs |= Attribute::PIN;
+    }
+    
+    let val = self.append_instr_with_attrs(Type::U16, attrs, Opcode::Load16, vec![ss, sp]);
+    let sp = self.append_instr_with_attrs(Type::U16, attrs | Attribute::STACK_PTR, Opcode::Add, vec![sp, k]);
     self.ir.set_var(instr::Reg::SP, self.cur, sp);
 
     val

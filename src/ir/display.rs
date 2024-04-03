@@ -56,7 +56,7 @@ fn attributes_string(attr: u8) -> String {
 impl fmt::Display for Name {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
-      Name::Reg(r) => write!(f, "{}", reg_name(*r)),
+      Name::Reg(r) => write!(f, "{}", r.info().name),
       Name::Var(v) => write!(f, "{}", v),
     }
   }
@@ -106,7 +106,7 @@ impl Formatter {
           write!(f, "#0x{:x}", k)?;
         }
       }
-      Ref::Init(reg) => write!(f, "{}", reg.info().name)?,
+      Ref::Init(reg) => write!(f, "{}.init", reg.info().name)?,
       Ref::Block(blk) => write!(f, "b{}", blk.0)?,
       Ref::Instr(_, _) => {
         if let Some(FullName(sym, num)) = ir.names.get(&r) {

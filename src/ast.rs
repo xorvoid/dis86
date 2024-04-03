@@ -358,7 +358,7 @@ impl<'a> Builder<'a> {
       None => (),
     }
     if let ir::Ref::Init(reg) = r {
-      return Expr::Name(reg.info().name.to_string());
+      return Expr::Name(reg.info().name.to_string() + "_0");
     }
 
     let instr = self.ir.instr(r).unwrap();
