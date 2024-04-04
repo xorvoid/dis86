@@ -1,7 +1,6 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Opcode {
   Nop,
-  Pin,
   Ref,
   Phi,
 
@@ -42,6 +41,7 @@ pub enum Opcode {
   WriteArr16,
 
   LoadReg,
+  StoreReg,
 
   Lower8,      // |n: u16| => n as u8
   Upper8,      // |n: u16| => (n >> 8) as u8
@@ -98,7 +98,6 @@ impl Opcode {
   pub fn as_str(&self) -> &'static str {
     match self {
       Opcode::Nop         => "nop",
-      Opcode::Pin         => "pin",
       Opcode::Ref         => "ref",
       Opcode::Phi         => "phi",
       Opcode::Sub         => "sub",
@@ -135,6 +134,7 @@ impl Opcode {
       Opcode::WriteArr8   => "writearr8",
       Opcode::WriteArr16  => "writearr16",
       Opcode::LoadReg     => "loadreg",
+      Opcode::StoreReg    => "storereg",
       Opcode::Lower8      => "lower8",
       Opcode::Upper8      => "upper8",
       Opcode::Make16      => "make16",

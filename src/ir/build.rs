@@ -78,24 +78,8 @@ impl<'a> IRBuilder<'a> {
     let entry = this.new_block("entry");
     this.ir.seal_block(entry);
 
-    // Set initial register values
-    this.ir.set_var(instr::Reg::AX, this.cur, Ref::Init(instr::Reg::AX));
-    this.ir.set_var(instr::Reg::CX, this.cur, Ref::Init(instr::Reg::CX));
-    this.ir.set_var(instr::Reg::DX, this.cur, Ref::Init(instr::Reg::DX));
-    this.ir.set_var(instr::Reg::BX, this.cur, Ref::Init(instr::Reg::BX));
-
-    this.ir.set_var(instr::Reg::SP, this.cur, Ref::Init(instr::Reg::SP));
-    this.ir.set_var(instr::Reg::BP, this.cur, Ref::Init(instr::Reg::BP));
-    this.ir.set_var(instr::Reg::SI, this.cur, Ref::Init(instr::Reg::SI));
-    this.ir.set_var(instr::Reg::DI, this.cur, Ref::Init(instr::Reg::DI));
-
-    this.ir.set_var(instr::Reg::ES, this.cur, Ref::Init(instr::Reg::ES));
-    this.ir.set_var(instr::Reg::CS, this.cur, Ref::Init(instr::Reg::CS));
-    this.ir.set_var(instr::Reg::SS, this.cur, Ref::Init(instr::Reg::SS));
-    this.ir.set_var(instr::Reg::DS, this.cur, Ref::Init(instr::Reg::DS));
-
-    this.ir.set_var(instr::Reg::IP, this.cur, Ref::Init(instr::Reg::IP));
-    this.ir.set_var(instr::Reg::FLAGS, this.cur, Ref::Init(instr::Reg::FLAGS));
+    // Load all registers to start
+    this.load_registers();
 
     this
   }
@@ -506,39 +490,39 @@ impl IRBuilder<'_> {
   }
 
   fn load_register(&mut self, reg: instr::Reg) {
-    let vref = self.append_instr(Type::U16, Opcode::LoadReg, vec![Ref::Init(reg)]);
+    let vref = self.append_instr(Type::U16, Opcode::LoadReg, vec![Ref::Reg(reg)]);
     self.ir.set_var(reg, self.cur, vref);
   }
 
-  fn pin_registers(&mut self) {
+  fn store_registers(&mut self) {
     // Caller-saved: so don't bother.. unless pin_all
     if self.pin_all {
-      self.pin_register(instr::Reg::AX);
-      self.pin_register(instr::Reg::CX);
-      self.pin_register(instr::Reg::DX);
-      self.pin_register(instr::Reg::BX);
-      self.pin_register(instr::Reg::ES);
+      self.store_register(instr::Reg::AX);
+      self.store_register(instr::Reg::CX);
+      self.store_register(instr::Reg::DX);
+      self.store_register(instr::Reg::BX);
+      self.store_register(instr::Reg::ES);
     }
 
-    self.pin_register(instr::Reg::SP);
-    self.pin_register(instr::Reg::BP);
-    self.pin_register(instr::Reg::SI);
-    self.pin_register(instr::Reg::DI);
+    self.store_register(instr::Reg::SP);
+    self.store_register(instr::Reg::BP);
+    self.store_register(instr::Reg::SI);
+    self.store_register(instr::Reg::DI);
 
-    self.pin_register(instr::Reg::SS);
-    self.pin_register(instr::Reg::DS);
+    self.store_register(instr::Reg::SS);
+    self.store_register(instr::Reg::DS);
 
     // ??? Technically we should have this ???
-    //self.pin_register(instr::Reg::FLAGS);
+    //self.store_register(instr::Reg::FLAGS);
 
     // What would this even mean??
-    //self.pin_register(instr::Reg::CS);
-    //self.pin_register(instr::Reg::IP);
+    //self.store_register(instr::Reg::CS);
+    //self.store_register(instr::Reg::IP);
   }
 
-  fn pin_register(&mut self, reg: instr::Reg) {
+  fn store_register(&mut self, reg: instr::Reg) {
     let vref = self.ir.get_var(reg, self.cur);
-    let pin = self.append_instr(Type::Void, Opcode::Pin, vec![vref]);
+    let pin = self.append_instr(Type::Void, Opcode::StoreReg, vec![Ref::Reg(reg), vref]);
     self.ir.set_var(reg, self.cur, pin);
   }
 
@@ -774,7 +758,7 @@ impl IRBuilder<'_> {
     //println!("a: {:?}", a);
     match a {
       Ref::Instr(_, _) => self.ir.instr(a).unwrap().typ.clone(),
-      Ref::Init(_) => Type::U16,
+      //Ref::Reg(_) => Type::U16,
       _ => Type::Unknown,
     }
   }
@@ -839,13 +823,13 @@ impl IRBuilder<'_> {
         self.ir.set_var(instr::Reg::BP, self.cur, vref);
       }
       instr::Opcode::OP_RETF => {
-        self.pin_registers();
+        self.store_registers();
         let ret_vals = self.return_vals();
         self.append_instr(Type::Void, Opcode::RetFar, ret_vals);
 
       }
       instr::Opcode::OP_RET => {
-        self.pin_registers();
+        self.store_registers();
         let ret_vals = self.return_vals();
         self.append_instr(Type::Void, Opcode::RetNear, ret_vals);
       }
@@ -936,8 +920,10 @@ impl IRBuilder<'_> {
       }
       instr::Opcode::OP_INT => {
         let num = self.append_asm_src_operand(&ins.operands[0]);
+        // Store all registers because we have NO MODEL of what the interrupt may consume
+        self.store_registers();
         self.append_instr(Type::Void, Opcode::Int, vec![num]);
-        // Reload all registers because we have NO MODEL of what the interrupt may have done
+        // Reload all registers because we have NO MODEL of what the interrupt may mutate
         self.load_registers();
       }
       instr::Opcode::OP_LEA => {
@@ -1025,9 +1011,9 @@ impl IRBuilder<'_> {
       if block_start.get(&ins.addr).is_some() {
         self.start_next_blk(ins.addr);
       }
-      if i == 0 {
-        self.load_registers();
-      }
+      // if i == 0 {
+      //   self.load_registers();
+      // }
       self.append_asm_instr(ins);
     }
 

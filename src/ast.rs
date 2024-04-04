@@ -357,9 +357,9 @@ impl<'a> Builder<'a> {
       }
       None => (),
     }
-    if let ir::Ref::Init(reg) = r {
-      return Expr::Name(reg.info().name.to_string());
-    }
+    // if let ir::Ref::Init(reg) = r {
+    //   return Expr::Name(reg.info().name.to_string());
+    // }
 
     let instr = self.ir.instr(r).unwrap();
     if depth != 0 && (self.lookup_uses(r) != 1 || instr.opcode.is_call()) {
@@ -380,7 +380,8 @@ impl<'a> Builder<'a> {
         self.ref_to_expr(instr.operands[0], depth+1)
       }
       ir::Opcode::LoadReg => {
-        self.ref_to_expr(instr.operands[0], depth+1)
+        let ir::Ref::Reg(reg) = instr.operands[0] else { panic!("Expected register ref") };
+        Expr::Name(reg.info().name.to_string())
       }
       ir::Opcode::Load16 => {
         let seg = self.ref_to_expr_hex(instr.operands[0], depth+1, true);
@@ -581,7 +582,14 @@ impl<'a> Builder<'a> {
       match instr.opcode {
         ir::Opcode::Nop => continue,
         ir::Opcode::Phi => continue, // handled by jmp
-        ir::Opcode::Pin => continue, // ignored
+        ir::Opcode::StoreReg => {
+          let ir::Ref::Reg(reg) = instr.operands[0] else { panic!("Expected register ref") };
+          let rhs = self.ref_to_expr(instr.operands[1], 1);
+          blk.push_stmt(Stmt::Assign(Assign {
+            decltype: None,
+            lhs: Expr::Name(reg.info().name.to_string()),
+            rhs }));
+        }
         ir::Opcode::RetFar => {
           let vals: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, 1)).collect();
           blk.push_stmt(Stmt::Return(Return{rt: ReturnType::Far, vals}));

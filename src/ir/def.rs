@@ -15,7 +15,7 @@ pub enum Ref {
   //None,
   Const(ConstRef),
   Instr(BlockRef, DVecIndex),
-  Init(instr::Reg),
+  Reg(instr::Reg),
   Block(BlockRef),
   Symbol(sym::SymbolRef),
   Func(usize),

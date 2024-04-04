@@ -102,7 +102,7 @@ impl Opcode {
   pub fn has_no_result(&self) -> bool {
     match self {
       Opcode::Nop => true,
-      //Opcode::Pin => true,
+      Opcode::StoreReg => true,
       Opcode::Store8 => true,
       Opcode::Store16 => true,
       Opcode::WriteVar8 => true,
@@ -120,7 +120,7 @@ impl Opcode {
   pub fn maybe_unused(&self) -> bool {
     match self {
       Opcode::Nop => true,
-      Opcode::Pin => true,
+      Opcode::StoreReg => true,
       Opcode::Store8 => true,
       Opcode::Store16 => true,
       Opcode::WriteVar8 => true,
@@ -142,7 +142,7 @@ impl Opcode {
 
   pub fn has_side_effects(&self) -> bool {
     match self {
-      Opcode::Pin => true,
+      Opcode::StoreReg => true,
       Opcode::Store8 => true,
       Opcode::Store16 => true,
       Opcode::WriteVar8 => true,

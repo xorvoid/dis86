@@ -187,29 +187,29 @@ pub fn run() -> i32 {
     return 0;
   }
 
-  sym::symbolize(&mut ir, &cfg);
-  if let Some(path) = args.emit_ir_sym.as_ref() {
-    write_to_path(path, &format!("{}", ir));
-    return 0;
-  }
+  // sym::symbolize(&mut ir, &cfg);
+  // if let Some(path) = args.emit_ir_sym.as_ref() {
+  //   write_to_path(path, &format!("{}", ir));
+  //   return 0;
+  // }
 
-  opt::forward_store_to_load(&mut ir);
-  opt::optimize(&mut ir);
-  if let Some(path) = args.emit_ir_fwd.as_ref() {
-    write_to_path(path, &format!("{}", ir));
-    return 0;
-  }
+  // opt::forward_store_to_load(&mut ir);
+  // opt::optimize(&mut ir);
+  // if let Some(path) = args.emit_ir_fwd.as_ref() {
+  //   write_to_path(path, &format!("{}", ir));
+  //   return 0;
+  // }
 
-  opt::mem_symbol_to_ref(&mut ir);
-  opt::optimize(&mut ir);
-  if let Some(path) = args.emit_ir_opt.as_ref() {
-    let text = ir::display::display_ir_with_uses(&ir).unwrap();
-    write_to_path(path, &format!("{}", &text));
-    return 0;
-  }
+  // opt::mem_symbol_to_ref(&mut ir);
+  // opt::optimize(&mut ir);
+  // if let Some(path) = args.emit_ir_opt.as_ref() {
+  //   let text = ir::display::display_ir_with_uses(&ir).unwrap();
+  //   write_to_path(path, &format!("{}", &text));
+  //   return 0;
+  // }
 
-  fuse::fuse_mem(&mut ir);
-  opt::optimize(&mut ir);
+  // fuse::fuse_mem(&mut ir);
+  // opt::optimize(&mut ir);
 
   ir::fin::finalize(&mut ir);
   if let Some(path) = args.emit_ir_final.as_ref() {

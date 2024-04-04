@@ -196,8 +196,8 @@ impl SymbolMap {
 }
 
 pub fn symbolize_stack(ir: &mut IR) {
-  let ss = Ref::Init(instr::Reg::SS);
-  let sp = Ref::Init(instr::Reg::SP);
+  let ss = Ref::Reg(instr::Reg::SS);
+  let sp = Ref::Reg(instr::Reg::SP);
 
   // Detect locals and params
   let mut var_mem_refs = vec![];
@@ -283,7 +283,7 @@ pub fn populate_globals(ir: &mut IR, cfg: &Config) {
 pub fn symbolize_globals(ir: &mut IR, cfg: &Config) {
   populate_globals(ir, cfg);
 
-  let ds = Ref::Init(instr::Reg::DS);
+  let ds = Ref::Reg(instr::Reg::DS);
 
   for b in ir.iter_blocks() {
     for r in ir.iter_instrs(b) {
