@@ -1,3 +1,5 @@
+extern crate static_assertions as sa;
+
 // Helper libraries
 mod util;
 mod bsl;

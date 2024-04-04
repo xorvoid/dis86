@@ -53,7 +53,6 @@ pub struct SegInfo
 	pub minoff: u16,
 }
 
-#[repr(C, packed)]
 #[derive(Debug, Clone)]
 pub struct OverlaySeg {
   pub stub_segment: u16,     // Segment number where the stubs are located
@@ -63,13 +62,12 @@ pub struct OverlaySeg {
   pub _unknown_2: u16,
 }
 
-#[repr(C, packed)]
 #[derive(Debug, Clone)]
 pub struct OverlayStub {
-  overlay_seg_num: u16,  // Id or index of the overlay segment this stub belongs to
-  stub_segment: u16,     // Segment this stub is located at (as called)
-  stub_offset: u16,      // Offset this stub is located at (as called)
-  dest_offset: u16,      // Destination offset into the overlay segment (wherever it ends up resident)
+  pub overlay_seg_num: u16,  // Id or index of the overlay segment this stub belongs to
+  pub stub_segment: u16,     // Segment this stub is located at (as called)
+  pub stub_offset: u16,      // Offset this stub is located at (as called)
+  pub dest_offset: u16,      // Destination offset into the overlay segment (wherever it ends up resident)
 }
 
 #[derive(Debug, Clone)]
@@ -84,8 +82,8 @@ pub struct Exe<'a> {
 }
 
 #[derive(Debug, Clone)]
-pub struct OverlayInfo<'a> {
-  file_offset: u32,
-  segs: Vec<&'a OverlaySeg>,
-  stubs: Vec<&'a OverlayStub>,
+pub struct OverlayInfo {
+  pub file_offset: u32,
+  pub segs: Vec<OverlaySeg>,
+  pub stubs: Vec<OverlayStub>,
 }

@@ -1,25 +1,6 @@
 use crate::binfmt::mz::*;
-use std::mem::size_of;
 
-unsafe fn try_struct_from_bytes<T: Sized>(data: &[u8]) -> Result<&T, String> {
-  let sz = size_of::<T>();
-  if data.len() < sz {
-    Err(format!("Data is too short for {}: got {}, expected {}", std::any::type_name::<T>(), data.len(), sz))
-  } else {
-    Ok(unsafe { &*(data.as_ptr() as *const T) })
-  }
-}
-
-unsafe fn try_slice_from_bytes<T: Sized>(data: &[u8], nelts: usize) -> Result<&[T], String> {
-  let len = nelts * size_of::<T>();
-  if data.len() < len {
-    Err(format!("Data is too short for {}: got {}, expected {}", std::any::type_name::<[T]>(), data.len(), len))
-  } else {
-    Ok(unsafe { std::slice::from_raw_parts(data.as_ptr() as *const T, nelts) })
-  }
-}
-
-pub fn decode_exe<'a>(data: &'a [u8]) -> Result<Exe<'a>, String> {
+fn decode_exe<'a>(data: &'a [u8]) -> Result<Exe<'a>, String> {
   // Decode the header
   let hdr = decode_hdr(data)?;
 
@@ -32,7 +13,7 @@ pub fn decode_exe<'a>(data: &'a [u8]) -> Result<Exe<'a>, String> {
   }
 
   // Determine the relocs array
-  let relocs = unsafe { try_slice_from_bytes(&data[hdr.lfarlc as usize..], hdr.crlc as usize) }?;
+  let relocs = unsafe { util::try_slice_from_bytes(&data[hdr.lfarlc as usize..], hdr.crlc as usize) }?;
 
   // Optional regions
   let data_rem = &data[exe_end as usize..];
@@ -44,7 +25,7 @@ pub fn decode_exe<'a>(data: &'a [u8]) -> Result<Exe<'a>, String> {
       let segnum = fbov.segnum; // unaligned
       return Err(format!("Negative FBOV segnum: {}", segnum));
     }
-    seginfo = Some(unsafe { try_slice_from_bytes(&data[fbov.exeinfo as usize..], fbov.segnum as usize) }?);
+    seginfo = Some(unsafe { util::try_slice_from_bytes(&data[fbov.exeinfo as usize..], fbov.segnum as usize) }?);
   }
 
   Ok(Exe {
@@ -58,14 +39,9 @@ pub fn decode_exe<'a>(data: &'a [u8]) -> Result<Exe<'a>, String> {
   })
 }
 
-pub fn decode_hdr<'a>(data: &'a [u8]) -> Result<&'a Header, String> {
-  // let hdr_sz = size_of::<Header>();
-  // if data.len() < hdr_sz {
-  //   return Err(format!("Data is too short for header: got {}, expected {}", data.len(), hdr_sz));
-  // }
-
+fn decode_hdr<'a>(data: &'a [u8]) -> Result<&'a Header, String> {
   // Get the header and perform magic check
-  let hdr: &Header = unsafe { try_struct_from_bytes(data) }?;
+  let hdr: &Header = unsafe { util::try_struct_from_bytes(data) }?;
   let magic_expect = ['M' as u8, 'Z' as u8];
   if hdr.magic != magic_expect {
     return Err(format!("Magic number mismatch: got {:?}, expected {:?}", hdr.magic, magic_expect));
@@ -74,9 +50,9 @@ pub fn decode_hdr<'a>(data: &'a [u8]) -> Result<&'a Header, String> {
   Ok(hdr)
 }
 
-pub fn decode_fbov<'a>(data: &'a [u8]) -> Option<&'a FBOV> {
+fn decode_fbov<'a>(data: &'a [u8]) -> Option<&'a FBOV> {
   // Get the struct and perform magic check
-  let fbov: &FBOV = unsafe { try_struct_from_bytes(data) }.ok()?;
+  let fbov: &FBOV = unsafe { util::try_struct_from_bytes(data) }.ok()?;
   let magic_expect = ['F' as u8, 'B' as u8, 'O' as u8, 'V' as u8];
   if fbov.magic != magic_expect {
     return None;
@@ -97,7 +73,7 @@ impl<'a> Exe<'a> {
     decode_exe(data)
   }
 
-  pub fn overlay_info(&self) -> Result<Option<OverlayInfo>, String> {
-    OK(None)
+  pub fn decode_overlay_info(&self) -> Result<Option<OverlayInfo>, String> {
+    overlay::decode_overlay_info(self)
   }
 }
