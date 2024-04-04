@@ -75,26 +75,26 @@ impl<'a> Exe<'a> {
   pub fn print_seginfo(seginfo: &[SegInfo]) {
     println!("Segment Information:");
     println!("  {:<8}  {:<12}  {:<8}  {:<8}  {:<10}",
-           "seg", "flags", "minoff", "maxoff", "size");
+           "seg", "type", "minoff", "maxoff", "size");
 
     for s in seginfo {
       // Load everything to stack because rust thinks it's unaligned and complains otherwise...
       let seg    = s.seg;
       let maxoff = s.maxoff;
-      let flags  = s.flags;
+      let typ    = s.typ;
       let minoff = s.minoff;
 
       let n = maxoff.wrapping_sub(minoff);
-      let typ = match flags {
-        SegInfoFlags::DATA => "DATA",
-        SegInfoFlags::CODE => "CODE",
-        SegInfoFlags::STUB => "STUB",
-        SegInfoFlags::OVERLAY => "OVERLAY",
+      let typ_str = match typ {
+        SegInfoType::DATA => "DATA",
+        SegInfoType::CODE => "CODE",
+        SegInfoType::STUB => "STUB",
+        SegInfoType::OVERLAY => "OVERLAY",
         _ => "UNKNOWN",
       };
-      let flags_str = format!("{}({})", typ, flags);
+      let typ_str = format!("{}({})", typ_str, typ);
       println!("  0x{:04x}    {:<12}  0x{:04x}    0x{:04x}    {:5} (0x{:04x})",
-               seg, flags_str, minoff, maxoff, n, n);
+               seg, typ_str, minoff, maxoff, n, n);
     }
     println!("");
   }

@@ -40,7 +40,7 @@ pub(super) fn decode_overlay_info(data: &[u8], exe_start: u32, fbov: &FBOV, segi
   let mut next_seg = 0;
   for s in seginfo {
     // iterate all stubs
-    if s.flags != SegInfoFlags::STUB { continue }
+    if s.typ != SegInfoType::STUB { continue }
 
     // sanity check: might not be required but it's generally true how with
     // how this compiler liked to layout things

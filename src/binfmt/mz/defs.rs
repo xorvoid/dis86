@@ -36,7 +36,7 @@ pub struct FBOV {
 }
 
 #[allow(non_snake_case)]
-pub mod SegInfoFlags {
+pub mod SegInfoType {
   pub const DATA: u16 = 0;
   pub const CODE: u16 = 1;
   pub const STUB: u16 = 3;
@@ -49,7 +49,7 @@ pub struct SegInfo
 {
 	pub seg: u16,
 	pub maxoff: u16,
-	pub flags: u16, // SegInfoFlags::*
+	pub typ: u16, // SegInfoType::*
 	pub minoff: u16,
 }
 
