@@ -9,7 +9,7 @@ const CODE_OVERLAY_STUB_ZEROS:          [u8; 1]  = [0; 1];
 #[derive(Debug)]
 pub struct CodeOverlaySeg {
   interrupt_code: [u8; 4], // should be: cd 3f 00 00
-  file_offset: u32,
+  data_offset: u32,
   seg_size: u16,
   _unknown_1: u16,
   _unknown_2: u16,
@@ -68,7 +68,7 @@ pub(super) fn decode_overlay_info(data: &[u8], exe_start: u32, fbov: &FBOV, segi
     out_segs.push(OverlaySeg {
       stub_segment: s.seg,
       segment_size: seg.seg_size,
-      file_offset:  seg.file_offset,
+      data_offset:  seg.data_offset,
       _unknown_1: seg._unknown_1,
       _unknown_2: seg._unknown_2,
     });

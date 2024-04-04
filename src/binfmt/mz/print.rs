@@ -105,11 +105,11 @@ impl<'a> Exe<'a> {
     println!("");
 
     println!("Overlay Segments:");
-    println!("   num    file_off    file_end    seg_size    _unknown_1    _unknown_2");
+    println!("   num      data_off    data_end    seg_size    _unknown_1    _unknown_2");
     for (i, seg) in ovr.segs.iter().enumerate() {
-      let end = seg.file_offset + seg.segment_size as u32;
-      println!("   {:3}   {:9}   {:9}   {:9}        0x{:04x}        0x{:04x}",
-               i, seg.file_offset, end, seg.segment_size, seg._unknown_1, seg._unknown_2);
+      let end = seg.data_offset + seg.segment_size as u32;
+      println!("   {:3}   0x{:08x}   0x{:08x}   {:9}        0x{:04x}        0x{:04x}",
+               i, seg.data_offset, end, seg.segment_size, seg._unknown_1, seg._unknown_2);
     }
     println!("");
 

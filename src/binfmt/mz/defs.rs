@@ -57,7 +57,7 @@ pub struct SegInfo
 pub struct OverlaySeg {
   pub stub_segment: u16,     // Segment number where the stubs are located
   pub segment_size: u16,     // Size of the destination segment
-  pub file_offset: u32,      // Offset to the destination segment in the binary image
+  pub data_offset: u32,      // Offset to the destination segment in the binary image (from OverlayInfo::file_offset)
   pub _unknown_1: u16,
   pub _unknown_2: u16,
 }
