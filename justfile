@@ -4,13 +4,17 @@
 list:
   just --list
 
+# Edit the justfile
+edit:
+  emacs -nw justfile
+  
 # Build the repository
 build:
   cargo build
 
 # Test the repository
-test:
-  cargo test
+test *opts:
+  cargo test {{opts}}
 
 # Show control-flow-graph using graphviz
 vis name:
