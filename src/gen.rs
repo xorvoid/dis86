@@ -74,7 +74,7 @@ impl FlavorImpl for Hydra {
   fn func_sig(&self, g: &mut Gen<'_>, func: &Function) -> fmt::Result {
     let name = &func.name;
     let name = if name.starts_with("F_") { &name[2..] } else { name };
-    g.text(&format!("HOOK_FUNC(H_{})", name))
+    g.text(&format!("HYDRA_FUNC(H_{})", name))
   }
 
   fn ret(&self, g: &mut Gen<'_>, ret: &Return) -> fmt::Result {
