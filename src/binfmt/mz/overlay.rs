@@ -27,14 +27,15 @@ pub struct CodeOverlayStub {
 }
 sa::const_assert!(std::mem::size_of::<CodeOverlayStub>() == 5);
 
-pub(super) fn decode_overlay_info(exe: &Exe<'_>) -> Result<Option<OverlayInfo>, String> {
+pub(super) fn decode_overlay_info(data: &[u8], exe_start: u32, fbov: &FBOV, seginfo: &[SegInfo]) -> Result<OverlayInfo, String> {
   let mut out_segs = vec![];
   let mut out_stubs = vec![];
 
-  let exe_data = exe.exe_data();
-  let Some(seginfo) = exe.seginfo else {
-    return Ok(None);
-  };
+  let exe_data = &data[exe_start as usize..];
+  // let exe_data = exe.exe_data();
+  // let Some(seginfo) = exe.seginfo else {
+  //   return Ok(None);
+  // };
 
   let mut next_seg = 0;
   for s in seginfo {
@@ -100,13 +101,13 @@ pub(super) fn decode_overlay_info(exe: &Exe<'_>) -> Result<Option<OverlayInfo>, 
 
   // Overlay data starts immediately after the FBOV header
   let file_offset =
-    exe.fbov.unwrap() as *const _ as usize
+    fbov as *const _ as usize
     + std::mem::size_of::<FBOV>()
-    - exe.rawdata.as_ptr() as usize;
+    - data.as_ptr() as usize;
 
-  Ok(Some(OverlayInfo {
+  Ok(OverlayInfo {
     file_offset: file_offset.try_into().unwrap(),
     segs: out_segs,
     stubs: out_stubs
-  }))
+  })
 }

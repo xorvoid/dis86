@@ -71,6 +71,13 @@ pub struct OverlayStub {
 }
 
 #[derive(Debug, Clone)]
+pub struct OverlayInfo {
+  pub file_offset: u32,
+  pub segs: Vec<OverlaySeg>,
+  pub stubs: Vec<OverlayStub>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Exe<'a> {
   pub hdr: &'a Header,
   pub exe_start: u32,
@@ -78,12 +85,6 @@ pub struct Exe<'a> {
   pub relocs: &'a [Reloc],
   pub fbov: Option<&'a FBOV>,
   pub seginfo: Option<&'a [SegInfo]>,
+  pub ovr: Option<OverlayInfo>,
   pub rawdata: &'a [u8],
-}
-
-#[derive(Debug, Clone)]
-pub struct OverlayInfo {
-  pub file_offset: u32,
-  pub segs: Vec<OverlaySeg>,
-  pub stubs: Vec<OverlayStub>,
 }

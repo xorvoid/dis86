@@ -15,8 +15,4 @@ fn main() {
   let exe = mz::Exe::decode(&data).unwrap();
   //println!("{:#?}", exe);
   exe.print();
-
-  if let Some(ovr) = exe.decode_overlay_info().unwrap() {
-    ovr.print();
-  }
 }

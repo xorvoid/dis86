@@ -99,6 +99,26 @@ impl<'a> Exe<'a> {
     println!("");
   }
 
+
+  fn print_overlayinfo(ovr: &OverlayInfo) {
+    println!("Overlay File Offset: 0x{:x}", ovr.file_offset);
+    println!("");
+
+    println!("Overlay Segments:");
+    println!("   num    file_off    file_end    seg_size    _unknown_1    _unknown_2");
+    for (i, seg) in ovr.segs.iter().enumerate() {
+      let end = seg.file_offset + seg.segment_size as u32;
+      println!("   {:3}   {:9}   {:9}   {:9}        0x{:04x}        0x{:04x}",
+               i, seg.file_offset, end, seg.segment_size, seg._unknown_1, seg._unknown_2);
+    }
+    println!("");
+
+    println!("Overlay Stubs:");
+    for stub in &ovr.stubs {
+      println!("  0x{:04x}:0x{:04x} => seg:0x{:04x} (overlay: {})", stub.stub_segment, stub.stub_offset, stub.dest_offset, stub.overlay_seg_num);
+    }
+  }
+
   pub fn print(&self) {
     Self::print_hdr(self);
     Self::print_relocs(&self.relocs);
@@ -108,26 +128,8 @@ impl<'a> Exe<'a> {
     if let Some(seginfo) = self.seginfo {
       Self::print_seginfo(seginfo);
     }
-  }
-}
-
-impl OverlayInfo {
-  pub fn print(&self) {
-    println!("Overlay File Offset: 0x{:x}", self.file_offset);
-    println!("");
-
-    println!("Overlay Segments:");
-    println!("   num    file_off    file_end    seg_size    _unknown_1    _unknown_2");
-    for (i, seg) in self.segs.iter().enumerate() {
-      let end = seg.file_offset + seg.segment_size as u32;
-      println!("   {:3}   {:9}   {:9}   {:9}        0x{:04x}        0x{:04x}",
-               i, seg.file_offset, end, seg.segment_size, seg._unknown_1, seg._unknown_2);
-    }
-    println!("");
-
-    println!("Overlay Stubs:");
-    for stub in &self.stubs {
-      println!("  0x{:04x}:0x{:04x} => seg:0x{:04x} (overlay: {})", stub.stub_segment, stub.stub_offset, stub.dest_offset, stub.overlay_seg_num);
+    if let Some(ovr) = self.ovr.as_ref() {
+      Self::print_overlayinfo(ovr);
     }
   }
 }

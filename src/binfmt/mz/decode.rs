@@ -15,9 +15,11 @@ fn decode_exe<'a>(data: &'a [u8]) -> Result<Exe<'a>, String> {
   // Determine the relocs array
   let relocs = unsafe { util::try_slice_from_bytes(&data[hdr.lfarlc as usize..], hdr.crlc as usize) }?;
 
-  // Optional regions
+  // Optional FBOV
   let data_rem = &data[exe_end as usize..];
   let fbov = decode_fbov(data_rem);
+
+  // Optional seginfo
   let mut seginfo = None;
   if let Some(fbov) = fbov {
     // Decode seginfo
@@ -28,6 +30,12 @@ fn decode_exe<'a>(data: &'a [u8]) -> Result<Exe<'a>, String> {
     seginfo = Some(unsafe { util::try_slice_from_bytes(&data[fbov.exeinfo as usize..], fbov.segnum as usize) }?);
   }
 
+  // Optional overlay info
+  let mut ovr = None;
+  if let Some(fbov) = fbov {
+    ovr = Some(overlay::decode_overlay_info(data, exe_start, fbov, seginfo.unwrap())?);
+  }
+
   Ok(Exe {
     hdr,
     exe_start,
@@ -35,6 +43,7 @@ fn decode_exe<'a>(data: &'a [u8]) -> Result<Exe<'a>, String> {
     relocs,
     fbov,
     seginfo,
+    ovr,
     rawdata: data,
   })
 }
@@ -71,9 +80,5 @@ impl<'a> Exe<'a> {
   #[cfg(target_endian = "little")]
   pub fn decode(data: &'a [u8]) -> Result<Self, String> {
     decode_exe(data)
-  }
-
-  pub fn decode_overlay_info(&self) -> Result<Option<OverlayInfo>, String> {
-    overlay::decode_overlay_info(self)
   }
 }
