@@ -358,7 +358,7 @@ impl<'a> Builder<'a> {
       None => (),
     }
     if let ir::Ref::Init(reg) = r {
-      return Expr::Name(reg.info().name.to_string() + "_0");
+      return Expr::Name(reg.info().name.to_string());
     }
 
     let instr = self.ir.instr(r).unwrap();
@@ -377,6 +377,9 @@ impl<'a> Builder<'a> {
 
     match instr.opcode {
       ir::Opcode::Ref => {
+        self.ref_to_expr(instr.operands[0], depth+1)
+      }
+      ir::Opcode::LoadReg => {
         self.ref_to_expr(instr.operands[0], depth+1)
       }
       ir::Opcode::Load16 => {

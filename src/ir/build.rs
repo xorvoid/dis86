@@ -466,12 +466,6 @@ impl IRBuilder<'_> {
     self.set_flags(new_flags);
   }
 
-  fn pin_register(&mut self, reg: instr::Reg) {
-    let vref = self.ir.get_var(reg, self.cur);
-    let pin = self.append_instr(Type::Void, Opcode::Pin, vec![vref]);
-    self.ir.set_var(reg, self.cur, pin);
-  }
-
   fn return_vals(&mut self) -> Vec<Ref> {
     let ax = self.ir.get_var(instr::Reg::AX, self.cur);
     let dx = self.ir.get_var(instr::Reg::DX, self.cur);
@@ -487,6 +481,33 @@ impl IRBuilder<'_> {
       // Assume worst case: DX:AX return
       vec![ax, dx]
     }
+  }
+
+  fn load_registers(&mut self) {
+    self.load_register(instr::Reg::AX);
+    self.load_register(instr::Reg::CX);
+    self.load_register(instr::Reg::DX);
+    self.load_register(instr::Reg::BX);
+    self.load_register(instr::Reg::ES);
+
+    self.load_register(instr::Reg::SP);
+    self.load_register(instr::Reg::BP);
+    self.load_register(instr::Reg::SI);
+    self.load_register(instr::Reg::DI);
+
+    self.load_register(instr::Reg::SS);
+    self.load_register(instr::Reg::DS);
+
+    self.load_register(instr::Reg::FLAGS);
+
+    // What would this even mean??
+    //self.load_register(instr::Reg::CS);
+    //self.load_register(instr::Reg::IP);
+  }
+
+  fn load_register(&mut self, reg: instr::Reg) {
+    let vref = self.append_instr(Type::U16, Opcode::LoadReg, vec![Ref::Init(reg)]);
+    self.ir.set_var(reg, self.cur, vref);
   }
 
   fn pin_registers(&mut self) {
@@ -515,6 +536,12 @@ impl IRBuilder<'_> {
     //self.pin_register(instr::Reg::IP);
   }
 
+  fn pin_register(&mut self, reg: instr::Reg) {
+    let vref = self.ir.get_var(reg, self.cur);
+    let pin = self.append_instr(Type::Void, Opcode::Pin, vec![vref]);
+    self.ir.set_var(reg, self.cur, pin);
+  }
+
   fn append_push(&mut self, vref: Ref) {
     let ss = self.ir.get_var(instr::Reg::SS, self.cur);
     let sp = self.ir.get_var(instr::Reg::SP, self.cur);
@@ -524,7 +551,7 @@ impl IRBuilder<'_> {
     if self.pin_all {
       attrs |= Attribute::PIN;
     }
-    
+
     // decrement SP
     let sp = self.append_instr_with_attrs(Type::U16, attrs | Attribute::STACK_PTR, Opcode::Sub, vec![sp, k]);
     self.ir.set_var(instr::Reg::SP, self.cur, sp);
@@ -542,7 +569,7 @@ impl IRBuilder<'_> {
     if self.pin_all {
       attrs |= Attribute::PIN;
     }
-    
+
     let val = self.append_instr_with_attrs(Type::U16, attrs, Opcode::Load16, vec![ss, sp]);
     let sp = self.append_instr_with_attrs(Type::U16, attrs | Attribute::STACK_PTR, Opcode::Add, vec![sp, k]);
     self.ir.set_var(instr::Reg::SP, self.cur, sp);
@@ -910,6 +937,8 @@ impl IRBuilder<'_> {
       instr::Opcode::OP_INT => {
         let num = self.append_asm_src_operand(&ins.operands[0]);
         self.append_instr(Type::Void, Opcode::Int, vec![num]);
+        // Reload all registers because we have NO MODEL of what the interrupt may have done
+        self.load_registers();
       }
       instr::Opcode::OP_LEA => {
         let instr::Operand::Mem(mem) = &ins.operands[1] else {
@@ -991,10 +1020,13 @@ impl IRBuilder<'_> {
     }
 
     // Step 3: iterate each instruction, building each block
-    for ins in self.instrs {
+    for (i, ins) in self.instrs.iter().enumerate() {
       if DEBUG { println!("DEBUG: {}", instr_str(ins)); }
       if block_start.get(&ins.addr).is_some() {
         self.start_next_blk(ins.addr);
+      }
+      if i == 0 {
+        self.load_registers();
       }
       self.append_asm_instr(ins);
     }
