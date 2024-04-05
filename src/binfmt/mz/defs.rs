@@ -25,7 +25,7 @@ pub struct Reloc {
   pub segment: u16,
 }
 
-// Borland C/C++ FBOV Header for Overlays (ZROOM?)
+// Borland C/C++ FBOV Header for Overlays (VROOM?)
 #[repr(C, packed)]
 #[derive(Debug, Clone)]
 pub struct FBOV {

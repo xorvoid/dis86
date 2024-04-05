@@ -146,6 +146,7 @@ fn cmd_dis(args: &[String]) {
 
   let binary = Binary::from_exe(&exe);
 
+  // Process normal segments
   for s in seginfo {
     let sz = s.size();
     if sz == 0 || sz == 0xffff {
@@ -158,6 +159,15 @@ fn cmd_dis(args: &[String]) {
     }
     else if s.typ == mz::SegInfoType::DATA {
       disassemble_data(&binary, start, end);
+    }
+  }
+
+  // Process overlay segments
+  if let Some(ovr) = exe.ovr.as_ref() {
+    for (i, seg) in ovr.segs.iter().enumerate() {
+      let start = SegOff { seg: Seg::Overlay(i as u16), off: Off(0) };
+      let end = SegOff { seg: Seg::Overlay(i as u16), off: Off(seg.segment_size) };
+      disassemble_code(&binary, start, end);
     }
   }
 }
