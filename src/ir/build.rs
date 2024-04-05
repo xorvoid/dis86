@@ -169,31 +169,29 @@ impl<'a> IRBuilder<'a> {
     }
 
     // Filter for branch instructions
-    match &ins.opcode {
-      instr::Opcode::OP_JA => (),
-      instr::Opcode::OP_JAE => (),
-      instr::Opcode::OP_JB => (),
-      instr::Opcode::OP_JBE => (),
-      instr::Opcode::OP_JCXZ => (),
-      instr::Opcode::OP_JE => (),
-      instr::Opcode::OP_JG => (),
-      instr::Opcode::OP_JGE => (),
-      instr::Opcode::OP_JL => (),
-      instr::Opcode::OP_JLE => (),
-      instr::Opcode::OP_JMP => (),
-      instr::Opcode::OP_JMPF => (),
-      instr::Opcode::OP_JNE => (),
-      instr::Opcode::OP_JNO => (),
-      instr::Opcode::OP_JNP => (),
-      instr::Opcode::OP_JNS => (),
-      instr::Opcode::OP_JO => (),
-      instr::Opcode::OP_JP => (),
-      instr::Opcode::OP_JS => (),
+    let oper_num = match &ins.opcode {
+      instr::Opcode::OP_JA => 0,
+      instr::Opcode::OP_JAE => 0,
+      instr::Opcode::OP_JB => 0,
+      instr::Opcode::OP_JBE => 0,
+      instr::Opcode::OP_JCXZ => 1,
+      instr::Opcode::OP_JE => 0,
+      instr::Opcode::OP_JG => 0,
+      instr::Opcode::OP_JGE => 0,
+      instr::Opcode::OP_JL => 0,
+      instr::Opcode::OP_JLE => 0,
+      instr::Opcode::OP_JMP => 0,
+      instr::Opcode::OP_JMPF => 0,
+      instr::Opcode::OP_JNE => 0,
+      instr::Opcode::OP_JNO => 0,
+      instr::Opcode::OP_JNP => 0,
+      instr::Opcode::OP_JNS => 0,
+      instr::Opcode::OP_JO => 0,
+      instr::Opcode::OP_JP => 0,
+      instr::Opcode::OP_JS => 0,
+      instr::Opcode::OP_LOOP => 1,
       _ => return None,
-    }
-
-    // target should be first operand unless it's JCXZ
-    let oper_num = if ins.opcode == instr::Opcode::OP_JCXZ { 1 } else { 0 };
+    };
 
     let tgt_taken = match &ins.operands[oper_num] {
       instr::Operand::Rel(rel) => {
@@ -725,6 +723,47 @@ impl IRBuilder<'_> {
     // handle less standard operations
     match &ins.opcode {
       instr::Opcode::OP_NOP => (),
+      instr::Opcode::OP_SBB => {
+        // FIXME: WE DON'T HAVE  A GREAT WAY TO IMPL SBB AT THE MOMENT BECAUSE IT NEEDS TO CORRECTLY
+        // CONSUME THE CARRY FLAG FROM A PREVIOUS SUBTRACT THAT GENERATED A BORROW. BUT, AT THE MOMENT,
+        // WE USE "UpdateFlags" AS A PLACEHOLDER FOR ARBITRARY FLAGS UPDATES WITHOUT BREAKING DOWN INTO
+        // THE SPECIFIC FLAGS AFFECTED. SO FOR NOW, WE'LL JAM IT THROUGH "Unimpl" AND MAKE THE USER
+        // DEAL WITH IT MANUALLY
+        let a = self.append_asm_src_operand(&ins.operands[0]);
+        let b = self.append_asm_src_operand(&ins.operands[1]);
+        let typ = self.deduce_type_binary(a, b);
+        let vref = self.append_instr(typ, Opcode::Unimpl, vec![a, b]);
+        self.append_asm_dst_operand(&ins.operands[0], vref);
+        self.append_update_flags(vref);
+      }
+      instr::Opcode::OP_RCL => {
+        // FIXME: SIMILAR FOR RCL ... WE SIMPLY DON'T HAVE A GREAT WAY TO CAPTURE THE SEMANTICS OF ROTATION
+        // INCLUDING THE CARRY FLAG!!!
+        let a = self.append_asm_src_operand(&ins.operands[0]);
+        let b = self.append_asm_src_operand(&ins.operands[1]);
+        let typ = self.deduce_type_binary(a, b);
+        let vref = self.append_instr(typ, Opcode::Unimpl, vec![a, b]);
+        self.append_asm_dst_operand(&ins.operands[0], vref);
+        self.append_update_flags(vref);
+      }
+      instr::Opcode::OP_LOOP => {
+        // Step 1: Update CX := CX - 1
+        let cx = self.append_asm_src_operand(&ins.operands[0]);
+        let one = self.ir.append_const(1);
+        let cx = self.append_instr(Type::U16, Opcode::Sub, vec![cx, one]);
+        self.append_asm_dst_operand(&ins.operands[0], cx);
+
+        // Step 2: Jump when CX != 0
+        let instr::Operand::Rel(rel) = &ins.operands[1] else { panic!("Expected relative offset operand for LOOP") };
+
+        let false_blk = self.get_block(ins.end_addr());
+        let true_blk = self.get_block(ins.rel_addr(rel));
+
+        let z = self.ir.append_const(0);
+        let cond = self.append_instr(Type::U16, Opcode::Neq, vec![cx, z]);
+
+        self.append_jne(cond, true_blk, false_blk);
+      }
       instr::Opcode::OP_XCHG => {
         let a = self.append_asm_src_operand(&ins.operands[0]);
         let b = self.append_asm_src_operand(&ins.operands[1]);
@@ -841,6 +880,34 @@ impl IRBuilder<'_> {
         let cx = self.append_asm_src_operand(&ins.operands[0]);
         let z = self.ir.append_const(0);
         let cond = self.append_instr(Type::U16, Opcode::Eq, vec![cx, z]);
+
+        self.append_jne(cond, true_blk, false_blk);
+      }
+
+      instr::Opcode::OP_JS  => {
+        let instr::Operand::Rel(rel) = &ins.operands[0] else { panic!("Expected relative offset operand for JS") };
+
+        let false_blk = self.get_block(ins.end_addr());
+        let true_blk = self.get_block(ins.rel_addr(rel));
+
+        let flags = self.get_flags();
+        let sign = self.append_instr(Type::U16, Opcode::SignFlags, vec![flags]);
+        let z = self.ir.append_const(0);
+        let cond = self.append_instr(Type::U16, Opcode::Neq, vec![sign, z]);
+
+        self.append_jne(cond, true_blk, false_blk);
+      }
+
+      instr::Opcode::OP_JNS  => {
+        let instr::Operand::Rel(rel) = &ins.operands[0] else { panic!("Expected relative offset operand for JNS") };
+
+        let false_blk = self.get_block(ins.end_addr());
+        let true_blk = self.get_block(ins.rel_addr(rel));
+
+        let flags = self.get_flags();
+        let sign = self.append_instr(Type::U16, Opcode::SignFlags, vec![flags]);
+        let z = self.ir.append_const(0);
+        let cond = self.append_instr(Type::U16, Opcode::Eq, vec![sign, z]);
 
         self.append_jne(cond, true_blk, false_blk);
       }

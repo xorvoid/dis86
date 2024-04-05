@@ -4,6 +4,7 @@ pub enum Opcode {
   Pin,
   Ref,
   Phi,
+  Unimpl,
 
   Add,
   Sub,
@@ -55,6 +56,7 @@ pub enum Opcode {
   UGeqFlags,   // Maps to: JAE / JNB  / JNC
   ULtFlags,    // Maps to: JB  / JNAE / JC
   ULeqFlags,   // Maps to: JBE / JNA
+  SignFlags,   // Maps to: JS and inverted for JNS,
 
   Eq,          // Operator: == (any sign)
   Neq,         // Operator: != (any sign)
@@ -94,6 +96,7 @@ impl Opcode {
       Opcode::Pin         => "pin",
       Opcode::Ref         => "ref",
       Opcode::Phi         => "phi",
+      Opcode::Unimpl      => "unimpl",
       Opcode::Sub         => "sub",
       Opcode::Add         => "add",
       Opcode::Shl         => "shl",
@@ -141,6 +144,7 @@ impl Opcode {
       Opcode::UGeqFlags   => "ugeqf",
       Opcode::ULtFlags    => "ultf",
       Opcode::ULeqFlags   => "uleqf",
+      Opcode::SignFlags   => "signf",
       Opcode::Eq          => "eq",
       Opcode::Neq         => "neq",
       Opcode::Gt          => "gt",
