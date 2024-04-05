@@ -84,7 +84,7 @@ fn format_data_impl(s: &mut String, addr: SegOff, bytes: &[u8], with_detail: boo
     let remain = if used <= 21 { 21 - used } else { 0 };
     write!(s, "{:1$}\t", "", remain)?;
   }
-  write!(s, "(data)");
+  write!(s, "(data)")?;
   Ok(())
 }
 

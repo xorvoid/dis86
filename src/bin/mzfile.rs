@@ -187,10 +187,11 @@ fn disassemble_code(binary: &Binary, start: SegOff, end: SegOff) {
 fn disassemble_data(binary: &Binary, start: SegOff, end: SegOff) {
   println!(";;; =========== DATA SEGMENT {} ===========", start.seg);
   let mut region = binary.region_iter(start, end);
-  while region.addr() != region.end_addr() {
+  while region.bytes_remaining() > 0 {
+    let n = std::cmp::min(region.bytes_remaining(), 16);
     let addr = region.addr();
-    let raw = region.slice(addr, 1);
-    region.advance();
+    let raw = region.slice(addr, n as u16);
+    region.advance_by(n);
     println!("{}", &asm::intel_syntax::format(addr, None, raw, true).unwrap());
   }
   println!("");

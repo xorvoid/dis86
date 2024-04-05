@@ -47,6 +47,10 @@ impl<'a> RegionIter<'a> {
     self.off += 1;
   }
 
+  pub fn advance_by(&mut self, n: usize) {
+    self.off += n;
+  }
+
   pub fn fetch(&mut self) -> Result<u8, String> {
     let b = self.peek_checked()?;
     self.advance();
@@ -81,6 +85,10 @@ impl<'a> RegionIter<'a> {
   pub fn end_addr(&self) -> SegOff {
     let off: u16 = self.mem.len().try_into().unwrap();
     self.base_addr().add_offset(off)
+  }
+
+  pub fn bytes_remaining(&self) -> usize {
+    self.mem.len() - self.off
   }
 }
 
