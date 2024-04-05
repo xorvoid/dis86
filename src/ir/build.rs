@@ -621,7 +621,6 @@ impl IRBuilder<'_> {
     let instr::Operand::Far(far) = &ins.operands[0] else {
       return self.process_callf_indirect(ins);
     };
-    println!("OVERLAY: {}", self.overlay);
     let seg = if self.overlay {
       // Far calls from overlays need to be remapped
       self.binary.remap_to_segment(far.seg)
