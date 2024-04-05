@@ -3,10 +3,18 @@ use crate::bsl;
 use crate::types::Type;
 
 #[derive(Debug)]
+pub struct OverlayRange {
+  pub num: u16,
+  pub start: u16,
+  pub end: u16,
+}
+
+#[derive(Debug)]
 pub struct Func {
   pub name: String,
   pub start: SegOff,
   pub end: Option<SegOff>,
+  pub overlay: Option<OverlayRange>,
   pub mode: CallMode,
   pub ret: Type,
   pub args: Option<u16>,  // None means "unknown", Some(0) means "no args"
@@ -145,6 +153,10 @@ impl Config {
       let dont_pop_args = f.get_str("dont_pop_args").is_some();
       let indirect = f.get_str("indirect_call_location").is_some();
 
+      let overlay_num = f.get_str("overlay_num");
+      let overlay_start = f.get_str("overlay_start");
+      let overlay_end = f.get_str("overlay_end");
+
       let start: SegOff = start_str.parse()
         .map_err(|_| format!("Expected segoff for '{}.start', got '{}'", key, start_str))?;
       let end: Option<SegOff> = if end_str.len() == 0 { None } else {
@@ -161,11 +173,31 @@ impl Config {
       let ret: Type = ret_str.parse()
         .map_err(|err| format!("Expected type for '{}.ret', got '{}' | {}", key, ret_str, err))?;
 
+      let n_overlay_opts =
+        overlay_num.is_some() as u32 +
+        overlay_start.is_some() as u32 +
+        overlay_end.is_some() as u32;
+
+      let overlay = if n_overlay_opts == 3 {
+        let num: u16 = overlay_num.unwrap().parse()
+          .map_err(|_| format!("Expected u16 for '{}.overlay_num', got '{}'", key, overlay_num.unwrap()))?;
+        let start: u16 = parse_hex_u16(&overlay_start.unwrap())
+          .map_err(|_| format!("Expected u16 for '{}.overlay_start', got '{}'", key, overlay_start.unwrap()))?;
+        let end: u16 = parse_hex_u16(&overlay_end.unwrap())
+          .map_err(|_| format!("Expected u16 for '{}.overlay_end', got '{}'", key, overlay_end.unwrap()))?;
+        Some(OverlayRange { num, start, end })
+      } else if n_overlay_opts == 0 {
+        None
+      } else {
+        return Err(format!("Overlay options only partially set for '{}'", key));
+      };
+
       if !indirect {
         self.funcs.push(Func {
           name: key.to_string(),
           start,
           end,
+          overlay,
           mode,
           ret,
           args: if args >= 0 { Some(args as u16) } else { None },
@@ -237,7 +269,7 @@ impl Config {
       let start: SegOff = start_str.parse()
         .map_err(|_| format!("Expected segoff for '{}.start', got '{}'", key, start_str))?;
       let end: SegOff = end_str.parse()
-        .map_err(|_| format!("Expected segoff for '{}.start', got '{}'", key, end_str))?;
+        .map_err(|_| format!("Expected segoff for '{}.end', got '{}'", key, end_str))?;
       let typ: Type = type_str.parse()
         .map_err(|err| format!("Expected type for '{}.type', got '{}' | {}", key, type_str, err))?;
 
@@ -277,5 +309,14 @@ impl Config {
       });
     }
     Ok(())
+  }
+}
+
+// parse("0x1234") -> 4660
+fn parse_hex_u16(s: &str) -> Result<u16, &'static str> {
+  if !s.starts_with("0x") {
+    return Err("Expected 0x prefix");
+  } else {
+    crate::util::parse::hex_u16(&s[2..])
   }
 }
