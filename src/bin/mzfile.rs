@@ -1,5 +1,7 @@
 use dis86::binfmt::mz;
-use dis86::segoff::SegOff;
+use dis86::segoff::{Seg, Off, SegOff};
+use dis86::binary::Binary;
+use dis86::asm;
 use std::fs;
 
 struct Command {
@@ -12,6 +14,7 @@ const COMMANDS: &'static [Command] = &[
   Command { name: "info",    func: cmd_info,    desc: "Decode the headers and print to stdout" },
   Command { name: "extract", func: cmd_extract, desc: "Extract the main exe region and all overlay regions" },
   Command { name: "map",     func: cmd_map,     desc: "Map addresses to destinations (useful for overlay stubs)" },
+  Command { name: "dis",     func: cmd_dis,     desc: "Disassemble entire file (in so far as practical)" },
 ];
 
 fn cmd_info(args: &[String]) {
@@ -122,6 +125,75 @@ fn cmd_map(args: &[String]) {
       println!("UNKNOWN");
     }
   }
+}
+
+fn cmd_dis(args: &[String]) {
+  if args.len() != 3 {
+    eprintln!("usage: {} dis <path>", args[0]);
+    std::process::exit(1);
+  }
+  let path = &args[2];
+
+  let Ok(data) = std::fs::read(path) else {
+    panic!("Failed to read file: {}", path);
+  };
+
+  let exe = mz::Exe::decode(&data).unwrap();
+
+  let Some(seginfo) = exe.seginfo else {
+    panic!("Binary has no seginfo: needed to do full disassemble");
+  };
+
+  let binary = Binary::from_exe(&exe);
+
+  for s in seginfo {
+    let sz = s.size();
+    if sz == 0 || sz == 0xffff {
+      continue;
+    }
+    let start = SegOff { seg: Seg::Normal(s.seg), off: Off(s.minoff) };
+    let end = SegOff { seg: Seg::Normal(s.seg), off: Off(s.maxoff) };
+    if s.typ == mz::SegInfoType::CODE {
+      disassemble_code(&binary, start, end);
+    }
+    else if s.typ == mz::SegInfoType::DATA {
+      disassemble_data(&binary, start, end);
+    }
+  }
+}
+
+fn disassemble_code(binary: &Binary, start: SegOff, end: SegOff) {
+  println!(";;; =========== CODE SEGMENT {} ===========", start.seg);
+  let mut region = binary.region_iter(start, end);
+  loop {
+    let (addr, instr, raw) = match asm::decode::decode_one(&mut region) {
+      Ok(None) => break,
+      Ok(Some((instr, raw))) => (instr.addr, Some(instr), raw),
+      Err(_) => {
+        // Failed to decode an instruction. We're probably in some inline data region and this is technically
+        // unsolvable without proper metadata. As a work-around, we simply emit the current byte as "data" and
+        // continue on. Eventually we'll decode another instruction and hopefully we'll eventually re-align.
+        let addr = region.addr();
+        let raw = region.slice(addr, 1);
+        region.advance();
+        (addr, None, raw)
+      }
+    };
+    println!("{}", &asm::intel_syntax::format(addr, instr.as_ref(), raw, true).unwrap());
+  }
+  println!("");
+}
+
+fn disassemble_data(binary: &Binary, start: SegOff, end: SegOff) {
+  println!(";;; =========== DATA SEGMENT {} ===========", start.seg);
+  let mut region = binary.region_iter(start, end);
+  while region.addr() != region.end_addr() {
+    let addr = region.addr();
+    let raw = region.slice(addr, 1);
+    region.advance();
+    println!("{}", &asm::intel_syntax::format(addr, None, raw, true).unwrap());
+  }
+  println!("");
 }
 
 fn main() {

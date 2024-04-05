@@ -12,13 +12,17 @@ impl<'a> RegionIter<'a> {
     Self { mem, base_seg: base_addr.seg, base_off: base_addr.off, off: 0 }
   }
 
-  pub fn get(&self, addr: SegOff) -> u8 {
-    if addr.seg != self.base_seg { panic!("Mismatching segments"); }
+  pub fn get_checked(&self, addr: SegOff) -> Result<u8, String> {
+    if addr.seg != self.base_seg { return Err(format!("Mismatching segments")); }
     let addr = addr.off.0 as usize;
     let base = self.base_off.0 as usize;
-    if addr < base { panic!("RegionIter access below start of region"); }
-    if addr >= base + self.mem.len() { panic!("RegionIter access beyond end of region"); }
-    self.mem[addr - base]
+    if addr < base { return Err(format!("RegionIter access below start of region")); }
+    if addr >= base + self.mem.len() { return Err(format!("RegionIter access beyond end of region")); }
+    Ok(self.mem[addr - base])
+  }
+
+  pub fn get(&self, addr: SegOff) -> u8 {
+    self.get_checked(addr).unwrap()
   }
 
   pub fn slice(&self, addr: SegOff, len: u16) -> &'a [u8] {
@@ -31,34 +35,43 @@ impl<'a> RegionIter<'a> {
     &self.mem[addr - base .. addr - base + len]
   }
 
+  pub fn peek_checked(&self) -> Result<u8, String> {
+    self.get_checked(self.addr())
+  }
+
   pub fn peek(&self) -> u8 {
-    self.get(self.addr())
+    self.peek_checked().unwrap()
   }
 
   pub fn advance(&mut self) {
     self.off += 1;
   }
 
-  pub fn fetch(&mut self) -> u8 {
-    let b = self.peek();
+  pub fn fetch(&mut self) -> Result<u8, String> {
+    let b = self.peek_checked()?;
     self.advance();
-    b
+    Ok(b)
   }
 
-  pub fn fetch_sext(&mut self) -> u16 {
-    let b = self.fetch();
-    b as i8 as i16 as u16
+  pub fn fetch_sext(&mut self) -> Result<u16, String> {
+    let b = self.fetch()?;
+    Ok(b as i8 as i16 as u16)
   }
 
-  pub fn fetch_u16(&mut self) -> u16 {
-    let low = self.fetch();
-    let high = self.fetch();
-    (high as u16) << 8 | (low as u16)
+  pub fn fetch_u16(&mut self) -> Result<u16, String> {
+    let low = self.fetch()?;
+    let high = self.fetch()?;
+    Ok((high as u16) << 8 | (low as u16))
   }
 
   pub fn addr(&self) -> SegOff {
     let off: u16 = self.off.try_into().unwrap();
     self.base_addr().add_offset(off)
+  }
+
+  pub fn reset_addr(&mut self, addr: SegOff) {
+    assert!(self.base_addr() <= addr && addr < self.end_addr());
+    self.off = (addr.off.0 - self.base_off.0) as usize;
   }
 
   pub fn base_addr(&self) -> SegOff {

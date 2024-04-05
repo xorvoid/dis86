@@ -17,3 +17,9 @@ impl<'a> Exe<'a> {
     self.ovr.as_ref().map(|ovr| ovr.segs.len()).unwrap_or(0)
   }
 }
+
+impl SegInfo {
+  pub fn size(&self) -> u16 {
+    self.maxoff.wrapping_sub(self.minoff)
+  }
+}

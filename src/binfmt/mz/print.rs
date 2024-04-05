@@ -84,7 +84,6 @@ impl<'a> Exe<'a> {
       let typ    = s.typ;
       let minoff = s.minoff;
 
-      let n = maxoff.wrapping_sub(minoff);
       let typ_str = match typ {
         SegInfoType::DATA => "DATA",
         SegInfoType::CODE => "CODE",
@@ -93,6 +92,7 @@ impl<'a> Exe<'a> {
         _ => "UNKNOWN",
       };
       let typ_str = format!("{}({})", typ_str, typ);
+      let n = s.size();
       println!(" {:4}   0x{:04x}    {:<12}  0x{:04x}    0x{:04x}    {:5} (0x{:04x})",
                i, seg, typ_str, minoff, maxoff, n, n);
     }

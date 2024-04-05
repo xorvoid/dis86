@@ -17,70 +17,70 @@ fn modrm_op2(modrm: u8) -> u8 { (modrm>>3)&7 }
 fn modrm_rm(modrm: u8) -> u8 { modrm&7 }
 
 
-fn operand_reg(r: Reg) -> Operand {
-  Operand::Reg(OperandReg(r))
+fn operand_reg(r: Reg) -> Result<Operand, String> {
+  Ok(Operand::Reg(OperandReg(r)))
 }
 
-fn operand_imm8(imm: u8) -> Operand {
-  Operand::Imm(OperandImm {
+fn operand_imm8(imm: u8) -> Result<Operand, String> {
+  Ok(Operand::Imm(OperandImm {
     sz: Size::Size8,
     val: imm as u16,
-  })
+  }))
 }
 
-fn operand_imm16(imm: u16) -> Operand {
-  Operand::Imm(OperandImm {
+fn operand_imm16(imm: u16) -> Result<Operand, String> {
+  Ok(Operand::Imm(OperandImm {
     sz: Size::Size16,
     val: imm,
-  })
+  }))
 }
 
-fn operand_rel(bin: &mut RegionIter, sz: Size) -> Operand {
+fn operand_rel(bin: &mut RegionIter, sz: Size) -> Result<Operand, String> {
   let val = match sz {
-    Size::Size8 => bin.fetch_sext(),
-    Size::Size16 => bin.fetch_u16(),
-    _ => panic!("Invalid size: {:?}", sz),
+    Size::Size8 => bin.fetch_sext()?,
+    Size::Size16 => bin.fetch_u16()?,
+    _ => return Err(format!("Invalid relative addressing size: {:?}", sz)),
   };
-  Operand::Rel(OperandRel { val })
+  Ok(Operand::Rel(OperandRel { val }))
 }
 
-fn operand_src(sz: Size) -> Operand {
-  Operand::Mem(OperandMem {
+fn operand_src(sz: Size) -> Result<Operand, String> {
+  Ok(Operand::Mem(OperandMem {
     sz: sz,
     sreg: Reg::DS, // TODO FIMXE: ARE SEG OVERRIDES ALLOWED FOR THESE??
     reg1: Some(Reg::SI),
     reg2: None,
     off: None,
-  })
+  }))
 }
 
-fn operand_dst(sz: Size) -> Operand {
-  Operand::Mem(OperandMem {
+fn operand_dst(sz: Size) -> Result<Operand, String> {
+  Ok(Operand::Mem(OperandMem {
     sz: sz,
     sreg: Reg::ES, // TODO FIMXE: ARE SEG OVERRIDES ALLOWED FOR THESE??
     reg1: Some(Reg::DI),
     reg2: None,
     off: None,
-  })
+  }))
 }
 
-fn operand_far(bin: &mut RegionIter) -> Operand {
-  let off = bin.fetch_u16();
-  let seg = bin.fetch_u16();
-  Operand::Far(OperandFar { seg, off })
+fn operand_far(bin: &mut RegionIter) -> Result<Operand, String> {
+  let off = bin.fetch_u16()?;
+  let seg = bin.fetch_u16()?;
+  Ok(Operand::Far(OperandFar { seg, off }))
 }
 
-fn operand_moff(bin: &mut RegionIter, sz: Size, prefix_sreg: Option<Reg>) -> Operand {
-  Operand::Mem(OperandMem {
+fn operand_moff(bin: &mut RegionIter, sz: Size, prefix_sreg: Option<Reg>) -> Result<Operand, String> {
+  Ok(Operand::Mem(OperandMem {
     sz,
     sreg: prefix_sreg.unwrap_or(Reg::DS),
     reg1: None,
     reg2: None,
-    off: Some(bin.fetch_u16()),
-  })
+    off: Some(bin.fetch_u16()?),
+  }))
 }
 
-fn operand_rm(bin: &mut RegionIter, sz: Size, modrm: u8, prefix_sreg: Option<Reg>) -> Operand {
+fn operand_rm(bin: &mut RegionIter, sz: Size, modrm: u8, prefix_sreg: Option<Reg>) -> Result<Operand, String> {
   let mode = modrm_mode(modrm);
   let rm = modrm_rm(modrm);
 
@@ -88,7 +88,7 @@ fn operand_rm(bin: &mut RegionIter, sz: Size, modrm: u8, prefix_sreg: Option<Reg
   if mode == 3 { /* Register mode */
     if sz == Size::Size8 { return operand_reg(Reg::reg8(rm)); }
     else if sz == Size::Size16 { return operand_reg(Reg::reg16(rm)); }
-    else { panic!("Only 8-bit and 16-bit registers are allowed"); }
+    else { return Err(format!("Only 8-bit and 16-bit registers are allowed")); }
   }
   if mode == 0 && rm == 6 { /* Direct addressing mode: 16-bit */
     return operand_moff(bin, sz, prefix_sreg);
@@ -112,46 +112,56 @@ fn operand_rm(bin: &mut RegionIter, sz: Size, modrm: u8, prefix_sreg: Option<Reg
   // Handle immediate dispacements
   let off = match mode {
     0 => None,
-    1 => Some(bin.fetch_sext()),
-    2 => Some(bin.fetch_u16()),
+    1 => Some(bin.fetch_sext()?),
+    2 => Some(bin.fetch_u16()?),
     _ => unreachable!(),
   };
 
   // Construct the resulting operand
-  Operand::Mem(OperandMem {
+  Ok(Operand::Mem(OperandMem {
     sz,
     sreg: prefix_sreg.unwrap_or(sreg),
     reg1: Some(reg1),
     reg2,
     off,
-  })
+  }))
 }
 
-fn operand_rm8(bin: &mut RegionIter, modrm: u8, sreg: Option<Reg>) -> Operand { operand_rm(bin, Size::Size8, modrm, sreg) }
-fn operand_rm16(bin: &mut RegionIter, modrm: u8, sreg: Option<Reg>) -> Operand { operand_rm(bin, Size::Size16, modrm, sreg) }
+fn operand_rm8(bin: &mut RegionIter, modrm: u8, sreg: Option<Reg>) -> Result<Operand, String> { operand_rm(bin, Size::Size8, modrm, sreg) }
+fn operand_rm16(bin: &mut RegionIter, modrm: u8, sreg: Option<Reg>) -> Result<Operand, String> { operand_rm(bin, Size::Size16, modrm, sreg) }
 
-fn operand_m8(bin: &mut RegionIter, modrm: u8, sreg: Option<Reg>) -> Operand {
-  let oper = operand_rm(bin, Size::Size8, modrm, sreg);
-  if !matches!(oper, Operand::Mem(_)) { panic!("Register used where memory operand was required"); }
-  oper
+fn operand_m8(bin: &mut RegionIter, modrm: u8, sreg: Option<Reg>) -> Result<Operand, String> {
+  let oper = operand_rm(bin, Size::Size8, modrm, sreg)?;
+  if !matches!(oper, Operand::Mem(_)) { return Err(format!("Register used where memory operand was required")); }
+  Ok(oper)
 }
 
-fn operand_m16(bin: &mut RegionIter, modrm: u8, sreg: Option<Reg>) -> Operand {
-  let oper = operand_rm(bin, Size::Size16, modrm, sreg);
-  if !matches!(oper, Operand::Mem(_)) { panic!("Register used where memory operand was required"); }
-  oper
+fn operand_m16(bin: &mut RegionIter, modrm: u8, sreg: Option<Reg>) -> Result<Operand, String> {
+  let oper = operand_rm(bin, Size::Size16, modrm, sreg)?;
+  if !matches!(oper, Operand::Mem(_)) { return Err(format!("Register used where memory operand was required")); }
+  Ok(oper)
 }
 
-fn operand_m32(bin: &mut RegionIter, modrm: u8, sreg: Option<Reg>) -> Operand {
-  let oper = operand_rm(bin, Size::Size32, modrm, sreg);
-  if !matches!(oper, Operand::Mem(_)) { panic!("Register used where memory operand was required"); }
-  oper
+fn operand_m32(bin: &mut RegionIter, modrm: u8, sreg: Option<Reg>) -> Result<Operand, String> {
+  let oper = operand_rm(bin, Size::Size32, modrm, sreg)?;
+  if !matches!(oper, Operand::Mem(_)) { return Err(format!("Register used where memory operand was required")); }
+  Ok(oper)
 }
 
-pub fn decode_one<'a>(bin: &mut RegionIter<'a>) -> Option<(Instr, &'a [u8])> {
+pub fn decode_one<'a>(bin: &mut RegionIter<'a>) -> Result<Option<(Instr, &'a [u8])>, String> {
+  let save_addr = bin.addr();
+  let ret = decode_one_impl(bin);
+  if ret.is_err() {
+    // if error, roll-back any bytes consumed
+    bin.reset_addr(save_addr)
+  }
+  ret
+}
+
+pub fn decode_one_impl<'a>(bin: &mut RegionIter<'a>) -> Result<Option<(Instr, &'a [u8])>, String> {
   let start_addr = bin.addr();
   if start_addr == bin.end_addr() {
-    return None;
+    return Ok(None);
   }
 
   // First parse any prefixes
@@ -171,17 +181,17 @@ pub fn decode_one<'a>(bin: &mut RegionIter<'a>) -> Option<(Instr, &'a [u8])> {
   }
 
   // Now parse the main level1 opcode
-  let opcode1 = bin.fetch();
+  let opcode1 = bin.fetch()?;
   let mut opcode2 = None;
   let mut ret = instr_fmt::lookup(opcode1, opcode2);
 
   // Need a level 2 opcode to do the lookup?
   if ret.err() == Some(instr_fmt::Error::NeedOpcode2) {
-    let b = bin.peek();
+    let b = bin.peek_checked()?;
     opcode2 = Some(modrm_op2(b));
     ret = instr_fmt::lookup(opcode1, opcode2);
   } else if ret.err() == Some(instr_fmt::Error::NeedOpcode2Ext0F) {
-    let b = bin.peek();
+    let b = bin.peek_checked()?;
     bin.advance();
     opcode2 = Some(b);
     ret = instr_fmt::lookup(opcode1, opcode2);
@@ -190,17 +200,17 @@ pub fn decode_one<'a>(bin: &mut RegionIter<'a>) -> Option<(Instr, &'a [u8])> {
   // Unpack
   let fmt = match ret {
     Ok(fmt) => fmt,
-    Err(_) => panic!("Failed to find instruction fmt for opcode1={:?}, opcode2={:?} at {}", opcode1, opcode2, start_addr),
+    Err(_) => return Err(format!("Failed to find instruction fmt for opcode1={:?}, opcode2={:?} at {}", opcode1, opcode2, start_addr)),
   };
 
   if fmt.op == Opcode::OP_INVAL {
-    panic!("Unsupported or invalid instruction at {}", start_addr);
+    return Err(format!("Unsupported or invalid instruction at {}", start_addr));
   }
 
   // Do we need a modrm?
   let mut modrm = 0;
   if fmt.requires_modrm() {
-    modrm = bin.fetch();
+    modrm = bin.fetch()?;
   }
 
   // Process the format and build up the instruction
@@ -262,9 +272,9 @@ pub fn decode_one<'a>(bin: &mut RegionIter<'a>) -> Option<(Instr, &'a [u8])> {
       instr_fmt::Oper::OPER_RM16  => operand_rm16(bin, modrm, sreg),
 
       // Explicit immediate data
-      instr_fmt::Oper::OPER_IMM8      => operand_imm8(bin.fetch()),
-      instr_fmt::Oper::OPER_IMM8_EXT  => operand_imm16(bin.fetch_sext()),
-      instr_fmt::Oper::OPER_IMM16     => operand_imm16(bin.fetch_u16()),
+      instr_fmt::Oper::OPER_IMM8      => operand_imm8(bin.fetch()?),
+      instr_fmt::Oper::OPER_IMM8_EXT  => operand_imm16(bin.fetch_sext()?),
+      instr_fmt::Oper::OPER_IMM16     => operand_imm16(bin.fetch_u16()?),
 
       // Explicit far32 jump immediate
       instr_fmt::Oper::OPER_FAR32     => operand_far(bin),
@@ -277,6 +287,7 @@ pub fn decode_one<'a>(bin: &mut RegionIter<'a>) -> Option<(Instr, &'a [u8])> {
       instr_fmt::Oper::OPER_REL8      => operand_rel(bin, Size::Size8),
       instr_fmt::Oper::OPER_REL16     => operand_rel(bin, Size::Size16),
     };
+    let operand = operand?; // unwrap and forward any errors
     operands.push(operand);
   }
 
@@ -294,7 +305,7 @@ pub fn decode_one<'a>(bin: &mut RegionIter<'a>) -> Option<(Instr, &'a [u8])> {
 
   let raw = bin.slice(start_addr, n_bytes);
 
-  Some((instr, raw))
+  Ok(Some((instr, raw)))
 }
 
 
@@ -306,12 +317,16 @@ impl<'a> Decoder<'a> {
   pub fn new(it: RegionIter<'a>) -> Self {
     Self { bin: it }
   }
+
+  pub fn try_next(&mut self) -> Result<Option<(Instr, &'a [u8])>, String> {
+    decode_one(&mut self.bin)
+  }
 }
 
 impl<'a> Iterator for Decoder<'a> {
   type Item = (Instr, &'a [u8]);
   fn next(&mut self) -> Option<(Instr, &'a [u8])> {
-    decode_one(&mut self.bin)
+    self.try_next().unwrap()
   }
 }
 

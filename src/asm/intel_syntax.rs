@@ -1,4 +1,5 @@
 use crate::asm::instr::*;
+use crate::segoff::SegOff;
 use std::fmt::Write;
 
 type Result<T> = std::result::Result<T, std::fmt::Error>;
@@ -41,7 +42,7 @@ fn format_operand(s: &mut String, ins: &Instr, oper: &Operand) -> Result<()> {
   Ok(())
 }
 
-fn format_instr(s: &mut String, ins: &Instr, bytes: &[u8], with_detail: bool) -> Result<()> {
+fn format_instr_impl(s: &mut String, ins: &Instr, bytes: &[u8], with_detail: bool) -> Result<()> {
   if with_detail {
     write!(s, "{}:\t", ins.addr)?;
     for b in bytes {
@@ -73,8 +74,26 @@ fn format_instr(s: &mut String, ins: &Instr, bytes: &[u8], with_detail: bool) ->
   Ok(())
 }
 
-pub fn format(ins: &Instr, bytes: &[u8], with_detail: bool) -> Result<String> {
+fn format_data_impl(s: &mut String, addr: SegOff, bytes: &[u8], with_detail: bool) -> Result<()> {
+  if with_detail {
+    write!(s, "{}:\t", addr)?;
+    for b in bytes {
+      write!(s, "{:02x} ", b)?;
+    }
+    let used = bytes.len() as usize * 3;
+    let remain = if used <= 21 { 21 - used } else { 0 };
+    write!(s, "{:1$}\t", "", remain)?;
+  }
+  write!(s, "(data)");
+  Ok(())
+}
+
+// FIXME: THIS IS KLUDGY
+pub fn format(addr: SegOff, ins: Option<&Instr>, bytes: &[u8], with_detail: bool) -> Result<String> {
   let mut s = String::new();
-  format_instr(&mut s, ins, bytes, with_detail)?;
+  match ins {
+    Some(ins) => format_instr_impl(&mut s, ins, bytes, with_detail)?,
+    None => format_data_impl(&mut s, addr, bytes, with_detail)?,
+  }
   Ok(s.trim_end().to_string())
 }

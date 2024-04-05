@@ -47,17 +47,21 @@ impl Binary {
       }
       Fmt::Exe(_) => {
         let exe = binfmt::mz::Exe::decode(&data).unwrap();
-        let main = Data(exe.exe_data().to_vec());
-        let mut overlays = vec![];
-        for i in 0..exe.num_overlay_segments() {
-          overlays.push(Data(exe.overlay_data(i).to_vec()));
-        }
-        let segmap = build_segmap(&exe);
-        Binary { main, overlays, segmap, }
+        Self::from_exe(&exe)
       }
     };
 
     Ok(binary)
+  }
+
+  pub fn from_exe(exe: &binfmt::mz::Exe) -> Self {
+    let main = Data(exe.exe_data().to_vec());
+    let mut overlays = vec![];
+    for i in 0..exe.num_overlay_segments() {
+      overlays.push(Data(exe.overlay_data(i).to_vec()));
+    }
+    let segmap = build_segmap(&exe);
+    Binary { main, overlays, segmap, }
   }
 
   pub fn from_data(data: &[u8]) -> Self {

@@ -184,7 +184,7 @@ pub fn run() -> i32 {
     for i in 0..instr_list.len() {
       let instr = &instr_list[i];
       let raw = &raw_list[i];
-      buf += &intel_syntax::format(&instr, raw, true).unwrap();
+      buf += &intel_syntax::format(instr.addr, Some(&instr), raw, true).unwrap();
       buf += "\n";
     }
     write_to_path(path, &buf);

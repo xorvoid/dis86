@@ -10,7 +10,7 @@ use std::collections::{HashSet, HashMap};
 const DEBUG: bool = false;
 
 fn instr_str(ins: &instr::Instr) -> String {
-  crate::asm::intel_syntax::format(ins, &[], false).unwrap()
+  crate::asm::intel_syntax::format(ins.addr, Some(ins), &[], false).unwrap()
 }
 
 fn operand_is_stack_reg(operand: &instr::Operand) -> bool {
