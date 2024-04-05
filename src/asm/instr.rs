@@ -21,7 +21,7 @@ impl Instr {
   }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Operand {
   Reg(OperandReg),
   Mem(OperandMem),
@@ -30,10 +30,10 @@ pub enum Operand {
   Far(OperandFar),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OperandReg(pub Reg);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OperandMem {
   pub sz: Size,
   pub sreg: Reg,
@@ -42,31 +42,31 @@ pub struct OperandMem {
   pub off: Option<u16>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OperandImm {
   pub sz: Size,
   pub val: u16,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OperandRel {
   pub val: u16,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OperandFar {
   pub seg: u16,
   pub off: u16,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Size {
   Size8,
   Size16,
   Size32,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Rep {
   NE,
   EQ,

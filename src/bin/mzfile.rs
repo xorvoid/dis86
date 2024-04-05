@@ -2,6 +2,7 @@ use dis86::binfmt::mz;
 use dis86::segoff::{Seg, Off, SegOff};
 use dis86::binary::Binary;
 use dis86::asm;
+use dis86::config::{self, Config};
 use std::fs;
 
 struct Command {
@@ -128,11 +129,16 @@ fn cmd_map(args: &[String]) {
 }
 
 fn cmd_dis(args: &[String]) {
-  if args.len() != 3 {
-    eprintln!("usage: {} dis <path>", args[0]);
+  if args.len() < 3 {
+    eprintln!("usage: {} dis <path> [<config>]", args[0]);
     std::process::exit(1);
   }
   let path = &args[2];
+
+  let mut cfg = None;
+  if args.len() >= 4 {
+    cfg = Some(Config::from_path(&args[3]).unwrap());
+  }
 
   let Ok(data) = std::fs::read(path) else {
     panic!("Failed to read file: {}", path);
@@ -155,10 +161,10 @@ fn cmd_dis(args: &[String]) {
     let start = SegOff { seg: Seg::Normal(s.seg), off: Off(s.minoff) };
     let end = SegOff { seg: Seg::Normal(s.seg), off: Off(s.maxoff) };
     if s.typ == mz::SegInfoType::CODE {
-      disassemble_code(&binary, start, end);
+      disassemble_code(&binary, start, end, cfg.as_ref());
     }
     else if s.typ == mz::SegInfoType::DATA {
-      disassemble_data(&binary, start, end);
+      disassemble_data(&binary, start, end, cfg.as_ref());
     }
   }
 
@@ -167,15 +173,25 @@ fn cmd_dis(args: &[String]) {
     for (i, seg) in ovr.segs.iter().enumerate() {
       let start = SegOff { seg: Seg::Overlay(i as u16), off: Off(0) };
       let end = SegOff { seg: Seg::Overlay(i as u16), off: Off(seg.segment_size) };
-      disassemble_code(&binary, start, end);
+      disassemble_code(&binary, start, end, cfg.as_ref());
     }
   }
 }
 
-fn disassemble_code(binary: &Binary, start: SegOff, end: SegOff) {
-  println!(";;; =========== CODE SEGMENT {} ===========", start.seg);
+fn cfg_func(cfg: Option<&Config>, addr: SegOff) -> Option<&config::Func> {
+  cfg?.func_lookup(addr)
+}
+
+fn disassemble_code(binary: &Binary, start: SegOff, end: SegOff, cfg: Option<&Config>) {
+  println!(";;; ===================== CODE SEGMENT {} =====================", start.seg);
   let mut region = binary.region_iter(start, end);
   loop {
+    let mut is_function = false;
+    if let Some(func) = cfg_func(cfg, region.addr()) {
+      is_function = true;
+      println!(";;; =============================================================");
+      println!(";;; FUNCTION: {}", func.name);
+    }
     let (addr, instr, raw) = match asm::decode::decode_one(&mut region) {
       Ok(None) => break,
       Ok(Some((instr, raw))) => (instr.addr, Some(instr), raw),
@@ -189,12 +205,29 @@ fn disassemble_code(binary: &Binary, start: SegOff, end: SegOff) {
         (addr, None, raw)
       }
     };
+
+    if let Some(instr) = instr.as_ref() {
+      if !is_function && instr.opcode == asm::instr::Opcode::OP_PUSH &&
+        instr.operands[0] == asm::instr::Operand::Reg(asm::instr::OperandReg(asm::instr::Reg::BP)) {
+        println!(";;; =============================================================");
+        println!(";;; MAYBE UNKNOWN FUNCTION");
+      }
+    }
+
     println!("{}", &asm::intel_syntax::format(addr, instr.as_ref(), raw, true).unwrap());
+
+    if let Some(instr) = instr.as_ref() {
+      if instr.opcode == asm::instr::Opcode::OP_IRET ||
+        instr.opcode == asm::instr::Opcode::OP_RET ||
+        instr.opcode == asm::instr::Opcode::OP_RETF {
+          println!("");
+        }
+    }
   }
   println!("");
 }
 
-fn disassemble_data(binary: &Binary, start: SegOff, end: SegOff) {
+fn disassemble_data(binary: &Binary, start: SegOff, end: SegOff, _cfg: Option<&Config>) {
   println!(";;; =========== DATA SEGMENT {} ===========", start.seg);
   let mut region = binary.region_iter(start, end);
   while region.bytes_remaining() > 0 {
