@@ -65,8 +65,8 @@ fn find_segment_info<'a>(exe: &mz::Exe<'a>, addr: SegOff) -> &'a mz::SegInfo {
     panic!("Binary has no segment info, cannot map {}", addr);
   };
   for s in seginfo {
-    if s.seg != addr.seg { continue; }
-    if !(s.minoff <= addr.off && addr.off < s.maxoff) { continue; }
+    if s.seg != addr.seg.unwrap_normal() { continue; }
+    if !(s.minoff <= addr.off.0 && addr.off.0 < s.maxoff) { continue; }
     if found.is_some() { panic!("Found multiple matching segments"); }
     found = Some(s);
   }
@@ -81,7 +81,7 @@ fn find_stub_info<'a>(exe: &'a mz::Exe<'_>, addr: SegOff) -> &'a mz::OverlayStub
     panic!("Binary has no overlay info, cannot map {}", addr);
   };
   for stub in &ovr.stubs {
-    if addr.seg == stub.stub_segment && addr.off == stub.stub_offset {
+    if addr.seg.unwrap_normal() == stub.stub_segment && addr.off.0 == stub.stub_offset {
       return stub;
     }
   }

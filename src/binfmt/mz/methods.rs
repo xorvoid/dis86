@@ -12,4 +12,8 @@ impl<'a> Exe<'a> {
     let end = start + seg.segment_size as usize;
     &self.rawdata[start..end]
   }
+
+  pub fn num_overlay_segments(&self) -> usize {
+    self.ovr.as_ref().map(|ovr| ovr.segs.len()).unwrap_or(0)
+  }
 }

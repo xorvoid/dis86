@@ -265,10 +265,7 @@ impl<'a> Builder<'a> {
       rhs = Expr::Cast(Type::I16, Box::new(rhs));
     }
 
-    Some(Expr::Unary(Box::new(UnaryExpr {
-      op: ast_op,
-      rhs,
-    })))
+    Some(unary_expr(ast_op, rhs))
   }
 
   fn ref_to_binary_expr(&mut self, r: ir::Ref, depth: usize, hex_const: bool, inverted: &mut bool) -> Option<Expr> {

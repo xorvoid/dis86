@@ -1,6 +1,6 @@
 use crate::asm::instr;
 use crate::binary;
-use crate::segoff::SegOff;
+use crate::segoff::{Seg, Off, SegOff};
 use crate::config::{self, Config};
 use crate::spec;
 use crate::ir::*;
@@ -119,7 +119,7 @@ impl<'a> IRBuilder<'a> {
     // Construct a segoff address to the memory operand
     let addr = SegOff {
       seg: self.spec.start.seg, // code segment
-      off,
+      off: Off(off),
     };
 
     // Try to find a matching text segment region in config
@@ -147,7 +147,7 @@ impl<'a> IRBuilder<'a> {
     // Process them into branch targets
     let mut tgts = vec![];
     for i in 0..*len {
-      let off = u16::from_le_bytes(dat[2*i .. 2*i+2].try_into().unwrap());
+      let off = Off(u16::from_le_bytes(dat[2*i .. 2*i+2].try_into().unwrap()));
       tgts.push(SegOff { seg: self.spec.start.seg, off });
     }
 
@@ -599,8 +599,9 @@ impl IRBuilder<'_> {
       let nargs = self.heuristic_infer_call_arguments_by_context(ins,
                     &format!("Unknown call to {}", addr));
 
-      let seg = self.ir.append_const(addr.seg as i16);
-      let off = self.ir.append_const(addr.off as i16);
+      // FIXME: Can we do unwrap_normal() ??
+      let seg = self.ir.append_const(addr.seg.unwrap_normal() as i16);
+      let off = self.ir.append_const(addr.off.0 as i16);
 
       let mut operands = vec![seg, off];
       operands.append(&mut self.load_args_from_stack(nargs));
@@ -617,7 +618,7 @@ impl IRBuilder<'_> {
     let instr::Operand::Far(far) = &ins.operands[0] else {
       return self.process_callf_indirect(ins);
     };
-    let addr = SegOff { seg: far.seg, off: far.off };
+    let addr = SegOff { seg: Seg::Normal(far.seg), off: Off(far.off) };
     self.process_call_segoff(addr, config::CallMode::Far, ins);
   }
 
@@ -906,7 +907,7 @@ impl IRBuilder<'_> {
     let mut addr_ordered: Vec<_> = block_start.iter().collect();
     addr_ordered.sort();
     for addr in addr_ordered {
-      let bref = self.new_block(&format!("addr_{:x}", addr.abs()));
+      let bref = self.new_block(&format!("addr_{}", addr.off));
       self.addrmap.insert(*addr, bref);
     }
 

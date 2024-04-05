@@ -1,5 +1,5 @@
 use crate::util::arrayvec::ArrayVec;
-use crate::binary::RegionIter;
+use crate::region::RegionIter;
 use crate::asm::instr::*;
 use crate::asm::instr_fmt;
 
