@@ -9,6 +9,7 @@ use crate::gen;
 use crate::ast;
 use crate::control_flow;
 use crate::spec;
+use crate::binfmt;
 use std::fs::File;
 use std::io::Write;
 
@@ -18,7 +19,8 @@ fn print_help() {
   println!("");
   println!("REQUIRED OPTIONS:");
   println!("  --config          path to binary configuration file (required)");
-  println!("  --binary          path to binary on the filesystem (required)");
+  println!("  --binary-exe      path to MZ format exe on the filesystem (exactly 1 --binary-* flag required)");
+  println!("  --binary-raw      path to raw binary on the filesystem (exactly 1 --binary-* flag required)");
   println!("");
   println!("MODE: ADDRESS RANGE");
   println!("  --start-addr      start seg:off address (maybe required)");
@@ -57,8 +59,23 @@ fn write_to_path(path: &str, data: &str) {
 }
 
 #[derive(Debug)]
+enum BinaryFmt {
+  Raw(String),
+  Exe(String),
+}
+
+impl BinaryFmt {
+  fn path(&self) -> &str {
+    match self {
+      BinaryFmt::Raw(path) => path,
+      BinaryFmt::Exe(path) => path,
+    }
+  }
+}
+
+#[derive(Debug)]
 struct Args {
-  binary: String,
+  binary: BinaryFmt,
   config: String,
 
   start_addr: Option<SegOff>,
@@ -91,6 +108,21 @@ fn match_flag(args: &mut Vec<std::ffi::OsString>, flag: &str) -> bool {
   false
 }
 
+fn parse_binary_fmt(pargs: &mut pico_args::Arguments) -> Result<BinaryFmt, pico_args::Error> {
+  let binary_exe = pargs.opt_value_from_str("--binary-exe")?;
+  let binary_raw = pargs.opt_value_from_str("--binary-raw")?;
+  if 1 != binary_exe.is_some() as i32 + binary_raw.is_some() as i32 {
+    panic!("Exactly one of --binary-exe or --binary-raw must be set");
+  }
+  if let Some(path) = binary_exe {
+    return Ok(BinaryFmt::Exe(path));
+  }
+  if let Some(path) = binary_raw {
+    return Ok(BinaryFmt::Raw(path));
+  }
+  unreachable!();
+}
+
 fn parse_args() -> Result<Args, pico_args::Error> {
   let mut pargs = pico_args::Arguments::from_env();
 
@@ -103,7 +135,7 @@ fn parse_args() -> Result<Args, pico_args::Error> {
   // Parse out all args
   let mut args = Args {
     config:          pargs.value_from_str("--config")?,
-    binary:          pargs.value_from_str("--binary")?,
+    binary:          parse_binary_fmt(&mut pargs)?,
     start_addr:      pargs.opt_value_from_str("--start-addr")?,
     end_addr:        pargs.opt_value_from_str("--end-addr")?,
     name:            pargs.opt_value_from_str("--name")?,
@@ -152,7 +184,19 @@ pub fn run() -> i32 {
     spec::Spec::from_start_and_end(args.start_addr, args.end_addr)
   };
 
-  let binary = Binary::from_file(&args.binary).unwrap();
+  let path = args.binary.path();
+  let data =std::fs::read(path).map_err(
+    |err| format!("Failed to read file: '{}': {:?}", path, err)).unwrap();
+
+  let binary = match &args.binary {
+    BinaryFmt::Raw(_) => {
+      Binary::from_data(&data)
+    }
+    BinaryFmt::Exe(_) => {
+      let exe = binfmt::mz::Exe::decode(&data).unwrap();
+      Binary::from_data(exe.exe_data())
+    }
+  };
 
   let region = binary.region_iter(spec.start, spec.end);
   let decoder = Decoder::new(region);

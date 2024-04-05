@@ -5,6 +5,10 @@ pub struct Binary {
 }
 
 impl Binary {
+  pub fn from_data(data: &[u8]) -> Self {
+    Self { mem: data.to_vec() }
+  }
+
   pub fn from_file(path: &str) -> Result<Self, String> {
     let mem = std::fs::read(path).map_err(
       |err| format!("Failed to read file: '{}': {:?}", path, err))?;
