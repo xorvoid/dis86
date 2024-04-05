@@ -4,6 +4,7 @@ use dis86::binary::Binary;
 use dis86::asm;
 use dis86::config::{self, Config};
 use std::fs;
+use std::collections::HashMap;
 
 struct Command {
   name: &'static str,
@@ -85,7 +86,7 @@ fn find_stub_info<'a>(exe: &'a mz::Exe<'_>, addr: SegOff) -> &'a mz::OverlayStub
     panic!("Binary has no overlay info, cannot map {}", addr);
   };
   for stub in &ovr.stubs {
-    if addr.seg.unwrap_normal() == stub.stub_segment && addr.off.0 == stub.stub_offset {
+    if addr == stub.stub_addr() {
       return stub;
     }
   }
@@ -161,7 +162,7 @@ fn cmd_dis(args: &[String]) {
     let start = SegOff { seg: Seg::Normal(s.seg), off: Off(s.minoff) };
     let end = SegOff { seg: Seg::Normal(s.seg), off: Off(s.maxoff) };
     if s.typ == mz::SegInfoType::CODE {
-      disassemble_code(&binary, start, end, cfg.as_ref());
+      disassemble_code(&binary, start, end, cfg.as_ref(), None);
     }
     else if s.typ == mz::SegInfoType::DATA {
       disassemble_data(&binary, start, end, cfg.as_ref());
@@ -170,10 +171,15 @@ fn cmd_dis(args: &[String]) {
 
   // Process overlay segments
   if let Some(ovr) = exe.ovr.as_ref() {
+    let mut dest_to_stub_map = HashMap::new();
+    for stub in &ovr.stubs {
+      dest_to_stub_map.insert(stub.dest_addr(), stub.stub_addr());
+    }
+
     for (i, seg) in ovr.segs.iter().enumerate() {
       let start = SegOff { seg: Seg::Overlay(i as u16), off: Off(0) };
       let end = SegOff { seg: Seg::Overlay(i as u16), off: Off(seg.segment_size) };
-      disassemble_code(&binary, start, end, cfg.as_ref());
+      disassemble_code(&binary, start, end, cfg.as_ref(), Some(&dest_to_stub_map));
     }
   }
 }
@@ -182,16 +188,11 @@ fn cfg_func(cfg: Option<&Config>, addr: SegOff) -> Option<&config::Func> {
   cfg?.func_lookup(addr)
 }
 
-fn disassemble_code(binary: &Binary, start: SegOff, end: SegOff, cfg: Option<&Config>) {
+fn disassemble_code(binary: &Binary, start: SegOff, end: SegOff, cfg: Option<&Config>,
+                    dest_to_stub_map: Option<&HashMap<SegOff, SegOff>>) {
   println!(";;; ===================== CODE SEGMENT {} =====================", start.seg);
   let mut region = binary.region_iter(start, end);
   loop {
-    let mut is_function = false;
-    if let Some(func) = cfg_func(cfg, region.addr()) {
-      is_function = true;
-      println!(";;; =============================================================");
-      println!(";;; FUNCTION: {}", func.name);
-    }
     let (addr, instr, raw) = match asm::decode::decode_one(&mut region) {
       Ok(None) => break,
       Ok(Some((instr, raw))) => (instr.addr, Some(instr), raw),
@@ -206,11 +207,31 @@ fn disassemble_code(binary: &Binary, start: SegOff, end: SegOff, cfg: Option<&Co
       }
     };
 
-    if let Some(instr) = instr.as_ref() {
-      if !is_function && instr.opcode == asm::instr::Opcode::OP_PUSH &&
-        instr.operands[0] == asm::instr::Operand::Reg(asm::instr::OperandReg(asm::instr::Reg::BP)) {
+    let mut emitted_divider = false;
+    let mut emit_divider = || {
+      if !emitted_divider {
         println!(";;; =============================================================");
-        println!(";;; MAYBE UNKNOWN FUNCTION");
+        emitted_divider = true;
+      }
+    };
+
+    if let Some(dest_to_stub_map) = dest_to_stub_map {
+      if let Some(stub_addr) = dest_to_stub_map.get(&addr) {
+        emit_divider();
+        println!(";;; STUB TARGET FROM {}", stub_addr);
+      }
+    }
+
+    if let Some(func) = cfg_func(cfg, addr) {
+      emit_divider();
+      println!(";;; FUNCTION: {}", func.name);
+    } else {
+      if let Some(instr) = instr.as_ref() {
+        if instr.opcode == asm::instr::Opcode::OP_PUSH &&
+          instr.operands[0] == asm::instr::Operand::Reg(asm::instr::OperandReg(asm::instr::Reg::BP)) {
+            emit_divider();
+            println!(";;; MAYBE UNKNOWN FUNCTION");
+          }
       }
     }
 

@@ -115,7 +115,7 @@ impl<'a> Exe<'a> {
 
     println!("Overlay Stubs:");
     for stub in &ovr.stubs {
-      println!("  0x{:04x}:0x{:04x} => seg:0x{:04x} (overlay: {})", stub.stub_segment, stub.stub_offset, stub.dest_offset, stub.overlay_seg_num);
+      println!("  {} => {}", stub.stub_addr(), stub.dest_addr());
     }
   }
 

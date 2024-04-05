@@ -1,4 +1,5 @@
 use crate::binfmt::mz::*;
+use crate::segoff::{Seg, Off, SegOff};
 
 impl<'a> Exe<'a> {
   pub fn exe_data(&self) -> &[u8] {
@@ -21,5 +22,15 @@ impl<'a> Exe<'a> {
 impl SegInfo {
   pub fn size(&self) -> u16 {
     self.maxoff.wrapping_sub(self.minoff)
+  }
+}
+
+impl OverlayStub {
+  pub fn stub_addr(&self) -> SegOff {
+    SegOff { seg: Seg::Normal(self.stub_segment), off: Off(self.stub_offset) }
+  }
+
+  pub fn dest_addr(&self) -> SegOff {
+    SegOff { seg: Seg::Overlay(self.overlay_seg_num), off: Off(self.dest_offset) }
   }
 }

@@ -1,4 +1,4 @@
-use crate::segoff::SegOff;
+use crate::segoff::{Seg, SegOff};
 use crate::bsl;
 use crate::types::Type;
 
@@ -71,6 +71,13 @@ impl Config {
     for f in &self.funcs {
       if addr == f.start {
         return Some(f)
+      }
+      // matches as an overlay func?
+      let Some(overlay) = f.overlay.as_ref() else { continue };
+      if let Seg::Overlay(num) = addr.seg {
+        if num == overlay.num && addr.off.0 == overlay.start {
+          return Some(f);
+        }
       }
     }
     None
