@@ -22,11 +22,11 @@ vis name:
 
 # A temporary command for dev build-test-cycle
 run name *opts: build
-     ./target/debug/dis86 --config ../gizmo/build/src/hooklib/dis86_config.bsl --binary ../gizmo/dis/exe.bin --name {{name}} {{opts}}
+     ./target/debug/dis86 --config ../gizmo/build/src/hydra/dis86_config.bsl --binary-exe ../gizmo/ISO/ssg.exe --name {{name}} {{opts}}
 
 # A temporary command for dev build-test-cycle
 run-old:
-     ./old/v2/build/src/app/dis86 decomp --config ../gizmo/build/src/hooklib/dis86_config.bsl --binary ../gizmo/dis/exe.bin --start-addr 0622:0922 --end-addr 0622:09e5
+     ./old/v2/build/src/app/dis86 decomp --config ../gizmo/build/src/hydra/dis86_config.bsl --binary-exe ../gizmo/ISO/ssg.exe --start-addr 0622:0922 --end-addr 0622:09e5
 
 rundiff a b: build
      just run --emit-{{a}} /tmp/a

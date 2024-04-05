@@ -95,7 +95,7 @@ impl<'a> Binary<'a> {
       Seg::Normal(_) => cfg_func(self.config, to),
       Seg::Overlay(_) => {
         // We're calling from an overlay, so we need to remap the dest seg before making the call...
-        let Seg::Normal(seg) = to.seg else { panic!("Unexpected destination segment as overlay!") };
+        let Seg::Normal(seg) = to.seg else { return None; /*panic!("Unexpected destination segment as overlay!") */ };
         let remapped_seg = self.remap_to_segment(seg);
         let to_modified = SegOff { seg: remapped_seg, off: to.off };
         cfg_func(self.config, to_modified)

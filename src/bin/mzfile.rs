@@ -193,6 +193,11 @@ fn instr_is_callf(ins: &Option<asm::instr::Instr>) -> bool {
   ins.opcode == asm::instr::Opcode::OP_CALLF
 }
 
+fn instr_is_calln(ins: &Option<asm::instr::Instr>) -> bool {
+  let Some(ins) = ins.as_ref() else { return false };
+  ins.opcode == asm::instr::Opcode::OP_CALL
+}
+
 fn instr_is_return(ins: &Option<asm::instr::Instr>) -> bool {
   let Some(ins) = ins.as_ref() else { return false };
   ins.opcode == asm::instr::Opcode::OP_IRET ||
@@ -252,6 +257,15 @@ fn disassemble_code(binary: &Binary, start: SegOff, end: SegOff, cfg: Option<&Co
     if instr_is_callf(&instr) {
       if let asm::instr::Operand::Far(far) = &instr.as_ref().unwrap().operands[0] {
         let dest_addr = SegOff { seg: Seg::Normal(far.seg), off: Off(far.off) };
+        if let Some(func) = binary.lookup_call(addr, dest_addr) {
+          print!("  ; {}()", func.name);
+        }
+      }
+    }
+
+    if instr_is_calln(&instr) {
+      if let asm::instr::Operand::Rel(rel) = &instr.as_ref().unwrap().operands[0] {
+        let dest_addr = instr.as_ref().unwrap().rel_addr(rel);
         if let Some(func) = binary.lookup_call(addr, dest_addr) {
           print!("  ; {}()", func.name);
         }
