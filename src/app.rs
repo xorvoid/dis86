@@ -168,7 +168,7 @@ pub fn run() -> i32 {
     spec::Spec::from_start_and_end(args.start_addr, args.end_addr)
   };
 
-  let binary = Binary::from_fmt(&args.binary).unwrap();
+  let binary = Binary::from_fmt(&args.binary, Some(&cfg)).unwrap();
 
   let region = binary.region_iter(spec.start, spec.end);
   let decoder = Decoder::new(region);

@@ -151,7 +151,7 @@ fn cmd_dis(args: &[String]) {
     panic!("Binary has no seginfo: needed to do full disassemble");
   };
 
-  let binary = Binary::from_exe(&exe);
+  let binary = Binary::from_exe(&exe, cfg.as_ref());
 
   // Process normal segments
   for s in seginfo {
@@ -186,6 +186,18 @@ fn cmd_dis(args: &[String]) {
 
 fn cfg_func(cfg: Option<&Config>, addr: SegOff) -> Option<&config::Func> {
   cfg?.func_lookup(addr)
+}
+
+fn instr_is_callf(ins: &Option<asm::instr::Instr>) -> bool {
+  let Some(ins) = ins.as_ref() else { return false };
+  ins.opcode == asm::instr::Opcode::OP_CALLF
+}
+
+fn instr_is_return(ins: &Option<asm::instr::Instr>) -> bool {
+  let Some(ins) = ins.as_ref() else { return false };
+  ins.opcode == asm::instr::Opcode::OP_IRET ||
+    ins.opcode == asm::instr::Opcode::OP_RET ||
+    ins.opcode == asm::instr::Opcode::OP_RETF
 }
 
 fn disassemble_code(binary: &Binary, start: SegOff, end: SegOff, cfg: Option<&Config>,
@@ -235,14 +247,21 @@ fn disassemble_code(binary: &Binary, start: SegOff, end: SegOff, cfg: Option<&Co
       }
     }
 
-    println!("{}", &asm::intel_syntax::format(addr, instr.as_ref(), raw, true).unwrap());
+    print!("{}", &asm::intel_syntax::format(addr, instr.as_ref(), raw, true).unwrap());
 
-    if let Some(instr) = instr.as_ref() {
-      if instr.opcode == asm::instr::Opcode::OP_IRET ||
-        instr.opcode == asm::instr::Opcode::OP_RET ||
-        instr.opcode == asm::instr::Opcode::OP_RETF {
-          println!("");
+    if instr_is_callf(&instr) {
+      if let asm::instr::Operand::Far(far) = &instr.as_ref().unwrap().operands[0] {
+        let dest_addr = SegOff { seg: Seg::Normal(far.seg), off: Off(far.off) };
+        if let Some(func) = binary.lookup_call(addr, dest_addr) {
+          print!("  ; {}()", func.name);
         }
+      }
+    }
+
+    println!("");
+
+    if instr_is_return(&instr) {
+      println!("");
     }
   }
   println!("");
