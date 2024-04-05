@@ -74,10 +74,10 @@ impl<'a> Exe<'a> {
 
   pub fn print_seginfo(seginfo: &[SegInfo]) {
     println!("Segment Information:");
-    println!("  {:<8}  {:<12}  {:<8}  {:<8}  {:<10}",
-           "seg", "type", "minoff", "maxoff", "size");
+    println!("  {:<4}  {:<8}  {:<12}  {:<8}  {:<8}  {:<10}",
+             "num", "seg", "type", "minoff", "maxoff", "size");
 
-    for s in seginfo {
+    for (i, s) in seginfo.iter().enumerate() {
       // Load everything to stack because rust thinks it's unaligned and complains otherwise...
       let seg    = s.seg;
       let maxoff = s.maxoff;
@@ -93,8 +93,8 @@ impl<'a> Exe<'a> {
         _ => "UNKNOWN",
       };
       let typ_str = format!("{}({})", typ_str, typ);
-      println!("  0x{:04x}    {:<12}  0x{:04x}    0x{:04x}    {:5} (0x{:04x})",
-               seg, typ_str, minoff, maxoff, n, n);
+      println!(" {:4}   0x{:04x}    {:<12}  0x{:04x}    0x{:04x}    {:5} (0x{:04x})",
+               i, seg, typ_str, minoff, maxoff, n, n);
     }
     println!("");
   }
