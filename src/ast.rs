@@ -414,15 +414,15 @@ impl<'a> Builder<'a> {
         Expr::Call(Box::new(Expr::Name(funcname)), args)
       }
       ir::Opcode::CallFar => {
-        let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, depth+1)).collect();
+        let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr_hex(*r, depth+1, true)).collect();
         Expr::Abstract("CALL_FAR", exprs)
       }
       ir::Opcode::CallNear => {
-        let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, depth+1)).collect();
+        let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr_hex(*r, depth+1, true)).collect();
         Expr::Abstract("CALL_NEAR", exprs)
       }
       ir::Opcode::CallPtr => {
-        let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, depth+1)).collect();
+        let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr_hex(*r, depth+1, true)).collect();
         Expr::Abstract("CALL_FAR_INDIRECT", exprs)
       }
       ir::Opcode::Phi => {

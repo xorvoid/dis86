@@ -34,6 +34,10 @@ impl SegOff {
     (self.seg.unwrap_normal() as usize) * 16 + (self.off.0 as usize)
   }
 
+  pub fn is_overlay_addr(&self) -> bool {
+    matches!(self.seg, Seg::Overlay(_))
+  }
+
   pub fn add_offset(&self, off: u16) -> SegOff {
     SegOff { seg: self.seg, off: Off(self.off.0.wrapping_add(off)) }
   }

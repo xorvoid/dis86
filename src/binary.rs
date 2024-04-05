@@ -1,4 +1,4 @@
-use crate::segoff::{Seg, Off, SegOff};
+use crate::segoff::{Seg, SegOff};
 use crate::region::RegionIter;
 use crate::binfmt;
 
@@ -22,6 +22,16 @@ struct Data(Vec<u8>);
 pub struct Binary {
   main: Data,
   overlays: Vec<Data>,
+  segmap: Option<Vec<u16>>,
+}
+
+fn build_segmap(exe: &binfmt::mz::Exe) -> Option<Vec<u16>> {
+  let segmap = exe.seginfo?;
+  let mut out = vec![];
+  for s in segmap {
+    out.push(s.seg);
+  }
+  Some(out)
 }
 
 impl Binary {
@@ -42,7 +52,8 @@ impl Binary {
         for i in 0..exe.num_overlay_segments() {
           overlays.push(Data(exe.overlay_data(i).to_vec()));
         }
-        Binary { main, overlays }
+        let segmap = build_segmap(&exe);
+        Binary { main, overlays, segmap, }
       }
     };
 
@@ -50,13 +61,13 @@ impl Binary {
   }
 
   pub fn from_data(data: &[u8]) -> Self {
-    Self { main: Data(data.to_vec()), overlays: vec![] }
+    Self { main: Data(data.to_vec()), overlays: vec![], segmap: None }
   }
 
   pub fn from_file(path: &str) -> Result<Self, String> {
     let mem = std::fs::read(path).map_err(
       |err| format!("Failed to read file: '{}': {:?}", path, err))?;
-    Ok(Self { main: Data(mem), overlays: vec![] })
+    Ok(Self { main: Data(mem), overlays: vec![], segmap: None })
   }
 
   pub fn region(&self, start: SegOff, end: SegOff) -> &[u8] {
@@ -69,5 +80,13 @@ impl Binary {
 
   pub fn region_iter(&self, start: SegOff, end: SegOff) -> RegionIter<'_> {
     RegionIter::new(self.region(start, end), start)
+  }
+
+  pub fn remap_to_segment(&self, old: u16) -> Seg {
+    let Some(segmap) = self.segmap.as_ref() else {
+      panic!("Cannot remap segments when binary has no seginfo table");
+    };
+    assert!(old%8 == 0);
+    Seg::Normal(segmap[(old/8) as usize])
   }
 }

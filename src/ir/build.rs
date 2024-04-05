@@ -55,11 +55,13 @@ struct IRBuilder<'a> {
   cur: BlockRef,
   special: Option<SpecialState>,
 
+  overlay: bool,
   pin_all: bool,
 }
 
 impl<'a> IRBuilder<'a> {
-  fn new(cfg: &'a Config, instrs: &'a [instr::Instr], spec: &'a spec::Spec, binary: &'a binary::Binary, pin_all: bool) -> Self {
+  fn new(cfg: &'a Config, instrs: &'a [instr::Instr], spec: &'a spec::Spec, binary: &'a binary::Binary,
+         overlay: bool, pin_all: bool) -> Self {
     let mut this = Self {
       instrs,
       cfg,
@@ -71,6 +73,7 @@ impl<'a> IRBuilder<'a> {
       cur: BlockRef(0),
       special: None,
 
+      overlay,
       pin_all,
     };
 
@@ -618,7 +621,16 @@ impl IRBuilder<'_> {
     let instr::Operand::Far(far) = &ins.operands[0] else {
       return self.process_callf_indirect(ins);
     };
-    let addr = SegOff { seg: Seg::Normal(far.seg), off: Off(far.off) };
+    println!("OVERLAY: {}", self.overlay);
+    let seg = if self.overlay {
+      // Far calls from overlays need to be remapped
+      self.binary.remap_to_segment(far.seg)
+    } else {
+      // Otherwise: Normal
+      Seg::Normal(far.seg)
+    };
+    //let seg = Seg::Normal(far.seg);
+    let addr = SegOff { seg, off: Off(far.off) };
     self.process_call_segoff(addr, config::CallMode::Far, ins);
   }
 
@@ -948,8 +960,8 @@ fn offset_from<T>(slice: &[T], elt: &T) -> usize {
 }
 
 impl IR {
-  pub fn from_instrs(instrs: &[instr::Instr], cfg: &Config, spec: &spec::Spec<'_>, binary: &binary::Binary, pin_all: bool) -> IR {
-    let mut bld = IRBuilder::new(cfg, instrs, spec, binary, pin_all);
+  pub fn from_instrs(instrs: &[instr::Instr], cfg: &Config, spec: &spec::Spec<'_>, binary: &binary::Binary, overlay: bool, pin_all: bool) -> IR {
+    let mut bld = IRBuilder::new(cfg, instrs, spec, binary, overlay, pin_all);
     bld.build();
     bld.ir
   }

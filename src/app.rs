@@ -191,7 +191,9 @@ pub fn run() -> i32 {
     return 0;
   }
 
-  let mut ir = ir::IR::from_instrs(&instr_list, &cfg, &spec, &binary, args.build_pin_all);
+  let overlay = spec.start.is_overlay_addr();
+
+  let mut ir = ir::IR::from_instrs(&instr_list, &cfg, &spec, &binary, overlay, args.build_pin_all);
   if let Some(path) = args.emit_ir_initial.as_ref() {
     write_to_path(path, &format!("{}", ir));
     return 0;
