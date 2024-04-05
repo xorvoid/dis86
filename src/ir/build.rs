@@ -169,43 +169,44 @@ impl<'a> IRBuilder<'a> {
     }
 
     // Filter for branch instructions
-    let oper_num = match &ins.opcode {
-      instr::Opcode::OP_JA => 0,
-      instr::Opcode::OP_JAE => 0,
-      instr::Opcode::OP_JB => 0,
-      instr::Opcode::OP_JBE => 0,
-      instr::Opcode::OP_JCXZ => 1,
-      instr::Opcode::OP_JE => 0,
-      instr::Opcode::OP_JG => 0,
-      instr::Opcode::OP_JGE => 0,
-      instr::Opcode::OP_JL => 0,
-      instr::Opcode::OP_JLE => 0,
-      instr::Opcode::OP_JMP => 0,
-      instr::Opcode::OP_JMPF => 0,
-      instr::Opcode::OP_JNE => 0,
-      instr::Opcode::OP_JNO => 0,
-      instr::Opcode::OP_JNP => 0,
-      instr::Opcode::OP_JNS => 0,
-      instr::Opcode::OP_JO => 0,
-      instr::Opcode::OP_JP => 0,
-      instr::Opcode::OP_JS => 0,
-      instr::Opcode::OP_LOOP => 1,
+    let (oper_num, fallthrough) = match &ins.opcode {
+      instr::Opcode::OP_JA   => (0, true),
+      instr::Opcode::OP_JAE  => (0, true),
+      instr::Opcode::OP_JB   => (0, true),
+      instr::Opcode::OP_JBE  => (0, true),
+      instr::Opcode::OP_JCXZ => (1, true),
+      instr::Opcode::OP_JE   => (0, true),
+      instr::Opcode::OP_JG   => (0, true),
+      instr::Opcode::OP_JGE  => (0, true),
+      instr::Opcode::OP_JL   => (0, true),
+      instr::Opcode::OP_JLE  => (0, true),
+      instr::Opcode::OP_JMP  => (0, false),
+      instr::Opcode::OP_JMPF => (0, false),
+      instr::Opcode::OP_JNE  => (0, true),
+      instr::Opcode::OP_JNO  => (0, true),
+      instr::Opcode::OP_JNP  => (0, true),
+      instr::Opcode::OP_JNS  => (0, true),
+      instr::Opcode::OP_JO   => (0, true),
+      instr::Opcode::OP_JP   => (0, true),
+      instr::Opcode::OP_JS   => (0, true),
+      instr::Opcode::OP_LOOP => (1, true),
       _ => return None,
     };
 
-    let tgt_taken = match &ins.operands[oper_num] {
+    let mut targets = vec![];
+
+    match &ins.operands[oper_num] {
       instr::Operand::Rel(rel) => {
-        ins.rel_addr(rel)
+        targets.push(ins.rel_addr(rel));
       }
       _ => panic!("Unsupported branch instruction: '{}' | {:?}", instr_str(ins), ins.operands[oper_num]),
     };
 
-    let tgt_not_taken = ins.end_addr();
+    if fallthrough {
+      targets.push(ins.end_addr());
+    }
 
-    Some(vec![
-      tgt_taken,
-      tgt_not_taken,
-    ])
+    Some(targets)
   }
 
   fn append_instr(&mut self, typ: Type, opcode: Opcode, operands: Vec<Ref>) -> Ref {
@@ -262,11 +263,13 @@ impl<'a> IRBuilder<'a> {
   fn start_next_blk(&mut self, next: SegOff) {
     let next_bref = self.get_block(next);
 
-    // Make sure the last instruction is a jump
+    // Make sure the last instruction is a jump or ret
     match self.ir.block(self.cur).instrs.last().map(|ins| ins.opcode) {
       Some(Opcode::Jmp) => (),
       Some(Opcode::Jne) => (),
       Some(Opcode::JmpTbl) => (),
+      Some(Opcode::RetFar) => (),
+      Some(Opcode::RetNear) => (),
       _ => self.append_jmp(next_bref), // need to append a trailing jump
     }
 
