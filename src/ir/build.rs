@@ -192,12 +192,14 @@ impl<'a> IRBuilder<'a> {
       _ => return None,
     }
 
-    // target should be first operand
-    let tgt_taken = match &ins.operands[0] {
+    // target should be first operand unless it's JCXZ
+    let oper_num = if ins.opcode == instr::Opcode::OP_JCXZ { 1 } else { 0 };
+
+    let tgt_taken = match &ins.operands[oper_num] {
       instr::Operand::Rel(rel) => {
         ins.rel_addr(rel)
       }
-      _ => panic!("Unsupported branch instruction: '{}'", instr_str(ins)),
+      _ => panic!("Unsupported branch instruction: '{}' | {:?}", instr_str(ins), ins.operands[oper_num]),
     };
 
     let tgt_not_taken = ins.end_addr();
@@ -723,6 +725,12 @@ impl IRBuilder<'_> {
     // handle less standard operations
     match &ins.opcode {
       instr::Opcode::OP_NOP => (),
+      instr::Opcode::OP_XCHG => {
+        let a = self.append_asm_src_operand(&ins.operands[0]);
+        let b = self.append_asm_src_operand(&ins.operands[1]);
+        self.append_asm_dst_operand(&ins.operands[0], b);
+        self.append_asm_dst_operand(&ins.operands[1], a);
+      }
       instr::Opcode::OP_PUSH => {
         if matches!(ins.operands[0], instr::Operand::Reg(instr::OperandReg(instr::Reg::CS))) {
           assert!(self.special.is_none());
@@ -771,6 +779,20 @@ impl IRBuilder<'_> {
         let res = self.append_instr(typ, Opcode::IMul, vec![lhs, rhs]);
         self.append_asm_dst_operand(&ins.operands[0], res);
      }
+      instr::Opcode::OP_MUL => {
+        // Sanity check the form we have
+        assert!(
+          matches!(ins.operands[0], instr::Operand::Reg(instr::OperandReg(instr::Reg::DX))) &&
+          matches!(ins.operands[1], instr::Operand::Reg(instr::OperandReg(instr::Reg::AX))) &&
+          matches!(ins.operands[2], instr::Operand::Reg(_)));
+
+        let lhs = self.append_asm_src_operand(&ins.operands[1]);
+        let rhs = self.append_asm_src_operand(&ins.operands[2]);
+        let res = self.append_instr(Type::U32, Opcode::UMul, vec![lhs, rhs]);
+        let (upper, lower) = self.append_upper_lower_split(res);
+        self.append_asm_dst_operand(&ins.operands[0], upper);
+        self.append_asm_dst_operand(&ins.operands[1], lower);
+     }
       instr::Opcode::OP_INC => {
         let attr = if operand_is_stack_reg(&ins.operands[0]) { Attribute::STACK_PTR } else { Attribute::NONE };
         let one = self.ir.append_const(1);
@@ -808,6 +830,19 @@ impl IRBuilder<'_> {
           }
           _ => panic!("Unsupported JMP operand for '{}'", instr_str(ins)),
         }
+      }
+
+      instr::Opcode::OP_JCXZ  => {
+        let instr::Operand::Rel(rel) = &ins.operands[1] else { panic!("Expected relative offset operand for JCXZ") };
+
+        let false_blk = self.get_block(ins.end_addr());
+        let true_blk = self.get_block(ins.rel_addr(rel));
+
+        let cx = self.append_asm_src_operand(&ins.operands[0]);
+        let z = self.ir.append_const(0);
+        let cond = self.append_instr(Type::U16, Opcode::Eq, vec![cx, z]);
+
+        self.append_jne(cond, true_blk, false_blk);
       }
 
       instr::Opcode::OP_JE  => self.append_cond_jump(ins, Opcode::EqFlags),

@@ -19,7 +19,7 @@ pub enum Opcode {
   UDiv,  // unsigned
 
   Neg,
-  Not,
+  Not,  // bitwise
 
   SignExtTo32,
 
