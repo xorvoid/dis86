@@ -440,7 +440,7 @@ impl<'a> Builder<'a> {
         // TODO: VERIFY THIS IS A U16
         Expr::Cast(Type::I32, Box::new(Expr::Cast(Type::I16, Box::new(rhs))))
       }
-      ir::Opcode::Signed => {
+      ir::Opcode::Sign => {
         let lhs = self.ref_to_expr(instr.operands[0], depth+1);
         binary_expr(BinaryOperator::Neq,
                     binary_expr(BinaryOperator::Shr, lhs, Expr::DecimalConst(15)),

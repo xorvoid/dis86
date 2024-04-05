@@ -513,6 +513,40 @@ pub fn mem_symbol_to_ref(ir: &mut IR) {
   ir.seal_all_blocks();
 }
 
+/*
+From:
+--------------------------------------------
+  flags.10 = u16      updf       flags.8              dx.2
+  t9       = u16      signf      flags.10
+
+To:
+--------------------------------------------
+  flags.10 = u16      updf       flags.8              dx.2
+  t9       = u16      sign       dx.2
+*/
+pub fn simplify_sign_conds(ir: &mut IR) {
+  for b in ir.iter_blocks() {
+    for r in ir.iter_instrs(b) {
+      let instr = ir.instr(r).unwrap();
+      if instr.opcode != Opcode::SignFlags { continue; }
+
+      // let sign_ref = instr.operands[0];
+      // let sign_instr = ir.instr(sign_ref).unwrap();
+      // if sign_instr.opcode != Opcode::SignFlags { continue; }
+
+      let upd_ref = instr.operands[0];
+      let upd_instr = ir.instr(upd_ref).unwrap();
+      if upd_instr.opcode != Opcode::UpdateFlags { continue; }
+
+      let lhs = upd_instr.operands[1];
+
+      let instr = ir.instr_mut(r).unwrap();
+      instr.opcode = Opcode::Sign;
+      instr.operands = vec![lhs];
+    }
+  }
+}
+
 pub fn simplify_branch_conds(ir: &mut IR) {
   for b in ir.iter_blocks() {
     for r in ir.iter_instrs(b) {
@@ -586,7 +620,7 @@ pub fn simplify_branch_conds(ir: &mut IR) {
         // jl <tgt>   (equivalent to "jump if signed")
         let z = ir.append_const(0);
         let instr = ir.instr_mut(r).unwrap();
-        instr.opcode = Opcode::Signed;
+        instr.opcode = Opcode::Sign;
         instr.operands = vec![pred_ref, z];
       }
     }
@@ -603,6 +637,7 @@ pub fn optimize(ir: &mut IR) {
     reduce_phi_single_ref(ir);
     reduce_phi_common_subexpr(ir);
     simplify_branch_conds(ir);
+    simplify_sign_conds(ir);
     // note: reduce_trivial_or() after simplify_branch_conds() is important
     reduce_trivial_or(ir);
     stack_ptr_accumulation(ir);

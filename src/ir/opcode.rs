@@ -68,7 +68,7 @@ pub enum Opcode {
   UGeq,        // Operator: >= (unsigned)
   ULt,         // Operator: <  (unsigned)
   ULeq,        // Operator: <=  (unsigned)
-  Signed,      // Is Signed?
+  Sign,        // Is Signed?
 
   CallFar,
   CallNear,
@@ -155,7 +155,7 @@ impl Opcode {
       Opcode::UGeq        => "ugeq",
       Opcode::ULt         => "ult",
       Opcode::ULeq        => "uleq",
-      Opcode::Signed      => "signed",
+      Opcode::Sign        => "sign",
       Opcode::CallFar     => "callfar",
       Opcode::CallNear    => "callnear",
       Opcode::CallPtr     => "callptr",
