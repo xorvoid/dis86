@@ -446,6 +446,10 @@ impl<'a> Builder<'a> {
                     binary_expr(BinaryOperator::Shr, lhs, Expr::DecimalConst(15)),
                     Expr::DecimalConst(0))
       }
+      ir::Opcode::Unimpl => {
+        let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, depth+1)).collect();
+        Expr::Abstract("UNIMPL", exprs)
+      }
       opcode @ _ => {
         panic!("Unimplemented {:?} in ast converter", opcode);
       }
