@@ -35,6 +35,20 @@ pub enum CallMode {
 }
 
 #[derive(Debug)]
+pub struct Struct {
+  pub name: String,
+  pub size: u16,
+  pub members: Vec<StructMember>,
+}
+
+#[derive(Debug)]
+pub struct StructMember {
+  pub name: String,
+  pub typ: Type,
+  pub off: u16,
+}
+
+#[derive(Debug)]
 pub struct Global {
   pub name: String,
   pub offset: u16,
@@ -49,20 +63,13 @@ pub struct TextSectionRegion {
   pub typ: Type,
 }
 
-#[derive(Debug)]
-pub struct Segmap {
-  pub name: String,
-  pub from: u16,
-  pub to: u16,
-}
-
 #[derive(Debug, Default)]
 pub struct Config {
   pub funcs: Vec<Func>,
   pub indirects: Vec<Indirect>,
+  pub structs: Vec<Struct>,
   pub globals: Vec<Global>,
   pub text_section: Vec<TextSectionRegion>,
-  pub segmaps: Vec<Segmap>,
 }
 
 impl Config {
@@ -119,9 +126,9 @@ impl Config {
     let mut cfg = Config {
       funcs: vec![],
       indirects: vec![],
+      structs: vec![],
       globals: vec![],
       text_section: vec![],
-      segmaps: vec![],
     };
 
     let dat = std::fs::read_to_string(path)
@@ -131,9 +138,9 @@ impl Config {
       .ok_or_else(|| format!("Failed to parse config"))?;
 
     cfg.parse_functions(&root)?;
+    cfg.parse_structs(&root)?;
     cfg.parse_globals(&root)?;
     cfg.parse_text_section(&root)?;
-    cfg.parse_segmap(&root)?;
 
     Ok(cfg)
   }
@@ -188,9 +195,9 @@ impl Config {
       let overlay = if n_overlay_opts == 3 {
         let num: u16 = overlay_num.unwrap().parse()
           .map_err(|_| format!("Expected u16 for '{}.overlay_num', got '{}'", key, overlay_num.unwrap()))?;
-        let start: u16 = parse_hex_u16(&overlay_start.unwrap())
+        let start: u16 = parse_u16(&overlay_start.unwrap())
           .map_err(|_| format!("Expected u16 for '{}.overlay_start', got '{}'", key, overlay_start.unwrap()))?;
-        let end: u16 = parse_hex_u16(&overlay_end.unwrap())
+        let end: u16 = parse_u16(&overlay_end.unwrap())
           .map_err(|_| format!("Expected u16 for '{}.overlay_end', got '{}'", key, overlay_end.unwrap()))?;
         Some(OverlayRange { num, start, end })
       } else if n_overlay_opts == 0 {
@@ -225,6 +232,62 @@ impl Config {
     Ok(())
   }
 
+  fn parse_structs(&mut self, root: &bsl::Root) -> Result<(), String> {
+    let structures = root.get_node("dis86.structures")
+      .ok_or_else(|| format!("Failed to get the structures node"))?;
+
+    for (key, val) in structures.iter() {
+      let name = key;
+
+      let s = val.as_node()
+        .ok_or_else(|| format!("Expected structure properties"))?;
+
+      let size_str = s.get_str("size")
+        .ok_or_else(|| format!("No function 'size' property for '{}'", name))?;
+      let size: u16 = size_str.parse()
+        .map_err(|_| format!("Expected u16 for '{}.start', got '{}'", name, size_str))?;
+
+      let mbrs = s.get_node("members")
+        .ok_or_else(|| format!("Expected {}.members node", name))?;
+
+      let mut members = vec![];
+      for (key, val) in mbrs.iter() {
+        let mbr = val.as_node()
+          .ok_or_else(|| format!("Expected member properties for {}.members.{}", name, key))?;
+
+        let off_str = mbr.get_str("off")
+          .ok_or_else(|| format!("No 'off' property for '{}.members.{}'", name, key))?;
+        let type_str = mbr.get_str("type")
+          .ok_or_else(|| format!("No 'type' property for '{}.members.{}'", name, key))?;
+
+        let off = parse_u16(off_str)
+          .map_err(|_| format!("Expected u16 hex for '{}.members.{}.off', got '{}'", name, key, off_str))?;
+        let typ: Type = match type_str.parse() {
+          Ok(typ) => typ,
+          Err(err) => {
+            // FIXME: Make this a hard error.. currently the configs have undefined struct names.. need to support that first :-(
+            eprintln!("WRN: Expected type for '{}.members.{}.type', got '{}' | {}", name, key, type_str, err);
+            Type::Unknown
+          }
+        };
+
+        members.push(StructMember {
+          name: key.to_string(),
+          typ,
+          off,
+        });
+      }
+
+      self.structs.push(Struct {
+        name: name.to_string(),
+        size,
+        members,
+      });
+    }
+
+    Ok(())
+  }
+
   fn parse_globals(&mut self, root: &bsl::Root) -> Result<(), String> {
     let glob = root.get_node("dis86.globals")
       .ok_or_else(|| format!("Failed to get the globals node"))?;
@@ -238,7 +301,7 @@ impl Config {
       let type_str = g.get_str("type")
         .ok_or_else(|| format!("No global 'type' property for '{}'", key))?;
 
-      let off = crate::util::parse::hex_u16(off_str)
+      let off = parse_u16(off_str)
         .map_err(|_| format!("Expected u16 hex for '{}.off', got '{}'", key, off_str))?;
       let typ: Type = match type_str.parse() {
         Ok(typ) => typ,
@@ -290,33 +353,6 @@ impl Config {
 
     Ok(())
   }
-
-  fn parse_segmap(&mut self, root: &bsl::Root) -> Result<(), String> {
-    let segmap = root.get_node("dis86.segmap")
-      .ok_or_else(|| format!("Failed to get the segmap node"))?;
-
-    for (key, val) in segmap.iter() {
-      let g = val.as_node()
-        .ok_or_else(|| format!("Expected global properties"))?;
-
-      let from_str = g.get_str("from")
-        .ok_or_else(|| format!("No segmap 'from' property for '{}'", key))?;
-      let to_str = g.get_str("to")
-        .ok_or_else(|| format!("No segmap 'to' property for '{}'", key))?;
-
-      let from = crate::util::parse::hex_u16(from_str)
-        .map_err(|_| format!("Expected u16 hex for '{}.from', got '{}'", key, from_str))?;
-      let to = crate::util::parse::hex_u16(to_str)
-        .map_err(|_| format!("Expected u16 hex for '{}.to', got '{}'", key, to_str))?;
-
-      self.segmaps.push(Segmap {
-        name: key.to_string(),
-        from,
-        to,
-      });
-    }
-    Ok(())
-  }
 }
 
 // parse("0x1234") -> 4660
@@ -325,5 +361,14 @@ fn parse_hex_u16(s: &str) -> Result<u16, &'static str> {
     return Err("Expected 0x prefix");
   } else {
     crate::util::parse::hex_u16(&s[2..])
+  }
+}
+
+// parse number: either decimal or hex
+fn parse_u16(s: &str) -> Result<u16, String> {
+  if s.starts_with("0x") {
+    parse_hex_u16(s).map_err(|err| err.to_string())
+  } else {
+    s.parse().map_err(|err: std::num::ParseIntError| err.to_string())
   }
 }
