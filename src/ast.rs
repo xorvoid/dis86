@@ -457,10 +457,8 @@ impl<'a> Builder<'a> {
   }
 
   fn symbol_to_expr(&mut self, symref: ir::sym::SymbolRef) -> Expr {
-    let sym = self.ir.symbols.symbol(symref);
-
-    if (self.ir.symbols.symbol_region(symref) == ir::sym::SymbolRegion::Local ||
-        self.ir.symbols.symbol_region(symref) == ir::sym::SymbolRegion::Param) &&
+    let sym = symref.def(&self.ir.symbols);
+    if (symref.table() == ir::sym::Table::Local || symref.table() == ir::sym::Table::Param) &&
       self.mappings.get(&sym.name).is_none()
     {
       let ss = crate::asm::instr::Reg::SS;
@@ -490,19 +488,19 @@ impl<'a> Builder<'a> {
     }
 
     let mut expr = Expr::Name(sym.name.clone());
-    if symref.off != 0 ||  symref.sz != sym.size {
+    if symref.off() != 0 ||  symref.sz() != sym.size {
       expr = Expr::Unary(Box::new(UnaryExpr {
         op: UnaryOperator::Addr,
         rhs: expr,
       }));
-      if symref.off != 0 {
+      if symref.off() != 0 {
         expr = Expr::Binary(Box::new(BinaryExpr {
           op: BinaryOperator::Add,
           lhs: expr,
-          rhs: Expr::HexConst(symref.off as u16),
+          rhs: Expr::HexConst(symref.off() as u16),
         }));
       }
-      assert!(symref.sz == 2); // FIXME
+      assert!(symref.sz() == 2); // FIXME
       expr = Expr::Cast(Type::ptr(Type::U16), Box::new(expr));
       expr = Expr::Deref(Box::new(expr));
     }

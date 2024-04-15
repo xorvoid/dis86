@@ -12,9 +12,9 @@ pub fn fuse_adjacent_writevar16_to_writevar32(ir: &mut IR) {
       let low_instr = ir.instr(low_ref).unwrap();
       if low_instr.opcode != Opcode::WriteVar16 { continue; }
       let Ref::Symbol(low_symref) = &low_instr.operands[0] else { continue };
-      let low_sym = ir.symbols.symbol(*low_symref);
-      if low_symref.off != 0 { continue; }
-      if low_symref.sz != 2 { continue; }
+      let low_sym = low_symref.def(&ir.symbols);
+      if low_symref.off() != 0 { continue; }
+      if low_symref.sz() != 2 { continue; }
       if low_sym.size != 4 { continue; }
 
       // Find high write16: E.g. 'writevar16 _local_0028@2        ax.3' where _local_0028 is u32
@@ -22,18 +22,14 @@ pub fn fuse_adjacent_writevar16_to_writevar32(ir: &mut IR) {
       let high_instr = ir.instr(high_ref).unwrap();
       if high_instr.opcode != Opcode::WriteVar16 { continue; }
       let Ref::Symbol(high_symref) = &high_instr.operands[0] else { continue };
-      let high_sym = ir.symbols.symbol(*high_symref);
-      if high_symref.off != 2 { continue; }
-      if high_symref.sz != 2 { continue; }
+      let high_sym = high_symref.def(&ir.symbols);
+      if high_symref.off() != 2 { continue; }
+      if high_symref.sz() != 2 { continue; }
       if low_sym as *const _ != high_sym as *const _ { continue; }
 
       // New sequence: Make32 and WriteVar32
-      let symref = Ref::Symbol(sym::SymbolRef {
-        region: low_symref.region,
-        idx: low_symref.idx,
-        off: 0,
-        sz: 4,
-      });
+      let symref = sym::SymbolRef::join_adjacent(&ir.symbols, *low_symref, *high_symref).unwrap();
+
       let low_val = low_instr.operands[1];
       let high_val = high_instr.operands[1];
       *ir.instr_mut(high_ref).unwrap() = Instr {
@@ -46,7 +42,7 @@ pub fn fuse_adjacent_writevar16_to_writevar32(ir: &mut IR) {
         typ: Type::Void,
         attrs: Attribute::MAY_ESCAPE,
         opcode: Opcode::WriteVar32,
-        operands: vec![symref, high_ref],
+        operands: vec![Ref::Symbol(symref), high_ref],
       };
     }
   }

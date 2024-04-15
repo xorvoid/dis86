@@ -4,50 +4,118 @@ use crate::ir::def::*;
 use crate::types::Type;
 use std::cmp::Ordering;
 
-// FIXME THIS WHOLE MODULE IS A MESS OF BAD DESIGN
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum SymbolRegion {
+pub enum Table {
   Param,
   Local,
   Global,
 }
 
+// Id is a reference to lookup the cooresponding Symbol
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct SymbolRef {
-  pub region: SymbolRegion,
-  pub idx: usize /* id */,
-  pub off: i16, /* off-adjust */
-  pub sz: u16, /* size */
+struct Id {
+  table: Table,
+  idx: usize,
 }
 
-#[derive(Debug, Clone)]
-pub struct Symbol {
+// Region is information about a byte range region
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct Region {
+  pub off: i32,
+  pub sz: u16,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SymbolRef {
+  id: Id,
+  region: Region,
+}
+
+impl SymbolRef {
+  pub fn def<'a>(&self, map: &'a SymbolMap) -> &'a SymbolDef {
+    &map.get_table(self.id.table).symbols[self.id.idx]
+  }
+
+  pub fn table(&self) -> Table {
+    self.id.table
+  }
+
+  pub fn name(&self, map: &SymbolMap) -> String {
+    let name = &self.def(map).name;
+    if self.off() == 0 {
+      format!("{}", name)
+    } else {
+      format!("{}@+{}", name, self.off())
+    }
+  }
+
+  pub fn off(&self) -> i32 {
+    self.region.off
+  }
+
+  pub fn sz(&self) -> u16 {
+    self.region.sz
+  }
+
+  pub fn to_type(&self) -> Type {
+    match self.sz() {
+      1 => Type::U8,
+      2 => Type::U16,
+      4 => Type::U32,
+      _ => panic!("Unsupported type size: {}", self.sz()),
+    }
+  }
+
+  pub fn join_adjacent(map: &SymbolMap, low: SymbolRef, high: SymbolRef) -> Option<SymbolRef> {
+    let low_sym = low.def(map);
+    let high_sym = high.def(map);
+    if low_sym as *const _ != high_sym as *const _ {
+      return None;
+    }
+    let low_endoff = low.off() + low.sz() as i32;
+    if high.off() as i32 != low_endoff {
+      return None;
+    }
+    Some(SymbolRef {
+      id: low.id,
+      region: Region {
+        off: low.region.off,
+        sz: low.region.sz + high.region.sz,
+      }
+    })
+  }
+
+
+}
+
+#[derive(Debug, Clone, PartialOrd, Ord, Hash, PartialEq, Eq)]
+pub struct SymbolDef {
   pub name: String,
   pub off: i16,
   pub size: u16,
 }
 
-impl Symbol {
-  fn start(&self) -> i16 {
-    self.off
+impl SymbolDef {
+  fn start(&self) -> i32 {
+    self.off.into()
   }
-  fn end(&self) -> i16 {
-    let size: i16 = self.size.try_into().unwrap();
-    self.off + size
+  fn end(&self) -> i32 {
+    let off: i32 = self.off.into();
+    let size: i32 = self.size.into();
+    off + size
   }
 }
 
 #[derive(Debug)]
-pub struct SymbolTable {
-  symbols: Vec<Symbol>, // Ordered by offset
+struct SymbolTable {
+  symbols: Vec<SymbolDef>, // Ordered by offset
 }
 
 #[derive(Debug)]
 pub struct SymbolMap {
-  pub params: SymbolTable,
-  pub locals: SymbolTable,
-  pub globals: SymbolTable,
+  params: SymbolTable,
+  locals: SymbolTable,
+  globals: SymbolTable,
 }
 
 impl SymbolMap {
@@ -60,33 +128,22 @@ impl SymbolMap {
   }
 }
 
-impl SymbolRef {
-  pub fn to_type(&self) -> Type {
-    match self.sz {
-      1 => Type::U8,
-      2 => Type::U16,
-      4 => Type::U32,
-      _ => panic!("Unsupported type size: {}", self.sz),
-    }
-  }
-}
-
 impl SymbolTable {
-  pub fn new() -> Self {
+  fn new() -> Self {
     Self {
       symbols: Vec::new(),
     }
   }
 
-  pub fn append(&mut self, name: &str, off: i16, size: u16) {
-    self.symbols.push(Symbol {
+  fn append(&mut self, name: &str, off: i16, size: u16) {
+    self.symbols.push(SymbolDef {
       name: name.to_string(),
       off,
       size,
     });
   }
 
-  pub fn coalesce(&mut self) {
+  fn coalesce(&mut self) {
     if self.symbols.len() == 0 {
       return;
     }
@@ -113,7 +170,7 @@ impl SymbolTable {
     self.symbols = new_symbols;
   }
 
-  pub fn finalize_non_overlaping(&mut self) {
+  fn finalize_non_overlaping(&mut self) {
     self.symbols.sort_by(|a, b| match a.off.cmp(&b.off) {
       Ordering::Less => Ordering::Less,
       Ordering::Greater => Ordering::Greater,
@@ -127,71 +184,36 @@ impl SymbolTable {
     //   }
     // }
   }
-
-  pub fn find_by_name(&self, name: &str) -> Option<(usize, &Symbol)> {
-    // FIXME: Avoid O(n) search
-    for (i, sym) in self.symbols.iter().enumerate() {
-      if name == sym.name.as_str() {
-        return Some((i, sym));
-      }
-    }
-    None
-  }
 }
 
 impl SymbolMap {
-  fn region(&self, region: SymbolRegion) -> &SymbolTable {
-    match region {
-      SymbolRegion::Param  => &self.params,
-      SymbolRegion::Local  => &self.locals,
-      SymbolRegion::Global => &self.globals,
+  fn get_table(&self, table: Table) -> &SymbolTable {
+    match table {
+      Table::Param  => &self.params,
+      Table::Local  => &self.locals,
+      Table::Global => &self.globals,
     }
   }
 
-  pub fn find_by_name(&self, name: &str) -> Option<SymbolRef> {
-    if let Some((idx, sym)) = self.params.find_by_name(name) {
-      return Some(SymbolRef { region: SymbolRegion::Param, idx, off: 0, sz: sym.size })
-    }
-    if let Some((idx, sym)) = self.locals.find_by_name(name) {
-      return Some(SymbolRef { region: SymbolRegion::Local, idx, off: 0, sz: sym.size })
-    }
-    if let Some((idx, sym)) = self.globals.find_by_name(name) {
-      return Some(SymbolRef { region: SymbolRegion::Global, idx, off: 0, sz: sym.size })
-    }
-    None
-  }
-
-  pub fn find_ref(&self, region: SymbolRegion, off: i16, sz: u16) -> Option<SymbolRef> {
+  pub fn find_ref(&self, table: Table, off: i16, sz: u16) -> Option<SymbolRef> {
     // FIXME: This is sorted: can use binary search
-    let tbl = self.region(region);
+    let tbl = self.get_table(table);
+    let off: i32 = off.into();
     for (i, sym) in tbl.symbols.iter().enumerate() {
       if sym.start() <= off && off < sym.end() {
         return Some(SymbolRef {
-          region,
-          idx: i,
-          off: off - sym.start(),
-          sz,
+          id: Id {
+            table,
+            idx: i,
+          },
+          region: Region {
+            off: off - sym.start(),
+            sz,
+          }
         });
       }
     }
     None
-  }
-
-  pub fn symbol(&self, r: SymbolRef) -> &Symbol {
-    &self.region(r.region).symbols[r.idx]
-  }
-
-  pub fn symbol_region(&self, r: SymbolRef) -> SymbolRegion {
-    r.region
-  }
-
-  pub fn symbol_name(&self, r: SymbolRef) -> String {
-    let name = &self.symbol(r).name;
-    if r.off == 0 {
-      format!("{}", name)
-    } else {
-      format!("{}@+{}", name, r.off)
-    }
   }
 }
 
@@ -231,11 +253,11 @@ pub fn symbolize_stack(ir: &mut IR) {
       if off > 0 {
         let name = format!("_param_{:04x}", off+frame_offset);
         ir.symbols.params.append(&name, off, size);
-        var_mem_refs.push((mem_ref, SymbolRegion::Param, off, size));
+        var_mem_refs.push((mem_ref, Table::Param, off, size));
       } else {
         let name = format!("_local_{:04x}", -(off+frame_offset));
         ir.symbols.locals.append(&name, off, size);
-        var_mem_refs.push((mem_ref, SymbolRegion::Local, off, size));
+        var_mem_refs.push((mem_ref, Table::Local, off, size));
       }
     }
   }
@@ -293,7 +315,7 @@ pub fn symbolize_globals(ir: &mut IR, cfg: &Config) {
       let off_ref = instr.operands[1];
       let size = instr.opcode.operation_size();
       let Some(off) = ir.lookup_const(off_ref) else { continue };
-      let Some(sym) = ir.symbols.find_ref(SymbolRegion::Global, off, size) else {
+      let Some(sym) = ir.symbols.find_ref(Table::Global, off, size) else {
         eprintln!("WARN: Could not find global for DS:{:04x}", off);
         continue;
       };

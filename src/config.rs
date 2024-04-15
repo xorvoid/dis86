@@ -1,6 +1,6 @@
 use crate::segoff::{Seg, SegOff};
 use crate::bsl;
-use crate::types::Type;
+use crate::types::{self, Type};
 
 #[derive(Debug)]
 pub struct OverlayRange {
@@ -34,14 +34,14 @@ pub enum CallMode {
   Far,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Struct {
   pub name: String,
   pub size: u16,
   pub members: Vec<StructMember>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StructMember {
   pub name: String,
   pub typ: Type,
@@ -63,11 +63,12 @@ pub struct TextSectionRegion {
   pub typ: Type,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Config {
+  pub type_builder: types::Builder,
+  pub structs: Vec<Struct>,
   pub funcs: Vec<Func>,
   pub indirects: Vec<Indirect>,
-  pub structs: Vec<Struct>,
   pub globals: Vec<Global>,
   pub text_section: Vec<TextSectionRegion>,
 }
@@ -124,9 +125,10 @@ impl Config {
 impl Config {
   pub fn from_path(path: &str) -> Result<Config, String> {
     let mut cfg = Config {
+      type_builder: types::Builder::new(),
+      structs: vec![],
       funcs: vec![],
       indirects: vec![],
-      structs: vec![],
       globals: vec![],
       text_section: vec![],
     };
@@ -137,8 +139,9 @@ impl Config {
     let root = bsl::parse(&dat)
       .ok_or_else(|| format!("Failed to parse config"))?;
 
+
+    cfg.parse_structs(&root)?; // Important for this to go first and build types
     cfg.parse_functions(&root)?;
-    cfg.parse_structs(&root)?;
     cfg.parse_globals(&root)?;
     cfg.parse_text_section(&root)?;
 
@@ -184,7 +187,7 @@ impl Config {
       };
       let args: i16 = args_str.parse()
         .map_err(|_| format!("Expected u16 for '{}.args', got '{}'", key, args_str))?;
-      let ret: Type = ret_str.parse()
+      let ret: Type = self.type_builder.parse_type(ret_str)
         .map_err(|err| format!("Expected type for '{}.ret', got '{}' | {}", key, ret_str, err))?;
 
       let n_overlay_opts =
@@ -262,14 +265,15 @@ impl Config {
 
         let off = parse_u16(off_str)
           .map_err(|_| format!("Expected u16 hex for '{}.members.{}.off', got '{}'", name, key, off_str))?;
-        let typ: Type = match type_str.parse() {
-          Ok(typ) => typ,
-          Err(err) => {
-            // FIXME: Make this a hard error.. currently the configs have undefined struct names.. need to support that first :-(
-            eprintln!("WRN: Expected type for '{}.members.{}.type', got '{}' | {}", name, key, type_str, err);
-            Type::Unknown
-          }
-        };
+        let typ = self.type_builder.parse_type(type_str)?;
+        // let typ: Type = match type_str.parse() {
+        //   Ok(typ) => typ,
+        //   Err(err) => {
+        //     // FIXME: Make this a hard error.. currently the configs have undefined struct names.. need to support that first :-(
+        //     eprintln!("WRN: Expected type for '{}.members.{}.type', got '{}' | {}", name, key, type_str, err);
+        //     Type::Unknown
+        //   }
+        // };
 
         members.push(StructMember {
           name: key.to_string(),
@@ -278,11 +282,15 @@ impl Config {
         });
       }
 
-      self.structs.push(Struct {
+
+      let s = Struct {
         name: name.to_string(),
         size,
         members,
-      });
+      };
+
+      self.type_builder.append_struct(&s);
+      self.structs.push(s);
     }
 
     Ok(())
@@ -303,7 +311,7 @@ impl Config {
 
       let off = parse_u16(off_str)
         .map_err(|_| format!("Expected u16 hex for '{}.off', got '{}'", key, off_str))?;
-      let typ: Type = match type_str.parse() {
+      let typ = match self.type_builder.parse_type(type_str) {
         Ok(typ) => typ,
         Err(err) => {
           // FIXME: Make this a hard error.. currently the configs have undefined struct names.. need to support that first :-(
@@ -340,7 +348,7 @@ impl Config {
         .map_err(|_| format!("Expected segoff for '{}.start', got '{}'", key, start_str))?;
       let end: SegOff = end_str.parse()
         .map_err(|_| format!("Expected segoff for '{}.end', got '{}'", key, end_str))?;
-      let typ: Type = type_str.parse()
+      let typ: Type = self.type_builder.parse_type(type_str)
         .map_err(|err| format!("Expected type for '{}.type', got '{}' | {}", key, type_str, err))?;
 
       self.text_section.push(TextSectionRegion {
