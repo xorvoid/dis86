@@ -250,7 +250,7 @@ pub fn run() -> i32 {
   }
 
   let ret = spec.func.map(|f| f.ret.clone());
-  let ast = ast::Function::from_ir(&spec.name, ret, &ir, &ctrlflow);
+  let ast = ast::Function::from_ir(&cfg, &spec.name, ret, &ir, &ctrlflow);
   if let Some(path) = args.emit_ast.as_ref() {
     let text = format!("{:#?}", ast);
     write_to_path(path, &text);

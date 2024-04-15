@@ -218,6 +218,17 @@ impl<'a> Gen<'a> {
         }
         self.text(")")?;
       }
+      Expr::ArrayAccess(lhs, idx) => {
+        self.expr(lhs, level+1, imp)?;
+        self.text("[")?;
+        self.expr(idx, level+1, imp)?;
+        self.text("]")?;
+      }
+      Expr::StructAccess(lhs, mbr) => {
+        self.expr(lhs, level+1, imp)?;
+        self.text(".")?;
+        self.expr(mbr, level+1, imp)?;
+      }
       _ => {
         panic!("UNIMPL EXPR: {:?}", expr);
         //self.text(&format!("UNIMPL_EXPR /* {:?} */", expr))?;

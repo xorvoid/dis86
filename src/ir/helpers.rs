@@ -95,7 +95,7 @@ impl Opcode {
       Opcode::Load32 => 4,
       Opcode::Store8 => 1,
       Opcode::Store16 => 2,
-      _ => unreachable!(),
+      _ => panic!("invalid"),
     }
   }
 

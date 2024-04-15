@@ -1,5 +1,6 @@
 use crate::ir;
 use crate::types::*;
+use crate::config::Config;
 use crate::control_flow::{self, ControlFlow, Detail, ElemId};
 use std::collections::{HashMap, HashSet};
 
@@ -29,6 +30,8 @@ pub enum Expr {
   Name(String),
   Call(Box<Expr>, Vec<Expr>),
   Abstract(&'static str, Vec<Expr>),
+  ArrayAccess(Box<Expr>, Box<Expr>),
+  StructAccess(Box<Expr>, Box<Expr>),
   Deref(Box<Expr>),
   Cast(Type, Box<Expr>),
   UnimplPhi,
@@ -190,6 +193,7 @@ pub struct Function {
 pub struct Block(pub Vec<Stmt>);
 
 struct Builder<'a> {
+  cfg: &'a Config,
   ir: &'a ir::IR,
   cf: &'a ControlFlow,
   n_uses: HashMap<ir::Ref, usize>,
@@ -216,9 +220,10 @@ impl Block {
 }
 
 impl<'a> Builder<'a> {
-  fn new(ir: &'a ir::IR, cf: &'a ControlFlow) -> Self {
+  fn new(cfg: &'a Config, ir: &'a ir::IR, cf: &'a ControlFlow) -> Self {
     let n_uses = ir::util::compute_uses(ir);
     Self {
+      cfg,
       ir,
       cf,
       n_uses,
@@ -476,7 +481,7 @@ impl<'a> Builder<'a> {
       //   mem_mapping: Some(Expr::Deref(Box::new(Expr::Abstract("PTR_16", vec![seg, off])))),
       // })
 
-      let typ = symref.to_type();
+      let typ = symref.get_type(&self.ir.symbols);
       let ptr_sz = match typ {
         Type::U16 => "PTR_16",
         Type::U32 => "PTR_32",
@@ -484,24 +489,81 @@ impl<'a> Builder<'a> {
       };
 
       let impl_expr = Expr::Deref(Box::new(Expr::Abstract(ptr_sz, vec![seg, off])));
-      self.mappings.insert(sym.name.clone(), (symref.to_type(), impl_expr));
+      let typ = symref.get_type(&self.ir.symbols).clone();
+      self.mappings.insert(sym.name.clone(), (typ, impl_expr));
     }
 
-    let mut expr = Expr::Name(sym.name.clone());
-    if symref.off() != 0 ||  symref.sz() != sym.size {
+    let expr = Expr::Name(sym.name.clone());
+    let typ = symref.get_type(&self.ir.symbols);
+    self.symbol_to_expr_recurse(expr, typ, symref.access_region)
+  }
+
+  fn symbol_to_expr_recurse(&self, mut expr: Expr, typ: &Type, mut access: ir::sym::Region) -> Expr {
+    if !typ.is_primitive() {
+      match typ {
+        Type::Array(basetype, len) => {
+          let ArraySize::Known(len) = len else { panic!("Expected datatype to have known array length") };
+          let basetype_sz = basetype.size_in_bytes().unwrap();
+          let idx = access.off as usize / basetype_sz;
+          if idx > *len { panic!("Access out of range"); }
+          if access.sz as usize > basetype_sz { panic!("Access exceeds basetype size"); }
+
+          let expr = Expr::ArrayAccess(
+            Box::new(expr),
+            Box::new(Expr::DecimalConst(idx as i16)));
+
+          access.off -= (idx * basetype_sz) as i32;
+
+          // recurse
+          return self.symbol_to_expr_recurse(expr, basetype, access);
+        }
+        Type::Struct(struct_ref) => {
+          let access_start = access.off as usize;
+          let access_end = access_start + access.sz as usize;
+          let s = self.cfg.type_builder.lookup_struct(*struct_ref).unwrap();
+          for mbr in &s.members {
+            let mbr_start = mbr.off as usize;
+            let mbr_end = mbr_start + mbr.typ.size_in_bytes().unwrap();
+            if !(mbr_start <= access_start && access_end <= mbr_end) { continue; }
+
+            // Found!!
+            let expr = Expr::StructAccess(
+              Box::new(expr),
+              Box::new(Expr::Name(mbr.name.clone())));
+
+            access.off -= mbr.off as i32;
+
+            // recurse
+            return self.symbol_to_expr_recurse(expr, &mbr.typ, access);
+          }
+          panic!("Failed to find member");
+        }
+        _ => {
+          panic!("Unknown ... {:?}", typ);
+        }
+      }
+    }
+
+    // Base-case of a primitive
+    if access.off != 0 ||  access.sz as usize != typ.size_in_bytes().unwrap() {
       expr = Expr::Unary(Box::new(UnaryExpr {
         op: UnaryOperator::Addr,
         rhs: expr,
       }));
-      if symref.off() != 0 {
+      if access.off != 0 {
         expr = Expr::Binary(Box::new(BinaryExpr {
           op: BinaryOperator::Add,
           lhs: expr,
-          rhs: Expr::HexConst(symref.off() as u16),
+          rhs: Expr::HexConst(access.off as u16),
         }));
       }
-      assert!(symref.sz() == 2); // FIXME
-      expr = Expr::Cast(Type::ptr(Type::U16), Box::new(expr));
+      let t = match access.sz {
+        1 => Type::U8,
+        2 => Type::U16,
+        4 => Type::U32,
+        _ => panic!("Unknown access size: {}", access.sz),
+      };
+      expr = Expr::Cast(Type::ptr(t), Box::new(expr));
       expr = Expr::Deref(Box::new(expr));
     }
     expr
@@ -888,7 +950,7 @@ impl<'a> Builder<'a> {
 }
 
 impl Function {
-  pub fn from_ir(name: &str, ret: Option<Type>, ir: &ir::IR, ctrlflow: &ControlFlow) -> Self {
-    Builder::new(ir, ctrlflow).build(name, ret)
+  pub fn from_ir(cfg: &Config, name: &str, ret: Option<Type>, ir: &ir::IR, ctrlflow: &ControlFlow) -> Self {
+    Builder::new(cfg, ir, ctrlflow).build(name, ret)
   }
 }

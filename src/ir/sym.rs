@@ -20,7 +20,7 @@ struct Id {
 
 // Region is information about a byte range region
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct Region {
+pub struct Region {
   pub off: i32,
   pub sz: u16,
 }
@@ -28,7 +28,7 @@ struct Region {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SymbolRef {
   id: Id,
-  region: Region,
+  pub access_region: Region,   // Access using this region with the symbol
 }
 
 impl SymbolRef {
@@ -50,20 +50,15 @@ impl SymbolRef {
   }
 
   pub fn off(&self) -> i32 {
-    self.region.off
+    self.access_region.off
   }
 
   pub fn sz(&self) -> u16 {
-    self.region.sz
+    self.access_region.sz
   }
 
-  pub fn to_type(&self) -> Type {
-    match self.sz() {
-      1 => Type::U8,
-      2 => Type::U16,
-      4 => Type::U32,
-      _ => panic!("Unsupported type size: {}", self.sz()),
-    }
+  pub fn get_type<'a>(&self, map: &'a SymbolMap) -> &'a Type {
+    &self.def(map).typ
   }
 
   pub fn join_adjacent(map: &SymbolMap, low: SymbolRef, high: SymbolRef) -> Option<SymbolRef> {
@@ -78,9 +73,9 @@ impl SymbolRef {
     }
     Some(SymbolRef {
       id: low.id,
-      region: Region {
-        off: low.region.off,
-        sz: low.region.sz + high.region.sz,
+      access_region: Region {
+        off: low.access_region.off,
+        sz: low.access_region.sz + high.access_region.sz,
       }
     })
   }
@@ -88,9 +83,10 @@ impl SymbolRef {
 
 }
 
-#[derive(Debug, Clone, PartialOrd, Ord, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct SymbolDef {
   pub name: String,
+  pub typ: Type,
   pub off: i16,
   pub size: u16,
 }
@@ -135,9 +131,10 @@ impl SymbolTable {
     }
   }
 
-  fn append(&mut self, name: &str, off: i16, size: u16) {
+  fn append(&mut self, name: &str, typ: Type, off: i16, size: u16) {
     self.symbols.push(SymbolDef {
       name: name.to_string(),
+      typ,
       off,
       size,
     });
@@ -162,6 +159,8 @@ impl SymbolTable {
       if sym.start() < last.end() { // overlapping?
         // simply update the last size
         last.size = (sym.end() - last.start()).try_into().unwrap();
+        // also update the type
+        last.typ = infer_type_from_size(last.size);
       } else { // disjoint?
         new_symbols.push(sym.clone());
       }
@@ -206,7 +205,7 @@ impl SymbolMap {
             table,
             idx: i,
           },
-          region: Region {
+          access_region: Region {
             off: off - sym.start(),
             sz,
           }
@@ -214,6 +213,15 @@ impl SymbolMap {
       }
     }
     None
+  }
+}
+
+fn infer_type_from_size(size: u16) -> Type {
+  match size {
+    1 => Type::U8,
+    2 => Type::U16,
+    4 => Type::U32,
+    _ => panic!("Unsupported size"),
   }
 }
 
@@ -249,14 +257,16 @@ pub fn symbolize_stack(ir: &mut IR) {
       // f.fmt_instr(ir, mem_ref, mem_instr).unwrap();
       // println!("{}", f.finish());
 
+      let typ = infer_type_from_size(size);
+
       let frame_offset = 2;
       if off > 0 {
         let name = format!("_param_{:04x}", off+frame_offset);
-        ir.symbols.params.append(&name, off, size);
+        ir.symbols.params.append(&name, typ, off, size);
         var_mem_refs.push((mem_ref, Table::Param, off, size));
       } else {
         let name = format!("_local_{:04x}", -(off+frame_offset));
-        ir.symbols.locals.append(&name, off, size);
+        ir.symbols.locals.append(&name, typ, off, size);
         var_mem_refs.push((mem_ref, Table::Local, off, size));
       }
     }
@@ -297,7 +307,7 @@ pub fn populate_globals(ir: &mut IR, cfg: &Config) {
       eprintln!("WARN: Unsupported type '{}' for {} ... assuming u32", g.typ, g.name);
       Type::U32.size_in_bytes().unwrap()
     });
-    ir.symbols.globals.append(&g.name, g.offset as i16, size as u16);
+    ir.symbols.globals.append(&g.name, g.typ.clone(), g.offset as i16, size as u16);
   }
   ir.symbols.globals.finalize_non_overlaping();
 }

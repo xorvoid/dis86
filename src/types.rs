@@ -28,6 +28,20 @@ impl Type {
     Type::Ptr(Box::new(base))
   }
 
+  pub fn is_primitive(&self) -> bool {
+    match self {
+      Type::Void => true,
+      Type::U8  => true,
+      Type::U16 => true,
+      Type::U32 => true,
+      Type::I8  => true,
+      Type::I16 => true,
+      Type::I32 => true,
+      Type::Unknown => true,
+      _ => false,
+    }
+  }
+
   pub fn size_in_bytes(&self) -> Option<usize> {
     match self {
       Type::Void => None,
