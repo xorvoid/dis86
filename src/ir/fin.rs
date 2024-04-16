@@ -17,7 +17,6 @@ impl Finalizer {
   fn insert_intermediate_phi_blocks(&mut self, ir: &mut IR) {
     for blkref in ir.iter_blocks() {
       let r = Ref::Instr(blkref, ir.block(blkref).instrs.last_idx().unwrap());
-      let instr = ir.instr(r).unwrap().clone();
       let exits = ir.block(blkref).exits();
       if exits.len() <= 1 { continue; }
       let mut old_to_new = HashMap::new();
