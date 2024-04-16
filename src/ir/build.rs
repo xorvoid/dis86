@@ -727,7 +727,7 @@ impl IRBuilder<'_> {
     match &ins.opcode {
       instr::Opcode::OP_NOP => (),
       instr::Opcode::OP_SBB => {
-        // FIXME: WE DON'T HAVE  A GREAT WAY TO IMPL SBB AT THE MOMENT BECAUSE IT NEEDS TO CORRECTLY
+        // FIXME: WE DON'T HAVE  A GREAT WAY TO IMPL SBC AT THE MOMENT BECAUSE IT NEEDS TO CORRECTLY
         // CONSUME THE CARRY FLAG FROM A PREVIOUS SUBTRACT THAT GENERATED A BORROW. BUT, AT THE MOMENT,
         // WE USE "UpdateFlags" AS A PLACEHOLDER FOR ARBITRARY FLAGS UPDATES WITHOUT BREAKING DOWN INTO
         // THE SPECIFIC FLAGS AFFECTED. SO FOR NOW, WE'LL JAM IT THROUGH "Unimpl" AND MAKE THE USER
@@ -742,6 +742,15 @@ impl IRBuilder<'_> {
       instr::Opcode::OP_RCL => {
         // FIXME: SIMILAR FOR RCL ... WE SIMPLY DON'T HAVE A GREAT WAY TO CAPTURE THE SEMANTICS OF ROTATION
         // INCLUDING THE CARRY FLAG!!!
+        let a = self.append_asm_src_operand(&ins.operands[0]);
+        let b = self.append_asm_src_operand(&ins.operands[1]);
+        let typ = self.deduce_type_binary(a, b);
+        let vref = self.append_instr(typ, Opcode::Unimpl, vec![a, b]);
+        self.append_asm_dst_operand(&ins.operands[0], vref);
+        self.append_update_flags(vref);
+      }
+      instr::Opcode::OP_ADC => {
+        // FIXME: SIMILAR FOR ADC ... WE SIMPLY DON'T HAVE A GREAT WAY TO CAPTURE THE SEMANTICS
         let a = self.append_asm_src_operand(&ins.operands[0]);
         let b = self.append_asm_src_operand(&ins.operands[1]);
         let typ = self.deduce_type_binary(a, b);
