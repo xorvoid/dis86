@@ -1,4 +1,5 @@
 use crate::ir::def::*;
+use std::collections::HashMap;
 
 struct Finalizer {
   num: usize,
@@ -17,17 +18,24 @@ impl Finalizer {
     for blkref in ir.iter_blocks() {
       let r = Ref::Instr(blkref, ir.block(blkref).instrs.last_idx().unwrap());
       let instr = ir.instr(r).unwrap().clone();
-      if instr.opcode != Opcode::Jne { continue; }
-      if target_has_phis(ir, instr.operands[1].unwrap_block()) {
-        self.insert_block(ir, blkref, r, 1);
-      }
-      if target_has_phis(ir, instr.operands[2].unwrap_block()) {
-        self.insert_block(ir, blkref, r, 2);
+      let exits = ir.block(blkref).exits();
+      if exits.len() <= 1 { continue; }
+      let mut old_to_new = HashMap::new();
+      for (i, exit) in exits.into_iter().enumerate() {
+        if let Some(new_exit) = old_to_new.get(&exit) {
+          // Already generated phi block.. rewrite it
+          ir.instr_mut(r).unwrap().operands[i+1] = Ref::Block(*new_exit);
+          continue;
+        }
+        if target_has_phis(ir, exit) {
+          let new_exit = self.insert_block(ir, blkref, r, i+1);
+          old_to_new.insert(exit, new_exit);
+        }
       }
     }
   }
 
-  fn insert_block(&mut self, ir: &mut IR, blkref: BlockRef, r: Ref, oper_idx: usize) {
+  fn insert_block(&mut self, ir: &mut IR, blkref: BlockRef, r: Ref, oper_idx: usize) -> BlockRef {
     // unique number for block name
     let num = self.num;
     self.num += 1;
@@ -66,6 +74,8 @@ impl Finalizer {
         *pred = new_blkref;
       }
     }
+
+    new_blkref
   }
 }
 
