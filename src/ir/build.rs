@@ -1014,6 +1014,21 @@ impl IRBuilder<'_> {
         let src = self.append_asm_src_operand(&ins.operands[1]);
         self.append_asm_dst_operand(&ins.operands[0], src);
       }
+      instr::Opcode::OP_STI => {
+        self.append_instr(Type::Void, Opcode::Unimpl, vec![]);
+      }
+      instr::Opcode::OP_CLI => {
+        self.append_instr(Type::Void, Opcode::Unimpl, vec![]);
+      }
+      instr::Opcode::OP_IN => {
+        self.append_instr(Type::U8, Opcode::Unimpl, vec![]);
+      }
+      instr::Opcode::OP_OUT => {
+        self.append_instr(Type::Void, Opcode::Unimpl, vec![]);
+      }
+      instr::Opcode::OP_CLD => {
+        self.append_instr(Type::Void, Opcode::Unimpl, vec![]);
+      }
       _ => panic!("Unimpl opcode: {:?}", ins.opcode),
     }
   }
