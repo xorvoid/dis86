@@ -1036,17 +1036,24 @@ impl IRBuilder<'_> {
   fn build(&mut self) {
     // Step 1: Infer basic-block boundaries
     let mut block_start = HashSet::new();
+    let mut last_was_jump = false;
     for ins in self.instrs {
+      if last_was_jump {
+        block_start.insert(ins.addr);
+        last_was_jump = false;
+      }
       let Some(targets) = self.jump_targets(ins) else { continue };
       for tgt in targets {
         block_start.insert(tgt);
       }
+      last_was_jump = true;
     }
 
     // Step 2: Create all the blocks we should encounter
     let mut addr_ordered: Vec<_> = block_start.iter().collect();
     addr_ordered.sort();
     for addr in addr_ordered {
+      println!("addr: {}", addr.off);
       let bref = self.new_block(&format!("addr_{}", addr.off));
       self.addrmap.insert(*addr, bref);
     }
