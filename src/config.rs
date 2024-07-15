@@ -61,6 +61,7 @@ pub struct TextSectionRegion {
   pub start: SegOff,
   pub end: SegOff,
   pub typ: Type,
+  pub access: Option<SegOff>,
 }
 
 #[derive(Debug)]
@@ -119,6 +120,23 @@ impl Config {
       }
     }
     None
+  }
+
+  pub fn text_region_lookup_by_access(&self, addr: SegOff) -> Option<&TextSectionRegion> {
+    // TODO: Consider something better than linear search
+    for r in &self.text_section {
+      if r.access.is_some() && r.access.unwrap() == addr {
+        return Some(r)
+      }
+    }
+    None
+  }
+
+  pub fn text_region_lookup(&self, start_addr: SegOff, access: SegOff) -> Option<&TextSectionRegion> {
+    if let Some(r) = self.text_region_lookup_by_start_addr(start_addr) {
+      return Some(r);
+    }
+    self.text_region_lookup_by_access(access)
   }
 }
 
@@ -343,6 +361,7 @@ impl Config {
         .ok_or_else(|| format!("No text_section 'end' property for '{}'", key))?;
       let type_str = f.get_str("type")
         .ok_or_else(|| format!("No text_section 'type' property for '{}'", key))?;
+      let access_str = f.get_str("access");
 
       let start: SegOff = start_str.parse()
         .map_err(|_| format!("Expected segoff for '{}.start', got '{}'", key, start_str))?;
@@ -350,12 +369,18 @@ impl Config {
         .map_err(|_| format!("Expected segoff for '{}.end', got '{}'", key, end_str))?;
       let typ: Type = self.type_builder.parse_type(type_str)
         .map_err(|err| format!("Expected type for '{}.type', got '{}' | {}", key, type_str, err))?;
+      let access: Option<SegOff> = match access_str {
+        None => None,
+        Some(access) => Some(access.parse()
+          .map_err(|err| format!("Expected segoff for '{}.access', got '{}' | {}", key, access, err))?),
+      };
 
       self.text_section.push(TextSectionRegion {
         name: key.to_string(),
         start,
         end,
         typ,
+        access,
       });
     }
 

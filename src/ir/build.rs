@@ -126,8 +126,8 @@ impl<'a> IRBuilder<'a> {
     };
 
     // Try to find a matching text segment region in config
-    let region = self.cfg.text_region_lookup_by_start_addr(addr).unwrap_or_else(
-      || panic!("Failed to find text section region ({}) for: '{}'", addr, instr_str(ins)));
+    let region = self.cfg.text_region_lookup(addr, ins.addr).unwrap_or_else(
+      || panic!("Failed to find text section region ({}) for: '{}' at '{}'", addr, instr_str(ins), ins.addr));
 
     // Unpack the array type
     let Type::Array(basetype, ArraySize::Known(len)) = &region.typ else {
