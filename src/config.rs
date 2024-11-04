@@ -1,6 +1,7 @@
 use crate::segoff::{Seg, SegOff};
 use crate::bsl;
 use crate::types::{self, Type};
+use crate::asm::instr::Reg;
 
 #[derive(Debug)]
 pub struct OverlayRange {
@@ -18,6 +19,7 @@ pub struct Func {
   pub mode: CallMode,
   pub ret: Type,
   pub args: Option<u16>,  // None means "unknown", Some(0) means "no args"
+  pub regargs: Option<Vec<Reg>>,
   pub dont_pop_args: bool,
 }
 
@@ -192,6 +194,8 @@ impl Config {
       let overlay_start = f.get_str("overlay_start");
       let overlay_end = f.get_str("overlay_end");
 
+      let regargs = f.get_str("regargs");
+
       let start: SegOff = start_str.parse()
         .map_err(|_| format!("Expected segoff for '{}.start', got '{}'", key, start_str))?;
       let end: Option<SegOff> = if end_str.len() == 0 { None } else {
@@ -227,6 +231,19 @@ impl Config {
         return Err(format!("Overlay options only partially set for '{}'", key));
       };
 
+      let regargs = match regargs {
+        None => None,
+        Some(s) => {
+          let mut args = vec![];
+          for reg in s.split(',') {
+            let reg = Reg::from_str_upper(reg)
+              .ok_or_else(|| format!("Failed to parse register name: {}", reg))?;
+            args.push(reg);
+          }
+          Some(args)
+        }
+      };
+
       if !indirect {
         self.funcs.push(Func {
           name: key.to_string(),
@@ -236,6 +253,7 @@ impl Config {
           mode,
           ret,
           args: if args >= 0 { Some(args as u16) } else { None },
+          regargs,
           dont_pop_args,
         });
       } else {

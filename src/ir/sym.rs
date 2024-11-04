@@ -9,6 +9,7 @@ pub enum Table {
   Param,
   Local,
   Global,
+  Register,
 }
 
 // Id is a reference to lookup the cooresponding Symbol
@@ -112,15 +113,35 @@ pub struct SymbolMap {
   params: SymbolTable,
   locals: SymbolTable,
   globals: SymbolTable,
+  registers: SymbolTable,
 }
 
 impl SymbolMap {
   pub fn new() -> Self {
-    Self {
+    let mut this = Self {
       params: SymbolTable::new(),
       locals: SymbolTable::new(),
       globals: SymbolTable::new(),
-    }
+      registers: SymbolTable::new(),
+    };
+
+    // Add all registers
+    this.registers.append("AX",    Type::U16,  0, 2);
+    this.registers.append("CX",    Type::U16,  2, 2);
+    this.registers.append("DX",    Type::U16,  4, 2);
+    this.registers.append("BX",    Type::U16,  6, 2);
+    this.registers.append("SP",    Type::U16,  8, 2);
+    this.registers.append("BP",    Type::U16, 10, 2);
+    this.registers.append("SI",    Type::U16, 12, 2);
+    this.registers.append("DI",    Type::U16, 14, 2);
+    this.registers.append("ES",    Type::U16, 16, 2);
+    this.registers.append("CS",    Type::U16, 18, 2);
+    this.registers.append("SS",    Type::U16, 20, 2);
+    this.registers.append("DS",    Type::U16, 22, 2);
+    this.registers.append("IP",    Type::U16, 24, 2);
+    this.registers.append("FLAGS", Type::U16, 26, 2);
+
+    this
   }
 }
 
@@ -191,6 +212,7 @@ impl SymbolMap {
       Table::Param  => &self.params,
       Table::Local  => &self.locals,
       Table::Global => &self.globals,
+      Table::Register => &self.registers,
     }
   }
 
@@ -208,6 +230,25 @@ impl SymbolMap {
           access_region: Region {
             off: off - sym.start(),
             sz,
+          }
+        });
+      }
+    }
+    None
+  }
+
+  pub fn find_ref_by_name(&self, table: Table, name: &str) -> Option<SymbolRef> {
+    let tbl = self.get_table(table);
+    for (i, sym) in tbl.symbols.iter().enumerate() {
+      if &sym.name == name {
+        return Some(SymbolRef {
+          id: Id {
+            table,
+            idx: i,
+          },
+          access_region: Region {
+            off: 0,
+            sz: sym.size,
           }
         });
       }

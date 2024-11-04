@@ -69,6 +69,7 @@ pub enum Opcode {
   ULt,         // Operator: <  (unsigned)
   ULeq,        // Operator: <=  (unsigned)
   Sign,        // Is Signed?
+  NotSign,     // Is not signed?
 
   CallFar,
   CallNear,
@@ -156,6 +157,7 @@ impl Opcode {
       Opcode::ULt         => "ult",
       Opcode::ULeq        => "uleq",
       Opcode::Sign        => "sign",
+      Opcode::NotSign     => "notsign",
       Opcode::CallFar     => "callfar",
       Opcode::CallNear    => "callnear",
       Opcode::CallPtr     => "callptr",

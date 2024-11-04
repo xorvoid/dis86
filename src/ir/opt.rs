@@ -1,5 +1,6 @@
 use crate::ir::def::*;
 use crate::ir::sym;
+use crate::types::Type;
 use std::collections::{hash_map, HashMap, HashSet, VecDeque};
 
 // Propagate operand through any ref opcodes
@@ -104,7 +105,7 @@ To:
 --------------------------------------------
   t4 = ref t1
 */
-pub fn reduce_uppper_lower_make32(ir: &mut IR) {
+pub fn reduce_upper_lower_make32(ir: &mut IR) {
   for b in ir.iter_blocks() {
     for r in ir.iter_instrs(b) {
       let Some((make32_instr, make32_ref)) = ir.instr_matches(r, Opcode::Make32) else {continue};
@@ -116,6 +117,46 @@ pub fn reduce_uppper_lower_make32(ir: &mut IR) {
       let instr = ir.instr_mut(make32_ref).unwrap();
       instr.opcode = Opcode::Ref;
       instr.operands = vec![src];
+    }
+  }
+}
+
+/*
+From:
+--------------------------------------------
+  t2 = upper t1
+  t3 = lower t1
+  t4 = or t3 t2
+  t5 = eq t4 #0
+
+To:
+--------------------------------------------
+  t4 = eq t1 #0
+*/
+pub fn reduce_equal_zero_32(ir: &mut IR) {
+  for b in ir.iter_blocks() {
+    for r in ir.iter_instrs(b) {
+      let Some((eq_instr, eq_ref)) = ir.instr_matches(r, Opcode::Eq) else {continue};
+      let Some(k) = ir.lookup_const(eq_instr.operands[1]) else {continue};
+      if k != 0 { continue; }
+      let Some((or_instr, _)) = ir.instr_matches(eq_instr.operands[0], Opcode::Or) else {continue};
+
+      let mut upper = false;
+      let mut lower = false;
+      if ir.instr_matches(or_instr.operands[0], Opcode::Upper16).is_some() { upper = true; }
+      if ir.instr_matches(or_instr.operands[0], Opcode::Lower16).is_some() { lower = true; }
+      if ir.instr_matches(or_instr.operands[1], Opcode::Upper16).is_some() { upper = true; }
+      if ir.instr_matches(or_instr.operands[1], Opcode::Lower16).is_some() { lower = true; }
+
+      if !upper || !lower { continue; }
+      let ref32_1 = ir.instr(or_instr.operands[0]).unwrap().operands[0];
+      let ref32_2 = ir.instr(or_instr.operands[1]).unwrap().operands[0];
+      if ref32_1 != ref32_2 { continue; }
+
+      // rewrite
+      let instr = ir.instr_mut(eq_ref).unwrap();
+      instr.typ = Type::U32;
+      instr.operands[0] = ref32_1;
     }
   }
 }
@@ -569,6 +610,7 @@ pub fn simplify_branch_conds(ir: &mut IR) {
       let opcode_eq = opcode_new == Opcode::Eq || opcode_new == Opcode::Neq;
       let opcode_above = opcode_new == Opcode::UGt;
       let opcode_lt = opcode_new == Opcode::Lt;
+      let opcode_ge = opcode_new == Opcode::Geq;
 
       let upd_ref = instr.operands[0];
       let upd_instr = ir.instr(upd_ref).unwrap();
@@ -623,6 +665,15 @@ pub fn simplify_branch_conds(ir: &mut IR) {
         instr.opcode = Opcode::Sign;
         instr.operands = vec![pred_ref, z];
       }
+
+      else if pred_instr.opcode == Opcode::Or && opcode_ge { //&& pred_instr.operands[0] == pred_instr.operands[1] {
+        // or <a>, <b>
+        // jge <tgt>   (equivalent to "jump if not signed")
+        let z = ir.append_const(0);
+        let instr = ir.instr_mut(r).unwrap();
+        instr.opcode = Opcode::NotSign;
+        instr.operands = vec![pred_ref, z];
+      }
     }
   }
 }
@@ -633,7 +684,8 @@ pub fn optimize(ir: &mut IR) {
   for _ in 0..N_OPT_PASSES {
     reduce_xor(ir);
     reduce_make_32_signext_32(ir);
-    reduce_uppper_lower_make32(ir);
+    reduce_upper_lower_make32(ir);
+    reduce_equal_zero_32(ir);
     reduce_phi_single_ref(ir);
     reduce_phi_common_subexpr(ir);
     simplify_branch_conds(ir);

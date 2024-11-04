@@ -451,6 +451,12 @@ impl<'a> Builder<'a> {
                     binary_expr(BinaryOperator::Shr, lhs, Expr::DecimalConst(15)),
                     Expr::DecimalConst(0))
       }
+      ir::Opcode::NotSign => {
+        let lhs = self.ref_to_expr(instr.operands[0], depth+1);
+        binary_expr(BinaryOperator::Eq,
+                    binary_expr(BinaryOperator::Shr, lhs, Expr::DecimalConst(15)),
+                    Expr::DecimalConst(0))
+      }
       ir::Opcode::Unimpl => {
         let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, depth+1)).collect();
         Expr::Abstract("UNIMPL", exprs)

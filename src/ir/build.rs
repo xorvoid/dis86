@@ -592,12 +592,22 @@ impl IRBuilder<'_> {
     }
   }
 
+  fn append_regargs(&mut self, regargs: &Option<Vec<instr::Reg>>) {
+    let Some(regargs) = regargs else { return };
+    for reg in regargs {
+      let vref = self.ir.get_var(reg, self.cur);
+      let sym = self.ir.symbols.find_ref_by_name(sym::Table::Register, reg.info().name).unwrap();
+      self.append_instr_with_attrs(Type::U16, Attribute::PIN, Opcode::WriteVar16, vec![Ref::Symbol(sym), vref]);
+    }
+  }
+
   fn process_call_segoff(&mut self, addr: SegOff, mode: config::CallMode, ins: &instr::Instr) {
     if let Some(func) = self.cfg.func_lookup(addr) {
       // Known function
       if func.mode != mode {
         panic!("Found function but it's call mode doesn't match! Expected {:?}, Got {:?}", mode, func.mode);
       }
+      self.append_regargs(&func.regargs);
       self.process_call_known(func, ins);
     } else {
       // Unknown function
@@ -606,7 +616,12 @@ impl IRBuilder<'_> {
                     &format!("Unknown call to {}", addr));
 
       // FIXME: Can we do unwrap_normal() ??
-      let seg = self.ir.append_const(addr.seg.unwrap_normal() as i16);
+      println!("addr: {}", addr);
+      let seg = match addr.seg {
+        Seg::Normal(num) => self.ir.append_const(num as i16),
+        Seg::Overlay(num) => self.ir.append_const(-(num as i16)),
+      };
+      //let seg = self.ir.append_const(addr.seg.unwrap_normal() as i16);
       let off = self.ir.append_const(addr.off.0 as i16);
 
       let mut operands = vec![seg, off];
@@ -817,7 +832,7 @@ impl IRBuilder<'_> {
         let vref = self.append_asm_src_operand(&ins.operands[1]);
         self.append_asm_dst_operand(&ins.operands[0], vref);
       }
-      instr::Opcode::OP_IMUL => {
+      instr::Opcode::OP_IMUL_TRUNC => {
         // IMUL has many forms, let's be conservative for now and hard sanity check the version we need
         assert!(
           matches!(ins.operands[0], instr::Operand::Reg(_)) &&
@@ -829,7 +844,21 @@ impl IRBuilder<'_> {
         let typ = self.deduce_type_binary(lhs, rhs);
         let res = self.append_instr(typ, Opcode::IMul, vec![lhs, rhs]);
         self.append_asm_dst_operand(&ins.operands[0], res);
-     }
+      }
+      instr::Opcode::OP_IMUL => {
+        // IMUL has many forms, let's be conservative for now and hard sanity check the version we need
+        assert!(
+          ins.operands.len() == 3 &&
+          matches!(ins.operands[0], instr::Operand::Reg(instr::OperandReg(instr::Reg::DX))) &&
+          matches!(ins.operands[1], instr::Operand::Reg(instr::OperandReg(instr::Reg::AX))));
+
+        let lhs = self.append_asm_src_operand(&ins.operands[1]);
+        let rhs = self.append_asm_src_operand(&ins.operands[2]);
+        let res = self.append_instr(Type::U32, Opcode::IMul, vec![lhs, rhs]);
+        let (upper, lower) = self.append_upper_lower_split(res);
+        self.append_asm_dst_operand(&ins.operands[0], upper);
+        self.append_asm_dst_operand(&ins.operands[1], lower);
+      }
       instr::Opcode::OP_MUL => {
         // Sanity check the form we have
         assert!(
@@ -1053,7 +1082,6 @@ impl IRBuilder<'_> {
     let mut addr_ordered: Vec<_> = block_start.iter().collect();
     addr_ordered.sort();
     for addr in addr_ordered {
-      println!("addr: {}", addr.off);
       let bref = self.new_block(&format!("addr_{}", addr.off));
       self.addrmap.insert(*addr, bref);
     }

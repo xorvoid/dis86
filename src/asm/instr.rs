@@ -180,4 +180,32 @@ impl Reg {
     assert!(idx < REG_INFO.len());
     &REG_INFO[idx]
   }
+
+  pub fn from_str_upper(s: &str) -> Option<Reg> {
+    match s {
+      "AX" => Some(Reg::AX),
+      "CX" => Some(Reg::CX),
+      "DX" => Some(Reg::DX),
+      "BX" => Some(Reg::BX),
+      "SP" => Some(Reg::SP),
+      "BP" => Some(Reg::BP),
+      "SI" => Some(Reg::SI),
+      "DI" => Some(Reg::DI),
+      "AL" => Some(Reg::AL),
+      "CL" => Some(Reg::CL),
+      "DL" => Some(Reg::DL),
+      "BL" => Some(Reg::BL),
+      "AH" => Some(Reg::AH),
+      "CH" => Some(Reg::CH),
+      "DH" => Some(Reg::DH),
+      "BH" => Some(Reg::BH),
+      "ES" => Some(Reg::ES),
+      "CS" => Some(Reg::CS),
+      "SS" => Some(Reg::SS),
+      "DS" => Some(Reg::DS),
+      "IP" => Some(Reg::IP),
+      "FLAGS" => Some(Reg::FLAGS),
+      _ => None,
+    }
+  }
 }
