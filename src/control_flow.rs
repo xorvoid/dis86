@@ -462,6 +462,7 @@ impl<'a> Iterator for ControlFlowIter<'a> {
   }
 }
 
+#[allow(dead_code)]
 enum DFSAction<'a> {
   Cycle { from: ElemId, to: ElemId },
   Next(ElemId),

@@ -39,11 +39,11 @@ impl Root {
   }
 
   #[allow(unused)]
-  pub fn get(&self, key: &str) -> Option<Value> { node_get(self.ctx, key) }
+  pub fn get(&self, key: &str) -> Option<Value<'_>> { node_get(self.ctx, key) }
   #[allow(unused)]
   pub fn get_str(&self, key: &str) -> Option<&str> { node_get_str(self.ctx, key) }
   #[allow(unused)]
-  pub fn get_node(&self, key: &str) -> Option<Node> { node_get_node(self.ctx, key) }
+  pub fn get_node(&self, key: &str) -> Option<Node<'_>> { node_get_node(self.ctx, key) }
 }
 
 impl Drop for Root {
@@ -108,13 +108,13 @@ fn node_get_node<'a>(ctx: *mut bsl_t, key: &str) -> Option<Node<'a>> {
 
 impl<'a> Node<'a> {
   #[allow(unused)]
-  pub fn get(&self, key: &str) -> Option<Value> { node_get(self.ctx, key) }
+  pub fn get(&self, key: &str) -> Option<Value<'_>> { node_get(self.ctx, key) }
   #[allow(unused)]
   pub fn get_str(&self, key: &str) -> Option<&str> { node_get_str(self.ctx, key) }
   #[allow(unused)]
-  pub fn get_node(&self, key: &str) -> Option<Node> { node_get_node(self.ctx, key) }
+  pub fn get_node(&self, key: &str) -> Option<Node<'_>> { node_get_node(self.ctx, key) }
 
-  pub fn iter(&self) -> Iter {
+  pub fn iter(&self) -> Iter<'_> {
     let mut it: bsl_iter_t = unsafe { MaybeUninit::zeroed().assume_init() };
     unsafe { bsl_iter_begin(&mut it, self.ctx) };
     Iter { it, phantom: PhantomData }
