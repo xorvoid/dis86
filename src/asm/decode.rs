@@ -333,7 +333,6 @@ impl<'a> Iterator for Decoder<'a> {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::segoff::SegOff;
 
   struct TestCase {
     addr: usize,
@@ -588,11 +587,13 @@ mod tests {
 
   #[test]
   fn test() {
+    use crate::segoff::*;
     for (n, test) in TESTS.iter().enumerate() {
-      let addr = SegOff { seg: 0, off: test.addr.try_into().unwrap() };
+      let addr = SegOff { seg: Seg::Normal(0), off: Off(test.addr.try_into().unwrap()) };
       let mut bin = RegionIter::new(test.dat, addr);
-      let (ins, bytes) = decode_one(&mut bin).unwrap();
-      let asm = crate::asm::intel_syntax::format(&ins, &bytes, false).unwrap();
+      let (ins, bytes) = decode_one(&mut bin).unwrap().unwrap();
+      println!("{:?}", ins);
+      let asm = crate::asm::intel_syntax::format(addr, Some(&ins), &bytes, false).unwrap();
       if asm != test.asm {
         panic!("Failed ({}/{}) | Expected: '{}' | Got: '{}'\n\nRAW:\n{:?}", n, TESTS.len(), test.asm, asm, ins);
       }

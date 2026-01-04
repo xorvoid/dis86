@@ -34,9 +34,9 @@ fn format_operand(s: &mut String, ins: &Instr, oper: &Operand) -> Result<()> {
     Operand::Imm(o) => write!(s, "0x{:x}", o.val)?,
     Operand::Rel(o) => {
       let effective = ins.rel_addr(o);
-      write!(s, "{}", effective)?;
+      write!(s, "0x{:x}", effective.off.0)?;
     }
-    Operand::Far(o) => write!(s, "{:04x}:{:04x}", o.seg, o.off)?,
+    Operand::Far(o) => write!(s, "0x{:x}:0x{:x}", o.seg, o.off)?,
   };
 
   Ok(())

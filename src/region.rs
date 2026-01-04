@@ -97,7 +97,7 @@ mod tests {
   use super::*;
   #[test]
   fn test() {
-    let addr = SegOff { seg: 0, off: 10 };
+    let addr: SegOff = "0000:000a".parse().unwrap();
     let mut b = RegionIter::new(&[0x12, 0x34, 0x56, 0x78, 0x9a], addr);
     assert_eq!(b.peek(), 0x12);
     assert_eq!(b.peek(), 0x12);
@@ -106,11 +106,11 @@ mod tests {
     assert_eq!(b.peek(), 0x34);
     assert_eq!(b.get(addr), 0x12);
 
-    let v = b.fetch();
+    let v = b.fetch().unwrap();
     assert_eq!(v, 0x34);
     assert_eq!(b.peek(), 0x56);
 
-    let v = b.fetch_u16();
+    let v = b.fetch_u16().unwrap();
     assert_eq!(v, 0x7856);
 
     assert_eq!(b.peek(), 0x9a);
