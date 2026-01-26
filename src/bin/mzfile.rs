@@ -118,7 +118,8 @@ fn cmd_map(args: &[String]) {
     mz::SegInfoType::STUB => {
       // Overlay stub
       let stub = find_stub_info(&exe, addr);
-      println!("overlay_{:04x}:{:04x}", stub.overlay_seg_num, stub.dest_offset);
+      let addr = SegOff { seg: Seg::Overlay(stub.overlay_seg_num), off: Off(stub.dest_offset) };
+      println!("{}", addr);
     }
     mz::SegInfoType::OVERLAY => {
       println!("OVERLAY: UNIMPL");
@@ -232,14 +233,17 @@ fn disassemble_code(binary: &Binary, start: SegOff, end: SegOff, cfg: Option<&Co
       }
     };
 
+    let mut stub_addr = None;
     if let Some(dest_to_stub_map) = dest_to_stub_map {
-      if let Some(stub_addr) = dest_to_stub_map.get(&addr) {
+      stub_addr = dest_to_stub_map.get(&addr).cloned();
+      if let Some(addr) = stub_addr {
         emit_divider();
-        println!(";;; STUB TARGET FROM {}", stub_addr);
+        println!(";;; STUB TARGET FROM {}", addr);
       }
     }
 
-    if let Some(func) = cfg_func(cfg, addr) {
+    let func_addr = stub_addr.unwrap_or(addr);
+    if let Some(func) = cfg_func(cfg, func_addr) {
       emit_divider();
       println!(";;; FUNCTION: {}", func.name);
     } else {

@@ -52,7 +52,7 @@ impl SegOff {
 impl FromStr for SegOff {
   type Err = String;
   fn from_str(s: &str) -> Result<Self, String> {
-    // FIXME: EXTEND TO PARSE OVERLAYS? "ovrxx:yyyy"
+    // FIXME: EXTEND TO PARSE OVERLAYS? "overlay_xxxx:yyyy"
     // format: 'xxxx:yyyy' where xxxx and yyyy are 16-bit hexdecimal
     let idx = s.find(':').ok_or_else(|| format!("Invalid segoff: '{}'", s))?;
     Ok(SegOff {
@@ -66,7 +66,7 @@ impl fmt::Display for Seg {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
       Seg::Normal(seg) => write!(f, "{:04x}", seg),
-      Seg::Overlay(seg) => write!(f, "ovr{:02x}", seg),
+      Seg::Overlay(seg) => write!(f, "overlay_{:04x}", seg),
     }
   }
 }
