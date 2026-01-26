@@ -263,6 +263,8 @@ fn disassemble_code(binary: &Binary, start: SegOff, end: SegOff, cfg: Option<&Co
         let dest_addr = SegOff { seg: Seg::Normal(far.seg), off: Off(far.off) };
         if let Some(func) = binary.lookup_call(addr, dest_addr) {
           print!("  ; {}()", func.name);
+        } else {
+          print!("  ; ???");
         }
       }
     }
@@ -272,6 +274,8 @@ fn disassemble_code(binary: &Binary, start: SegOff, end: SegOff, cfg: Option<&Co
         let dest_addr = instr.as_ref().unwrap().rel_addr(rel);
         if let Some(func) = binary.lookup_call(addr, dest_addr) {
           print!("  ; {}()", func.name);
+        } else {
+          print!("  ; ???");
         }
       }
     }
