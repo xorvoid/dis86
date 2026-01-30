@@ -381,6 +381,11 @@ impl<'a> Builder<'a> {
       ir::Opcode::Ref => {
         self.ref_to_expr(instr.operands[0], depth+1)
       }
+      ir::Opcode::Load8 => {
+        let seg = self.ref_to_expr_hex(instr.operands[0], depth+1, true);
+        let off = self.ref_to_expr_hex(instr.operands[1], depth+1, true);
+        Expr::Deref(Box::new(Expr::Abstract("PTR_8", vec![seg, off])))
+      }
       ir::Opcode::Load16 => {
         let seg = self.ref_to_expr_hex(instr.operands[0], depth+1, true);
         let off = self.ref_to_expr_hex(instr.operands[1], depth+1, true);
