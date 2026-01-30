@@ -616,7 +616,6 @@ impl IRBuilder<'_> {
                     &format!("Unknown call to {}", addr));
 
       // FIXME: Can we do unwrap_normal() ??
-      println!("addr: {}", addr);
       let seg = match addr.seg {
         Seg::Normal(num) => self.ir.append_const(num as i16),
         Seg::Overlay(num) => self.ir.append_const(-(num as i16)),

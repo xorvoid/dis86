@@ -378,7 +378,8 @@ impl<'a> Gen<'a> {
 
   fn vardecls(&mut self, decls: &[VarDecl], _imp: &dyn FlavorImpl) -> fmt::Result {
     for d in decls {
-      self.text(&format!("{} ", d.typ))?;
+      let typ = d.typ.collapse_unknown_types_to_u32();
+      self.text(&format!("{} ", typ))?;
       for (i, name) in d.names.iter().enumerate() {
         if i != 0 { self.text(", ")?; }
         self.text(name)?;

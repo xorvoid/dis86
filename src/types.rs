@@ -64,6 +64,13 @@ impl Type {
       Type::Unknown => None,
     }
   }
+
+  pub fn collapse_unknown_types_to_u32(&self) -> Type {
+    match self {
+      Type::Unknown => Type::U32,
+      _ => self.clone(),
+    }
+  }
 }
 
 impl fmt::Display for Type {
@@ -89,6 +96,7 @@ impl fmt::Display for Type {
     }
   }
 }
+
 
 #[derive(Debug)]
 pub struct Builder {

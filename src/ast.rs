@@ -501,10 +501,17 @@ impl<'a> Builder<'a> {
 
     let expr = Expr::Name(sym.name.clone());
     let typ = symref.get_type(&self.ir.symbols);
-    self.symbol_to_expr_recurse(expr, typ, symref.access_region)
+    //println!("enter symbol_to_expr_recurse");
+    let r = self.symbol_to_expr_recurse(expr, typ, symref.access_region);
+    //println!("leave symbol_to_expr_recurse");
+    r
   }
 
   fn symbol_to_expr_recurse(&self, mut expr: Expr, typ: &Type, mut access: ir::sym::Region) -> Expr {
+    // println!("symbol_to_expr_recurse");
+    // println!("  expr:   {:?}", expr);
+    // println!("  type:   {:?}", typ);
+    // println!("  access: {:?}", access);
     if !typ.is_primitive() {
       match typ {
         Type::Array(basetype, len) => {
