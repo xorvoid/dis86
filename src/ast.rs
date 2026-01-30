@@ -444,6 +444,12 @@ impl<'a> Builder<'a> {
         let exprs: Vec<_> = instr.operands.iter().map(|r| self.ref_to_expr(*r, depth+1)).collect();
         Expr::Abstract("MAKE_32", exprs)
       }
+      ir::Opcode::SignExtTo16 => {
+        assert!(instr.operands.len() == 1);
+        let rhs = self.ref_to_expr(instr.operands[0], depth+1);
+        // TODO: VERIFY THIS IS A U16
+        Expr::Cast(Type::I16, Box::new(Expr::Cast(Type::I8, Box::new(rhs))))
+      }
       ir::Opcode::SignExtTo32 => {
         assert!(instr.operands.len() == 1);
         let rhs = self.ref_to_expr(instr.operands[0], depth+1);

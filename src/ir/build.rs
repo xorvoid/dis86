@@ -1057,6 +1057,11 @@ impl IRBuilder<'_> {
       instr::Opcode::OP_CLD => {
         self.append_instr(Type::Void, Opcode::Unimpl, vec![]);
       }
+      instr::Opcode::OP_CBW => {
+        let src = self.append_asm_src_operand(&ins.operands[1]);
+        let ext = self.append_instr(Type::U16, Opcode::SignExtTo16, vec![src]);
+        self.append_asm_dst_operand(&ins.operands[0], ext);
+      }
       _ => panic!("Unimpl opcode: {:?}", ins.opcode),
     }
   }

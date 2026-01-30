@@ -22,6 +22,7 @@ pub enum Opcode {
   Neg,
   Not,  // bitwise
 
+  SignExtTo16,
   SignExtTo32,
 
   Load8,
@@ -112,6 +113,7 @@ impl Opcode {
       Opcode::UDiv        => "udiv",
       Opcode::Neg         => "neg",
       Opcode::Not         => "not",
+      Opcode::SignExtTo16 => "signext16",
       Opcode::SignExtTo32 => "signext32",
       //Opcode::AddrOf      => "addrof",
       Opcode::Load8       => "load8",
