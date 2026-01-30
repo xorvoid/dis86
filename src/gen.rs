@@ -17,6 +17,8 @@ impl Flavor {
 
 trait FlavorImpl {
   fn func_sig(&self, g: &mut Gen<'_>, func: &Function) -> fmt::Result;
+  fn frame_enter(&self, g: &mut Gen<'_>, frame_size: u16) -> fmt::Result;
+  fn frame_leave(&self, g: &mut Gen<'_>) -> fmt::Result;
   fn ret(&self, g: &mut Gen<'_>, ret: &Return) -> fmt::Result;
   fn call(&self, g: &mut Gen<'_>, name: &Expr, args: &[Expr], level: usize) -> fmt::Result;
 }
@@ -29,6 +31,14 @@ impl FlavorImpl for Standard {
       None => "_unknown_return_type".to_string(),
     };
     g.text(&format!("{} {}(void)", ret_str, func.name))
+  }
+
+  fn frame_enter(&self, _g: &mut Gen<'_>, _frame_size: u16) -> fmt::Result {
+    Ok(())
+  }
+
+  fn frame_leave(&self, _g: &mut Gen<'_>) -> fmt::Result {
+    Ok(())
   }
 
   fn ret(&self, g: &mut Gen<'_>, ret: &Return) -> fmt::Result {
@@ -77,6 +87,16 @@ impl FlavorImpl for Hydra {
     g.text(&format!("HYDRA_FUNC(H_{})", name))
   }
 
+  fn frame_enter(&self, g: &mut Gen<'_>, frame_size: u16) -> fmt::Result {
+    g.text(&format!("FRAME_ENTER({});", frame_size))?;
+    g.endline()
+  }
+
+  fn frame_leave(&self, g: &mut Gen<'_>) -> fmt::Result {
+    g.text(&format!("FRAME_LEAVE();"))?;
+    g.endline()
+  }
+
   fn ret(&self, g: &mut Gen<'_>, ret: &Return) -> fmt::Result {
     match ret.vals.len() {
       0 => (),
@@ -98,6 +118,7 @@ impl FlavorImpl for Hydra {
       }
       _ => panic!("Unsupported return values"),
     }
+    self.frame_leave(g)?;
     match &ret.rt {
       ReturnType::Far => g.text("RETURN_FAR();")?,
       ReturnType::Near => g.text("RETURN_NEAR();")?,
@@ -360,6 +381,8 @@ impl<'a> Gen<'a> {
   }
 
   fn varmaps_def(&mut self, maps: &[VarMap], imp: &dyn FlavorImpl) -> fmt::Result {
+    self.text(&format!("u16 SP0 = SP;"))?;
+    self.endline()?;
     for d in maps {
       self.text(&format!("#define {} ", d.name))?;
       self.expr(&d.mapping_expr, 0, imp)?;
@@ -396,6 +419,8 @@ impl<'a> Gen<'a> {
     self.enter_block()?;
     self.endline()?;
     self.varmaps_def(&func.varmaps, imp)?;
+    self.endline()?;
+    imp.frame_enter(self, func.frame_size)?;
     self.endline()?;
     self.vardecls(&func.vardecls, imp)?;
     self.endline()?;

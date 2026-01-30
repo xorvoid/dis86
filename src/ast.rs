@@ -186,6 +186,7 @@ pub struct Function {
   pub ret: Option<Type>,
   pub vardecls: Vec<VarDecl>,
   pub varmaps: Vec<VarMap>,
+  pub frame_size: u16,
   pub body: Block,
 }
 
@@ -199,6 +200,8 @@ struct Builder<'a> {
   n_uses: HashMap<ir::Ref, usize>,
   temp_names: HashMap<ir::Ref, String>,
   temp_count: usize,
+  frame_off_low: i16,  // less negative
+  frame_off_high: i16, // more negative
 
   assigns: Vec<(String, Type)>,
   assigned: HashSet<String>,
@@ -229,6 +232,8 @@ impl<'a> Builder<'a> {
       n_uses,
       temp_names: HashMap::new(),
       temp_count: 0,
+      frame_off_low: i16::MIN+1,
+      frame_off_high: 0,
 
       assigns: vec![],
       assigned: HashSet::new(),
@@ -480,15 +485,45 @@ impl<'a> Builder<'a> {
 
   fn symbol_to_expr(&mut self, symref: ir::sym::SymbolRef) -> Expr {
     let sym = symref.def(&self.ir.symbols);
+
+    // grow the frame?
+    if symref.table() == ir::sym::Table::Local {
+
+      let start_off = sym.off;
+      if start_off.abs() > self.frame_off_high.abs() {
+        self.frame_off_high = start_off;
+      }
+
+      let typ = symref.get_type(&self.ir.symbols);
+      let sz = match typ {
+        Type::U8 => 1,
+        Type::U16 => 2,
+        Type::U32 => 4,
+        _ => panic!("Unsupported type: {:?}", typ),
+      };
+
+      let end_off = start_off + sz;
+      if end_off.abs() < self.frame_off_low.abs() {
+        self.frame_off_low = end_off;
+      }
+
+      //println!("{} | start_off: {}, end_off: {}", sym.name, start_off, end_off);
+    }
+
     if (symref.table() == ir::sym::Table::Local || symref.table() == ir::sym::Table::Param) &&
       self.mappings.get(&sym.name).is_none()
     {
       let ss = crate::asm::instr::Reg::SS;
       let sp = crate::asm::instr::Reg::SP;
+
+      // Use SP0 instead of SP so that its immutable everywhere in the function
+      let mut sp0 = sp.info().name.to_string();
+      sp0.push('0');
+
       let seg = Expr::Name(ss.info().name.to_string());
       let off = Expr::Binary(Box::new(BinaryExpr {
         op: BinaryOperator::Add,
-        lhs: Expr::Name(sp.info().name.to_string()),
+        lhs: Expr::Name(sp0),
         rhs: Expr::HexConst(sym.off as u16),
       }));
 
@@ -963,11 +998,24 @@ impl<'a> Builder<'a> {
       });
     }
 
+    //println!("low_off: {}, high_off: {}", self.frame_off_low, self.frame_off_high);
+
+    // Determine frame size (HACKY)
+    let mut frame_size = 0;
+    if self.frame_off_high != 0 { // frame is non-zero
+      if self.frame_off_low < -2 {
+        panic!("Frame offsets are below the return address location (-2)");
+      }
+      assert!(self.frame_off_low >= self.frame_off_high);
+      frame_size = (self.frame_off_high.abs() - 2) as u16;
+    }
+
     Function {
       name: name.to_string(),
       ret,
       vardecls,
       varmaps,
+      frame_size,
       body,
     }
   }
