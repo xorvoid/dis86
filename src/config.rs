@@ -1,21 +1,13 @@
-use crate::segoff::{Seg, SegOff};
+use crate::segoff::SegOff;
 use crate::bsl;
 use crate::types::{self, Type};
 use crate::asm::instr::Reg;
-
-#[derive(Debug)]
-pub struct OverlayRange {
-  pub num: u16,
-  pub start: u16,
-  pub end: u16,
-}
 
 #[derive(Debug)]
 pub struct Func {
   pub name: String,
   pub start: Option<SegOff>,
   pub end: Option<SegOff>,
-  pub overlay: Option<OverlayRange>,
   pub mode: CallMode,
   pub ret: Type,
   pub args: Option<u16>,  // None means "unknown", Some(0) means "no args"
@@ -83,13 +75,6 @@ impl Config {
       if let Some(start) = f.start {
         if addr == start {
           return Some(f)
-        }
-      }
-      // matches as an overlay func?
-      let Some(overlay) = f.overlay.as_ref() else { continue };
-      if let Seg::Overlay(num) = addr.seg {
-        if num == overlay.num && addr.off.0 == overlay.start {
-          return Some(f);
         }
       }
     }
@@ -192,10 +177,6 @@ impl Config {
       let dont_pop_args = f.get_str("dont_pop_args").is_some();
       let indirect = f.get_str("indirect_call_location").is_some();
 
-      let overlay_num = f.get_str("overlay_num");
-      let overlay_start = f.get_str("overlay_start");
-      let overlay_end = f.get_str("overlay_end");
-
       let regargs = f.get_str("regargs");
 
       let start: Option<SegOff> = if start_str.len() == 0 { None } else {
@@ -216,25 +197,6 @@ impl Config {
       let ret: Type = self.type_builder.parse_type(ret_str)
         .map_err(|err| format!("Expected type for '{}.ret', got '{}' | {}", key, ret_str, err))?;
 
-      let n_overlay_opts =
-        overlay_num.is_some() as u32 +
-        overlay_start.is_some() as u32 +
-        overlay_end.is_some() as u32;
-
-      let overlay = if n_overlay_opts == 3 {
-        let num: u16 = overlay_num.unwrap().parse()
-          .map_err(|_| format!("Expected u16 for '{}.overlay_num', got '{}'", key, overlay_num.unwrap()))?;
-        let start: u16 = parse_u16(&overlay_start.unwrap())
-          .map_err(|_| format!("Expected u16 for '{}.overlay_start', got '{}'", key, overlay_start.unwrap()))?;
-        let end: u16 = parse_u16(&overlay_end.unwrap())
-          .map_err(|_| format!("Expected u16 for '{}.overlay_end', got '{}'", key, overlay_end.unwrap()))?;
-        Some(OverlayRange { num, start, end })
-      } else if n_overlay_opts == 0 {
-        None
-      } else {
-        return Err(format!("Overlay options only partially set for '{}'", key));
-      };
-
       let regargs = match regargs {
         None => None,
         Some(s) => {
@@ -253,7 +215,6 @@ impl Config {
           name: key.to_string(),
           start,
           end,
-          overlay,
           mode,
           ret,
           args: if args >= 0 { Some(args as u16) } else { None },

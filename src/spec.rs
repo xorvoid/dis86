@@ -1,4 +1,4 @@
-use crate::segoff::{Seg, Off, SegOff};
+use crate::segoff::SegOff;
 use crate::config::{self, Config};
 
 pub struct Spec<'a> {
@@ -13,21 +13,11 @@ impl<'a> Spec<'a> {
     let Some(func) = cfg.func_lookup_by_name(name) else {
       panic!("Failed to lookup function named: {}", name);
     };
-    let (start, end) = match &func.overlay {
-      None => { // ordinary
-        let Some(start) = func.start else {
-          panic!("Function has no 'start' addr defined in config");
-        };
-        let Some(end) = func.end else {
-          panic!("Function has no 'end' addr defined in config");
-        };
-        (start, end)
-      }
-      Some(ovr) => { // overlay
-        let start = SegOff { seg: Seg::Overlay(ovr.num), off: Off(ovr.start) };
-        let end = SegOff { seg: Seg::Overlay(ovr.num), off: Off(ovr.end) };
-        (start, end)
-      }
+    let Some(start) = func.start else {
+      panic!("Function has no 'start' addr defined in config");
+    };
+    let Some(end) = func.end else {
+      panic!("Function has no 'end' addr defined in config");
     };
     Spec {
       name: name.to_string(),
