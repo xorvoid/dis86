@@ -52,8 +52,6 @@ impl SegOff {
 impl FromStr for SegOff {
   type Err = String;
   fn from_str(s: &str) -> Result<Self, String> {
-    println!("blah: {}", s);
-
     // Strip off "overlay_" prefix if required
     let mut rem = s;
     let mut overlay = false;
