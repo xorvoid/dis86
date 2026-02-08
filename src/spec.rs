@@ -15,7 +15,9 @@ impl<'a> Spec<'a> {
     };
     let (start, end) = match &func.overlay {
       None => { // ordinary
-        let start = func.start;
+        let Some(start) = func.start else {
+          panic!("Function has no 'start' addr defined in config");
+        };
         let Some(end) = func.end else {
           panic!("Function has no 'end' addr defined in config");
         };

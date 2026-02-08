@@ -13,7 +13,7 @@ pub struct OverlayRange {
 #[derive(Debug)]
 pub struct Func {
   pub name: String,
-  pub start: SegOff,
+  pub start: Option<SegOff>,
   pub end: Option<SegOff>,
   pub overlay: Option<OverlayRange>,
   pub mode: CallMode,
@@ -80,8 +80,10 @@ impl Config {
   pub fn func_lookup(&self, addr: SegOff) -> Option<&Func> {
     // TODO: Consider something better than linear search
     for f in &self.funcs {
-      if addr == f.start {
-        return Some(f)
+      if let Some(start) = f.start {
+        if addr == start {
+          return Some(f)
+        }
       }
       // matches as an overlay func?
       let Some(overlay) = f.overlay.as_ref() else { continue };
@@ -196,8 +198,10 @@ impl Config {
 
       let regargs = f.get_str("regargs");
 
-      let start: SegOff = start_str.parse()
-        .map_err(|_| format!("Expected segoff for '{}.start', got '{}'", key, start_str))?;
+      let start: Option<SegOff> = if start_str.len() == 0 { None } else {
+        Some(start_str.parse()
+             .map_err(|_| format!("Expected segoff for '{}.start', got '{}'", key, start_str))?)
+      };
       let end: Option<SegOff> = if end_str.len() == 0 { None } else {
         Some(end_str.parse()
              .map_err(|_| format!("Expected segoff for '{}.end', got '{}'", key, end_str))?)
@@ -260,6 +264,9 @@ impl Config {
         if mode != CallMode::Far {
           panic!("Cannot have an indirect near call: {}", key);
         }
+        let Some(start) = start else {
+          panic!("Expected start address to be defined for an indirect");
+        };
         self.indirects.push(Indirect {
           addr: start,
           ret,

@@ -52,13 +52,29 @@ impl SegOff {
 impl FromStr for SegOff {
   type Err = String;
   fn from_str(s: &str) -> Result<Self, String> {
-    // FIXME: EXTEND TO PARSE OVERLAYS? "overlay_xxxx:yyyy"
+    println!("blah: {}", s);
+
+    // Strip off "overlay_" prefix if required
+    let mut rem = s;
+    let mut overlay = false;
+    if s.starts_with("overlay_") {
+      rem = &s[8..];
+      overlay = true;
+    }
+
+    // Find the colon seperator
     // format: 'xxxx:yyyy' where xxxx and yyyy are 16-bit hexdecimal
-    let idx = s.find(':').ok_or_else(|| format!("Invalid segoff: '{}'", s))?;
-    Ok(SegOff {
-      seg: Seg::Normal(u16::from_str_radix(&s[..idx], 16).map_err(|_| format!("Invalid segoff: '{}'", s))?),
-      off: Off(u16::from_str_radix(&s[idx+1..], 16).map_err(|_| format!("Invalid segoff: '{}'", s))?),
-    })
+    let idx = rem.find(':').ok_or_else(|| format!("Invalid segoff: '{}'", s))?;
+
+    // Hex string to 16-bit int
+    let seg_num = u16::from_str_radix(&rem[..idx], 16).map_err(|_| format!("Invalid segoff: '{}'", s))?;
+    let off_num = u16::from_str_radix(&rem[idx+1..], 16).map_err(|_| format!("Invalid segoff: '{}'", s))?;
+
+    // Build segment and offset wrappers
+    let seg = if overlay { Seg::Overlay(seg_num) } else { Seg::Normal(seg_num) };
+    let off = Off(off_num);
+
+    Ok(SegOff { seg, off })
   }
 }
 
