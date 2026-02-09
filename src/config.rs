@@ -8,6 +8,7 @@ pub struct Func {
   pub name: String,
   pub start: Option<SegOff>,
   pub end: Option<SegOff>,
+  pub entry: Option<SegOff>,
   pub mode: CallMode,
   pub ret: Type,
   pub args: Option<u16>,  // None means "unknown", Some(0) means "no args"
@@ -68,14 +69,21 @@ pub struct Config {
   pub text_section: Vec<TextSectionRegion>,
 }
 
+impl Func {
+  fn entry(&self) -> Option<SegOff> {
+    if let Some(entry) = self.entry { return Some(entry); }
+    if let Some(start) = self.start { return Some(start); }
+    None
+  }
+}
+
 impl Config {
   pub fn func_lookup(&self, addr: SegOff) -> Option<&Func> {
     // TODO: Consider something better than linear search
     for f in &self.funcs {
-      if let Some(start) = f.start {
-        if addr == start {
-          return Some(f)
-        }
+      let Some(entry) = f.entry() else { continue };
+      if addr == entry {
+        return Some(f)
       }
     }
     None
@@ -167,6 +175,7 @@ impl Config {
         .ok_or_else(|| format!("No function 'start' property for '{}'", key))?;
       let end_str = f.get_str("end")
         .ok_or_else(|| format!("No function 'end' property for '{}'", key))?;
+      let entry_str = f.get_str("entry").unwrap_or("");
       let mode_str = f.get_str("mode")
         .ok_or_else(|| format!("No function 'mode' property for '{}'", key))?;
       let ret_str = f.get_str("ret")
@@ -186,6 +195,10 @@ impl Config {
       let end: Option<SegOff> = if end_str.len() == 0 { None } else {
         Some(end_str.parse()
              .map_err(|_| format!("Expected segoff for '{}.end', got '{}'", key, end_str))?)
+      };
+      let entry: Option<SegOff> = if entry_str.len() == 0 { None } else {
+        Some(entry_str.parse()
+             .map_err(|_| format!("Expected segoff for '{}.entry', got '{}'", key, entry_str))?)
       };
       let mode = match mode_str {
         "near" => CallMode::Near,
@@ -215,6 +228,7 @@ impl Config {
           name: key.to_string(),
           start,
           end,
+          entry,
           mode,
           ret,
           args: if args >= 0 { Some(args as u16) } else { None },
