@@ -418,6 +418,9 @@ impl<'a> Builder<'a> {
         let lhs = self.ref_to_expr_hex(instr.operands[0], depth+1, hex_const);
         Expr::Cast(Type::U16, Box::new(lhs))
       }
+      ir::Opcode::ReadVar8 => {
+        self.symbol_to_expr(instr.operands[0].unwrap_symbol())
+      }
       ir::Opcode::ReadVar16 => {
         self.symbol_to_expr(instr.operands[0].unwrap_symbol())
       }
