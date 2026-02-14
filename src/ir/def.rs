@@ -51,7 +51,7 @@ pub struct Block {
   pub name: String,
   pub defs: HashMap<Name, Ref>,
   pub preds: Vec<BlockRef>,
-  pub instrs: DVec<Instr>,
+  pub(super) instrs: DVec<Instr>,
   pub sealed: bool, // has all predecessors?
   pub incomplete_phis: Vec<(Name, Ref)>,
 }

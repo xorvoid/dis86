@@ -235,6 +235,15 @@ impl IR {
     }
   }
 
+  pub fn block_instr_count(&mut self, blkref: BlockRef) -> usize {
+    self.block(blkref).instrs.count()
+  }
+
+  pub fn block_append_instr(&mut self, blkref: BlockRef, instr: Instr) -> Ref {
+    let idx = self.block_mut(blkref).instrs.push_back(instr);
+    Ref::Instr(blkref, idx)
+  }
+
   pub fn last_instr(&self, blkref: BlockRef) -> Option<&Instr> {
     self.instr(self.last_ref_in_block(blkref))
   }

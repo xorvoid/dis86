@@ -221,8 +221,8 @@ impl<'a> IRBuilder<'a> {
       opcode,
       operands,
     };
-    let idx = self.ir.block_mut(self.cur).instrs.push_back(instr);
-    Ref::Instr(self.cur, idx)
+
+    self.ir.block_append_instr(self.cur, instr)
   }
 
   fn append_jmp(&mut self, next: BlockRef) {
@@ -276,7 +276,7 @@ impl<'a> IRBuilder<'a> {
 
     // Switch to the next block
     self.switch_blk(next_bref);
-    assert!(self.ir.block(self.cur).instrs.empty());
+    assert!(self.ir.block_instr_count(self.cur) == 0);
   }
 }
 

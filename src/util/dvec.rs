@@ -29,8 +29,8 @@ impl<T> DVec<T> {
     self.start()..self.end()
   }
 
-  pub fn empty(&self) -> bool {
-    self.start() == 0 && self.end() == 0
+  pub fn count(&self) -> usize {
+    self.neg.len() + self.pos.len()
   }
 
   pub fn push_front(&mut self, val: T) -> DVecIndex {
