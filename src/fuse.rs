@@ -1,4 +1,4 @@
-use crate::ir::def::*;
+use crate::ir::*;
 use crate::sym;
 use crate::types::Type;
 
