@@ -264,7 +264,7 @@ impl<'a> IRBuilder<'a> {
     let next_bref = self.get_block(next);
 
     // Make sure the last instruction is a jump or ret
-    match self.ir.block(self.cur).instrs.last().map(|ins| ins.opcode) {
+    match self.ir.last_instr(self.cur).map(|ins| ins.opcode) {
       Some(Opcode::Jmp) => (),
       Some(Opcode::Jne) => (),
       Some(Opcode::JmpTbl) => (),

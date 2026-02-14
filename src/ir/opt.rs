@@ -380,7 +380,7 @@ pub fn deadblock_elimination(ir: &mut IR) {
     if blk.preds.len() > 0 { continue; }
 
     // Need to remove ourself as a pred from any target blocks
-    for exit in blk.exits() {
+    for exit in ir.block_exits(blkref) {
       // Find pred_idx
       let exit_blk = ir.block_mut(exit);
       let mut pred_idx = None;

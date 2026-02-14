@@ -369,9 +369,10 @@ impl ControlFlow {
     };
 
     for b in ir.iter_blocks() {
-      let exits = ir.block(b).exits().into_iter().map(|x| ElemId(x.0)).collect();
+      let exits = ir.block_exits(b).into_iter().map(|x| ElemId(x.0)).collect();
       let preds = ir.block(b).preds.iter().map(|x| ElemId(x.0)).collect();
-      let jump_table = ir.block(b).instrs.last().unwrap().opcode == ir::Opcode::JmpTbl;
+
+      let jump_table = ir.last_instr(b).unwrap().opcode == ir::Opcode::JmpTbl;
 
       cf.data.append_with_id(ElemId(b.0), Elem {
         entry: ElemId(b.0),

@@ -212,6 +212,33 @@ impl IR {
     self.block(blk).instrs.range().map(move |idx| Ref::Instr(blk, idx))
   }
 
+  pub fn last_ref_in_block(&self, blkref: BlockRef) -> Ref {
+    Ref::Instr(blkref, self.block(blkref).instrs.last_idx().unwrap())
+  }
+
+  pub fn block_exits(&self, blkref: BlockRef) -> Vec<BlockRef> {
+    let instr = self.last_instr(blkref).unwrap();
+
+    match instr.opcode {
+      Opcode::RetFar | Opcode::RetNear => vec![],
+      Opcode::Jmp => vec![
+        instr.operands[0].unwrap_block()
+      ],
+      Opcode::Jne => vec![
+        instr.operands[1].unwrap_block(),
+        instr.operands[2].unwrap_block()
+      ],
+      Opcode::JmpTbl => {
+        instr.operands[1..].iter().map(|oper| oper.unwrap_block()).collect()
+      },
+      _ => panic!("Expected last instruction to be a branching instruction: {:?}", instr),
+    }
+  }
+
+  pub fn last_instr(&self, blkref: BlockRef) -> Option<&Instr> {
+    self.instr(self.last_ref_in_block(blkref))
+  }
+
   pub fn prev_ref_in_block(&self, r: Ref) -> Option<Ref> {
     let Ref::Instr(b, mut i) = r else { return None };
     let blk = self.block(b);
@@ -390,24 +417,6 @@ impl Block {
       instrs: DVec::new(),
       sealed: false,
       incomplete_phis: vec![],
-    }
-  }
-
-  pub fn exits(&self) -> Vec<BlockRef> {
-    let instr = self.instrs.last().unwrap();
-    match instr.opcode {
-      Opcode::RetFar | Opcode::RetNear => vec![],
-      Opcode::Jmp => vec![
-        instr.operands[0].unwrap_block()
-      ],
-      Opcode::Jne => vec![
-        instr.operands[1].unwrap_block(),
-        instr.operands[2].unwrap_block()
-      ],
-      Opcode::JmpTbl => {
-        instr.operands[1..].iter().map(|oper| oper.unwrap_block()).collect()
-      },
-      _ => panic!("Expected last instruction to be a branching instruction: {:?}", instr),
     }
   }
 }

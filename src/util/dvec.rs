@@ -53,11 +53,6 @@ impl<T> DVec<T> {
       None
     }
   }
-
-  pub fn last(&self) -> Option<&T> {
-    let idx = self.last_idx()?;
-    Some(&self[idx])
-  }
 }
 
 impl<T> Index<DVecIndex> for DVec<T> {
