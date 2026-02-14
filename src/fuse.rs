@@ -66,15 +66,15 @@ fn is_fusable_load16_to_load32(ir: &IR, high_ref: Ref, low_ref: Ref) -> bool {
 
       //if false { unreachable!();
       if high_off.operands[0] == low_ref_ref && high_off.operands[1].is_const() {
-        (ir.lookup_const(high_off.operands[1]).unwrap(), 0)
+        (ir.const_lookup(high_off.operands[1]).unwrap(), 0)
       } else {
         if low_off.opcode != Opcode::Add { return false }
         if high_off.operands[0] != low_off.operands[0] { return false }
         let Ref::Const(_) = &high_off.operands[1] else { return false };
         let Ref::Const(_) = &low_off.operands[1] else { return false };
         (
-          ir.lookup_const(high_off.operands[1]).unwrap(),
-          ir.lookup_const(low_off.operands[1]).unwrap(),
+          ir.const_lookup(high_off.operands[1]).unwrap(),
+          ir.const_lookup(low_off.operands[1]).unwrap(),
         )
       }
     }

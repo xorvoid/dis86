@@ -1,3 +1,4 @@
+mod dvec;
 mod opcode;
 mod def;
 mod methods;

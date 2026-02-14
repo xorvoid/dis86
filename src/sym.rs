@@ -285,8 +285,8 @@ pub fn symbolize_stack(ir: &mut IR) {
       if addr_instr.operands[0] != sp { continue; }
 
       let off = match addr_instr.opcode {
-        Opcode::Add => ir.lookup_const(addr_instr.operands[1]),
-        Opcode::Sub => ir.lookup_const(addr_instr.operands[1]).map(|x| -x),
+        Opcode::Add => ir.const_lookup(addr_instr.operands[1]),
+        Opcode::Sub => ir.const_lookup(addr_instr.operands[1]).map(|x| -x),
         _ => None,
       };
       let Some(off) = off else { continue };
@@ -365,7 +365,7 @@ pub fn symbolize_globals(ir: &mut IR, cfg: &Config) {
       if instr.operands[0] != ds { continue; }
       let off_ref = instr.operands[1];
       let size = instr.opcode.operation_size();
-      let Some(off) = ir.lookup_const(off_ref) else { continue };
+      let Some(off) = ir.const_lookup(off_ref) else { continue };
       let Some(sym) = ir.symbols.find_ref(Table::Global, off, size) else {
         eprintln!("WARN: Could not find global for DS:{:04x}", off);
         continue;

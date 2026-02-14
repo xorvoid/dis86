@@ -2,7 +2,7 @@ pub use crate::ir::opcode::Opcode;
 use crate::asm::instr;
 use crate::sym;
 use crate::types::Type;
-use crate::util::dvec::{DVec, DVecIndex};
+use crate::ir::dvec::{DVec, DVecIndex};
 use std::collections::HashMap;
 
 // SSA IR Definitions

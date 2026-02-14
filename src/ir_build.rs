@@ -245,7 +245,7 @@ impl<'a> IRBuilder<'a> {
     self.append_instr(Type::Void, Opcode::AssertPos, vec![reg_ref]);
     self.append_instr(Type::Void, Opcode::AssertEven, vec![reg_ref]);
     // Then scale it down..
-    let k = self.ir.append_const(1);
+    let k = self.ir.const_new(1);
     let typ = self.deduce_type_binary(reg_ref, k);
     let idx = self.append_instr(typ, Opcode::UShr, vec![reg_ref, k]);
     let mut opers = vec![idx];
@@ -303,7 +303,7 @@ impl IRBuilder<'_> {
       refs.push(self.ir.get_var(reg, self.cur));
     }
     if let Some(off) = mem.off {
-      refs.push(self.ir.append_const(off as i16));
+      refs.push(self.ir.const_new(off as i16));
     }
 
     let attr = if mem.sreg == instr::Reg::SS { Attribute::STACK_PTR } else { Attribute::NONE };
@@ -358,7 +358,7 @@ impl IRBuilder<'_> {
     //   instr::Size::Size16 => (imm.val as i16).into(),
     //   _ => panic!("32-bit immediates not supported"),
     // };
-    self.ir.append_const(imm.val as i16)
+    self.ir.const_new(imm.val as i16)
   }
 
   fn append_asm_src_rel(&mut self, _rel: &instr::OperandRel) -> Ref {
@@ -455,7 +455,7 @@ impl IRBuilder<'_> {
   fn append_push(&mut self, vref: Ref) {
     let ss = self.ir.get_var(instr::Reg::SS, self.cur);
     let sp = self.ir.get_var(instr::Reg::SP, self.cur);
-    let k = self.ir.append_const(2);
+    let k = self.ir.const_new(2);
 
     // decrement SP
     let sp = self.append_instr_with_attrs(Type::U16, Attribute::STACK_PTR, Opcode::Sub, vec![sp, k]);
@@ -468,7 +468,7 @@ impl IRBuilder<'_> {
   fn append_pop(&mut self) -> Ref {
     let ss = self.ir.get_var(instr::Reg::SS, self.cur);
     let sp = self.ir.get_var(instr::Reg::SP, self.cur);
-    let k = self.ir.append_const(2);
+    let k = self.ir.const_new(2);
 
     let val = self.append_instr(Type::U16, Opcode::Load16, vec![ss, sp]);
     let sp = self.append_instr_with_attrs(Type::U16, Attribute::STACK_PTR, Opcode::Add, vec![sp, k]);
@@ -530,7 +530,7 @@ impl IRBuilder<'_> {
     for i in 0..n {
       let mut off = sp;
       if i != 0 {
-        let k = self.ir.append_const((2*i) as i16);
+        let k = self.ir.const_new((2*i) as i16);
         off = self.append_instr_with_attrs(Type::U16, Attribute::STACK_PTR, Opcode::Add, vec![sp, k]);
       }
       let val = self.append_instr(Type::U16, Opcode::Load16, vec![ss, off]);
@@ -587,7 +587,7 @@ impl IRBuilder<'_> {
 
     if func.dont_pop_args {
       let sp = self.ir.get_var(instr::Reg::SP, self.cur);
-      let k = self.ir.append_const((2*nargs) as i16);
+      let k = self.ir.const_new((2*nargs) as i16);
       let sp = self.append_instr_with_attrs(Type::U16, Attribute::STACK_PTR, Opcode::Add, vec![sp, k]);
       self.ir.set_var(instr::Reg::SP, self.cur, sp);
     }
@@ -618,11 +618,11 @@ impl IRBuilder<'_> {
 
       // FIXME: Can we do unwrap_normal() ??
       let seg = match addr.seg {
-        Seg::Normal(num) => self.ir.append_const(num as i16),
-        Seg::Overlay(num) => self.ir.append_const(-(num as i16)),
+        Seg::Normal(num) => self.ir.const_new(num as i16),
+        Seg::Overlay(num) => self.ir.const_new(-(num as i16)),
       };
-      //let seg = self.ir.append_const(addr.seg.unwrap_normal() as i16);
-      let off = self.ir.append_const(addr.off.0 as i16);
+      //let seg = self.ir.const_new(addr.seg.unwrap_normal() as i16);
+      let off = self.ir.const_new(addr.off.0 as i16);
 
       let mut operands = vec![seg, off];
       operands.append(&mut self.load_args_from_stack(nargs));
@@ -776,7 +776,7 @@ impl IRBuilder<'_> {
       instr::Opcode::OP_LOOP => {
         // Step 1: Update CX := CX - 1
         let cx = self.append_asm_src_operand(&ins.operands[0]);
-        let one = self.ir.append_const(1);
+        let one = self.ir.const_new(1);
         let cx = self.append_instr(Type::U16, Opcode::Sub, vec![cx, one]);
         self.append_asm_dst_operand(&ins.operands[0], cx);
 
@@ -786,7 +786,7 @@ impl IRBuilder<'_> {
         let false_blk = self.get_block(ins.end_addr());
         let true_blk = self.get_block(ins.rel_addr(rel));
 
-        let z = self.ir.append_const(0);
+        let z = self.ir.const_new(0);
         let cond = self.append_instr(Type::U16, Opcode::Neq, vec![cx, z]);
 
         self.append_jne(cond, true_blk, false_blk);
@@ -875,7 +875,7 @@ impl IRBuilder<'_> {
      }
       instr::Opcode::OP_INC => {
         let attr = if operand_is_stack_reg(&ins.operands[0]) { Attribute::STACK_PTR } else { Attribute::NONE };
-        let one = self.ir.append_const(1);
+        let one = self.ir.const_new(1);
         let vref = self.append_asm_src_operand(&ins.operands[0]);
         let typ = self.deduce_type_binary(vref, one);
         let vref = self.append_instr_with_attrs(typ, attr, Opcode::Add, vec![vref, one]);
@@ -884,7 +884,7 @@ impl IRBuilder<'_> {
       }
       instr::Opcode::OP_DEC => {
         let attr = if operand_is_stack_reg(&ins.operands[0]) { Attribute::STACK_PTR } else { Attribute::NONE };
-        let one = self.ir.append_const(1);
+        let one = self.ir.const_new(1);
         let vref = self.append_asm_src_operand(&ins.operands[0]);
         let typ = self.deduce_type_binary(vref, one);
         let vref = self.append_instr_with_attrs(typ, attr, Opcode::Sub, vec![vref, one]);
@@ -919,7 +919,7 @@ impl IRBuilder<'_> {
         let true_blk = self.get_block(ins.rel_addr(rel));
 
         let cx = self.append_asm_src_operand(&ins.operands[0]);
-        let z = self.ir.append_const(0);
+        let z = self.ir.const_new(0);
         let cond = self.append_instr(Type::U16, Opcode::Eq, vec![cx, z]);
 
         self.append_jne(cond, true_blk, false_blk);
@@ -933,7 +933,7 @@ impl IRBuilder<'_> {
 
         let flags = self.get_flags();
         let sign = self.append_instr(Type::U16, Opcode::SignFlags, vec![flags]);
-        let z = self.ir.append_const(0);
+        let z = self.ir.const_new(0);
         let cond = self.append_instr(Type::U16, Opcode::Neq, vec![sign, z]);
 
         self.append_jne(cond, true_blk, false_blk);
@@ -947,7 +947,7 @@ impl IRBuilder<'_> {
 
         let flags = self.get_flags();
         let sign = self.append_instr(Type::U16, Opcode::SignFlags, vec![flags]);
-        let z = self.ir.append_const(0);
+        let z = self.ir.const_new(0);
         let cond = self.append_instr(Type::U16, Opcode::Eq, vec![sign, z]);
 
         self.append_jne(cond, true_blk, false_blk);

@@ -355,7 +355,7 @@ impl<'a> Builder<'a> {
   // depth==1 operand of another instruction (may generate)
   // FIXME: CLEANUP AND RENAME
   fn ref_to_expr_impl(&mut self, r: ir::Ref, depth: usize, hex_const: bool, inverted: &mut bool) -> Expr {
-    match self.ir.lookup_const(r) {
+    match self.ir.const_lookup(r) {
       Some(k) => {
         if hex_const || k >= 256 || k <= -256 {
           return Expr::HexConst(k as u16);

@@ -28,7 +28,7 @@ pub fn reduce_xor(ir: &mut IR) {
       if instr.opcode != Opcode::Xor || instr.operands[0] != instr.operands[1] {
         continue;
       }
-      let k = ir.append_const(0);
+      let k = ir.const_new(0);
       let instr = ir.instr_mut(r).unwrap();
       instr.opcode = Opcode::Ref;
       instr.operands = vec![k];
@@ -137,7 +137,7 @@ pub fn reduce_equal_zero_32(ir: &mut IR) {
   for b in ir.iter_blocks() {
     for r in ir.iter_instrs(b) {
       let Some((eq_instr, eq_ref)) = ir.instr_matches(r, Opcode::Eq) else {continue};
-      let Some(k) = ir.lookup_const(eq_instr.operands[1]) else {continue};
+      let Some(k) = ir.const_lookup(eq_instr.operands[1]) else {continue};
       if k != 0 { continue; }
       let Some((or_instr, _)) = ir.instr_matches(eq_instr.operands[0], Opcode::Or) else {continue};
 
@@ -278,8 +278,8 @@ fn stack_ptr_const_oper(ir: &IR, vref: Ref) -> Option<(Ref, i16)> {
   let Ref::Const(_) = cref else { return None };
 
   match instr.opcode {
-    Opcode::Add => Some((nref, ir.lookup_const(cref).unwrap())),
-    Opcode::Sub => Some((nref, -ir.lookup_const(cref).unwrap())),
+    Opcode::Add => Some((nref, ir.const_lookup(cref).unwrap())),
+    Opcode::Sub => Some((nref, -ir.const_lookup(cref).unwrap())),
     _ => None,
   }
 }
@@ -294,12 +294,12 @@ pub fn stack_ptr_accumulation(ir: &mut IR) {
 
       let k = a+b;
       if k > 0 {
-        let cref = ir.append_const(k);
+        let cref = ir.const_new(k);
         let instr = ir.instr_mut(vref).unwrap();
         instr.opcode = Opcode::Add;
         instr.operands = vec![nref, cref];
       } else if k < 0 {
-        let cref = ir.append_const(-k);
+        let cref = ir.const_new(-k);
         let instr = ir.instr_mut(vref).unwrap();
         instr.opcode = Opcode::Sub;
         instr.operands = vec![nref, cref];
@@ -633,7 +633,7 @@ pub fn simplify_branch_conds(ir: &mut IR) {
       else if pred_instr.opcode == Opcode::And && opcode_eq {
         // test <a>, <b>
         // je <tgt>
-        let z = ir.append_const(0);
+        let z = ir.const_new(0);
         let instr = ir.instr_mut(r).unwrap();
         instr.opcode = opcode_new;
         instr.operands = vec![pred_ref, z];
@@ -642,7 +642,7 @@ pub fn simplify_branch_conds(ir: &mut IR) {
       else if pred_instr.opcode == Opcode::Or && opcode_eq { //&& pred_instr.operands[0] == pred_instr.operands[1] {
         // or <a>, <b>
         // je <tgt>
-        let z = ir.append_const(0);
+        let z = ir.const_new(0);
         let instr = ir.instr_mut(r).unwrap();
         instr.opcode = opcode_new;
         instr.operands = vec![pred_ref, z];
@@ -651,7 +651,7 @@ pub fn simplify_branch_conds(ir: &mut IR) {
       else if pred_instr.opcode == Opcode::Or && opcode_above { //&& pred_instr.operands[0] == pred_instr.operands[1] {
         // or <a>, <b>
         // ja <tgt>   (equivalent to "jne <tgt>" after the or)
-        let z = ir.append_const(0);
+        let z = ir.const_new(0);
         let instr = ir.instr_mut(r).unwrap();
         instr.opcode = Opcode::Neq;
         instr.operands = vec![pred_ref, z];
@@ -660,7 +660,7 @@ pub fn simplify_branch_conds(ir: &mut IR) {
       else if pred_instr.opcode == Opcode::Or && opcode_lt { //&& pred_instr.operands[0] == pred_instr.operands[1] {
         // or <a>, <b>
         // jl <tgt>   (equivalent to "jump if signed")
-        let z = ir.append_const(0);
+        let z = ir.const_new(0);
         let instr = ir.instr_mut(r).unwrap();
         instr.opcode = Opcode::Sign;
         instr.operands = vec![pred_ref, z];
@@ -669,7 +669,7 @@ pub fn simplify_branch_conds(ir: &mut IR) {
       else if pred_instr.opcode == Opcode::Or && opcode_ge { //&& pred_instr.operands[0] == pred_instr.operands[1] {
         // or <a>, <b>
         // jge <tgt>   (equivalent to "jump if not signed")
-        let z = ir.append_const(0);
+        let z = ir.const_new(0);
         let instr = ir.instr_mut(r).unwrap();
         instr.opcode = Opcode::NotSign;
         instr.operands = vec![pred_ref, z];

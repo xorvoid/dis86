@@ -2,7 +2,7 @@ use crate::asm::instr;
 use crate::ir::def::*;
 use crate::sym;
 use crate::types::Type;
-use crate::util::dvec::{DVec, DVecIndex};
+use crate::ir::dvec::{DVec, DVecIndex};
 use std::collections::HashMap;
 
 impl Ref {
@@ -41,127 +41,6 @@ impl From<instr::Reg> for Name {
 impl From<&instr::Reg> for Name {
   fn from(reg: &instr::Reg) -> Self {
     Self::Reg(*reg)
-  }
-}
-
-impl Opcode {
-  pub fn is_load(&self) -> bool {
-    match self {
-      Opcode::Load8 => true,
-      Opcode::Load16 => true,
-      Opcode::Load32 => true,
-      _ => false,
-    }
-  }
-
-  pub fn is_store(&self) -> bool {
-    match self {
-      Opcode::Store8 => true,
-      Opcode::Store16 => true,
-      Opcode::Store32 => true,
-      _ => false,
-    }
-  }
-
-  pub fn is_mem_op(&self) -> bool {
-    match self {
-      Opcode::Load8 => true,
-      Opcode::Load16 => true,
-      Opcode::Load32 => true,
-      Opcode::Store8 => true,
-      Opcode::Store16 => true,
-      Opcode::Store32 => true,
-      Opcode::ReadVar8 => true,
-      Opcode::ReadVar16 => true,
-      Opcode::ReadVar32 => true,
-      Opcode::WriteVar8 => true,
-      Opcode::WriteVar16 => true,
-      Opcode::WriteVar32 => true,
-      _ => false,
-    }
-  }
-
-  pub fn is_call(&self) -> bool {
-    match self {
-      Opcode::CallFar | Opcode::CallNear | Opcode::CallPtr | Opcode::CallArgs => true,
-      _ => false,
-    }
-  }
-
-  pub fn operation_size(&self) -> u16 {
-    match self {
-      Opcode::Load8 => 1,
-      Opcode::Load16 => 2,
-      Opcode::Load32 => 4,
-      Opcode::Store8 => 1,
-      Opcode::Store16 => 2,
-      _ => panic!("invalid"),
-    }
-  }
-
-  pub fn has_no_result(&self) -> bool {
-    match self {
-      Opcode::Nop => true,
-      //Opcode::Pin => true,
-      Opcode::Store8 => true,
-      Opcode::Store16 => true,
-      Opcode::WriteVar8 => true,
-      Opcode::WriteVar16 => true,
-      Opcode::WriteVar32 => true,
-      Opcode::RetFar => true,
-      Opcode::RetNear => true,
-      Opcode::Jmp => true,
-      Opcode::Jne => true,
-      Opcode::JmpTbl => true,
-      _ => false,
-    }
-  }
-
-  pub fn maybe_unused(&self) -> bool {
-    match self {
-      Opcode::Nop => true,
-      Opcode::Pin => true,
-      Opcode::Store8 => true,
-      Opcode::Store16 => true,
-      Opcode::WriteVar8 => true,
-      Opcode::WriteVar16 => true,
-      Opcode::WriteVar32 => true,
-      Opcode::CallFar => true,
-      Opcode::CallNear => true,
-      Opcode::CallPtr => true,
-      Opcode::CallArgs => true,
-      Opcode::Int => true,
-      Opcode::RetFar => true,
-      Opcode::RetNear => true,
-      Opcode::Jmp => true,
-      Opcode::Jne => true,
-      Opcode::JmpTbl => true,
-      _ => false,
-    }
-  }
-
-  pub fn has_side_effects(&self) -> bool {
-    match self {
-      Opcode::Pin => true,
-      Opcode::Store8 => true,
-      Opcode::Store16 => true,
-      Opcode::WriteVar8 => true,
-      Opcode::WriteVar16 => true,
-      Opcode::WriteVar32 => true,
-      Opcode::CallFar => true,
-      Opcode::CallNear => true,
-      Opcode::CallPtr => true,
-      Opcode::CallArgs => true,
-      Opcode::Int => true,
-      Opcode::RetFar => true,
-      Opcode::RetNear => true,
-      Opcode::Jmp => true,
-      Opcode::Jne => true,
-      Opcode::JmpTbl => true,
-      Opcode::AssertEven => true,
-      Opcode::AssertPos => true,
-      _ => false,
-    }
   }
 }
 
@@ -295,8 +174,9 @@ impl IR {
   }
 }
 
+// Constants
 impl IR {
-  pub fn append_const(&mut self, val: i16) -> Ref {
+  pub fn const_new(&mut self, val: i16) -> Ref {
     // Search existing constants for a duplicate (TODO: Make this into a hash-tbl if it gets slow)
     for (i, constval) in self.consts.iter().enumerate() {
       if val == *constval {
@@ -310,7 +190,7 @@ impl IR {
     Ref::Const(ConstRef(idx))
   }
 
-  pub fn lookup_const(&self, k: Ref) -> Option<i16> {
+  pub fn const_lookup(&self, k: Ref) -> Option<i16> {
     if let Ref::Const(ConstRef(i)) = k {
       Some(self.consts[i])
     } else {
@@ -318,6 +198,9 @@ impl IR {
     }
   }
 
+}
+
+impl IR {
   fn phi_populate<S: Into<Name>>(&mut self, sym: S, phiref: Ref) {
     let sym: Name = sym.into();
     let Ref::Instr(blk, idx) = phiref else { panic!("Invalid ref") };
