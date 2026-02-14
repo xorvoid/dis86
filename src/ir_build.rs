@@ -3,6 +3,7 @@ use crate::binary;
 use crate::segoff::{Seg, Off, SegOff};
 use crate::config::{self, Config};
 use crate::spec;
+use crate::sym;
 use crate::ir::*;
 use crate::types::{Type, ArraySize};
 use std::collections::{HashSet, HashMap};
@@ -1126,10 +1127,8 @@ fn offset_from<T>(slice: &[T], elt: &T) -> usize {
   n
 }
 
-impl IR {
-  pub fn from_instrs(instrs: &[instr::Instr], cfg: &Config, spec: &spec::Spec<'_>, binary: &binary::Binary, overlay: bool, pin_all: bool) -> IR {
-    let mut bld = IRBuilder::new(cfg, instrs, spec, binary, overlay, pin_all);
-    bld.build();
-    bld.ir
-  }
+pub fn build_from_instrs(instrs: &[instr::Instr], cfg: &Config, spec: &spec::Spec<'_>, binary: &binary::Binary, overlay: bool, pin_all: bool) -> IR {
+  let mut bld = IRBuilder::new(cfg, instrs, spec, binary, overlay, pin_all);
+  bld.build();
+  bld.ir
 }

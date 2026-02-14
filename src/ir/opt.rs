@@ -1,5 +1,5 @@
 use crate::ir::def::*;
-use crate::ir::sym;
+use crate::sym;
 use crate::types::Type;
 use std::collections::{hash_map, HashMap, HashSet, VecDeque};
 

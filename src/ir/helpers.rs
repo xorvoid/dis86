@@ -1,6 +1,6 @@
 use crate::asm::instr;
 use crate::ir::def::*;
-use crate::ir::sym;
+use crate::sym;
 use crate::types::Type;
 use crate::util::dvec::{DVec, DVecIndex};
 use std::collections::HashMap;

@@ -3,10 +3,12 @@ use crate::binary::{self, Binary};
 use crate::segoff::SegOff;
 use crate::asm::decode::Decoder;
 use crate::asm::intel_syntax;
-use crate::ir::{self, opt, sym, fuse};
+use crate::ir::{self, opt, fuse};
 use crate::config::Config;
 use crate::gen;
 use crate::ast;
+use crate::ir_build;
+use crate::sym;
 use crate::control_flow;
 use crate::spec;
 use std::fs::File;
@@ -193,7 +195,7 @@ pub fn run() -> i32 {
 
   let overlay = spec.start.is_overlay_addr();
 
-  let mut ir = ir::IR::from_instrs(&instr_list, &cfg, &spec, &binary, overlay, args.build_pin_all);
+  let mut ir = ir_build::build_from_instrs(&instr_list, &cfg, &spec, &binary, overlay, args.build_pin_all);
   if let Some(path) = args.emit_ir_initial.as_ref() {
     write_to_path(path, &format!("{}", ir));
     return 0;

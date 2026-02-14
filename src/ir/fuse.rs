@@ -1,5 +1,5 @@
 use crate::ir::def::*;
-use crate::ir::sym;
+use crate::sym;
 use crate::types::Type;
 
 pub fn fuse_adjacent_writevar16_to_writevar32(ir: &mut IR) {

@@ -1,4 +1,5 @@
 use crate::ir;
+use crate::sym;
 use crate::types::*;
 use crate::config::Config;
 use crate::control_flow::{self, ControlFlow, Detail, ElemId};
@@ -491,11 +492,11 @@ impl<'a> Builder<'a> {
     }
   }
 
-  fn symbol_to_expr(&mut self, symref: ir::sym::SymbolRef) -> Expr {
+  fn symbol_to_expr(&mut self, symref: sym::SymbolRef) -> Expr {
     let sym = symref.def(&self.ir.symbols);
 
     // grow the frame?
-    if symref.table() == ir::sym::Table::Local {
+    if symref.table() == sym::Table::Local {
 
       let start_off = sym.off;
       if start_off.abs() > self.frame_off_high.abs() {
@@ -518,7 +519,7 @@ impl<'a> Builder<'a> {
       //println!("{} | start_off: {}, end_off: {}", sym.name, start_off, end_off);
     }
 
-    if (symref.table() == ir::sym::Table::Local || symref.table() == ir::sym::Table::Param) &&
+    if (symref.table() == sym::Table::Local || symref.table() == sym::Table::Param) &&
       self.mappings.get(&sym.name).is_none()
     {
       let ss = crate::asm::instr::Reg::SS;
@@ -561,7 +562,7 @@ impl<'a> Builder<'a> {
     r
   }
 
-  fn symbol_to_expr_recurse(&self, mut expr: Expr, typ: &Type, mut access: ir::sym::Region) -> Expr {
+  fn symbol_to_expr_recurse(&self, mut expr: Expr, typ: &Type, mut access: sym::Region) -> Expr {
     // println!("symbol_to_expr_recurse");
     // println!("  expr:   {:?}", expr);
     // println!("  type:   {:?}", typ);
