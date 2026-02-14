@@ -225,7 +225,7 @@ impl Block {
 
 impl<'a> Builder<'a> {
   fn new(cfg: &'a Config, ir: &'a ir::IR, cf: &'a ControlFlow) -> Self {
-    let n_uses = ir::util::compute_uses(ir);
+    let n_uses = ir.compute_uses();
     Self {
       cfg,
       ir,

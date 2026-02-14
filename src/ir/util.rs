@@ -1,19 +1,5 @@
 use crate::ir;
-use std::collections::HashMap;
 use std::fmt::Write;
-
-pub fn compute_uses(ir: &ir::IR) -> HashMap<ir::Ref, usize> {
-  let mut n_uses = HashMap::new();
-  for b in ir.iter_blocks() {
-    for r in ir.iter_instrs(b) {
-      let instr = ir.instr(r).unwrap();
-      for oper in &instr.operands {
-        *n_uses.entry(*oper).or_insert(0) += 1;
-      }
-    }
-  }
-  n_uses
-}
 
 pub fn gen_graphviz_dotfile(ir: &ir::IR) -> Result<String, std::fmt::Error> {
   let mut buf = String::new();

@@ -408,6 +408,21 @@ impl IR {
  }
 }
 
+impl IR {
+  pub fn compute_uses(&self) -> HashMap<Ref, usize> {
+    let mut n_uses = HashMap::new();
+    for b in self.iter_blocks() {
+      for r in self.iter_instrs(b) {
+        let instr = self.instr(r).unwrap();
+        for oper in &instr.operands {
+          *n_uses.entry(*oper).or_insert(0) += 1;
+        }
+      }
+    }
+    n_uses
+  }
+}
+
 impl Block {
   pub fn new(name: &str) -> Self {
     Self {

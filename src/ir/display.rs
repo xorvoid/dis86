@@ -182,7 +182,7 @@ impl fmt::Display for IR {
 }
 
 pub fn display_ir_with_uses(ir: &IR) -> Result<String, std::fmt::Error> {
-  let n_uses = util::compute_uses(ir);
+  let n_uses = ir.compute_uses();
   let mut r = Formatter::new();
   for bref in ir.iter_blocks() {
     let blk = ir.block(bref);

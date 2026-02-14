@@ -1,6 +1,6 @@
 mod opcode;
 mod def;
-mod helpers;
+mod methods;
 pub use def::*;
 
 pub mod display;
