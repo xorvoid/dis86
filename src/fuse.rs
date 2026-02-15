@@ -18,7 +18,7 @@ pub fn fuse_adjacent_writevar16_to_writevar32(ir: &mut IR) {
       if low_sym.size != 4 { continue; }
 
       // Find high write16: E.g. 'writevar16 _local_0028@2        ax.3' where _local_0028 is u32
-      let Some(high_ref) = ir.prev_ref_in_block(low_ref) else { continue };
+      let Some(high_ref) = ir.instr_prev(low_ref) else { continue };
       let high_instr = ir.instr(high_ref).unwrap();
       if high_instr.opcode != Opcode::WriteVar16 { continue; }
       let Ref::Symbol(high_symref) = &high_instr.operands[0] else { continue };
@@ -107,7 +107,7 @@ pub fn fuse_make32_load16_to_load32(ir: &mut IR) {
       let mut cur = Ref::Instr(make32_b, start_i);
       let mut allowed = true;
       loop {
-        cur = ir.next_ref_in_block(cur).unwrap();
+        cur = ir.instr_next(cur).unwrap();
         if cur == make32_ref { break }
         if cur == high_ref || cur == low_ref { continue };
         let instr = ir.instr(cur).unwrap();

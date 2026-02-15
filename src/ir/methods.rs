@@ -5,45 +5,6 @@ use crate::types::Type;
 use crate::ir::dvec::{DVec, DVecIndex};
 use std::collections::HashMap;
 
-impl Ref {
-  pub fn is_const(self) -> bool {
-    let Ref::Const(_) = self else { return false };
-    true
-  }
-
-  pub fn unwrap_instr(self) -> (BlockRef, DVecIndex) {
-    let Ref::Instr(b, i) = self else { panic!("expected instr ref") };
-    (b, i)
-  }
-
-  pub fn unwrap_block(self) -> BlockRef {
-    let Ref::Block(blkref) = self else { panic!("expected block ref") };
-    blkref
-  }
-
-  pub fn unwrap_symbol(self) -> sym::SymbolRef {
-    let Ref::Symbol(symref) = self else { panic!("expected symbol ref") };
-    symref
-  }
-
-  pub fn unwrap_func(self) -> usize {
-    let Ref::Func(idx) = self else { panic!("expected function ref") };
-    idx
-  }
-}
-
-impl From<instr::Reg> for Name {
-  fn from(reg: instr::Reg) -> Self {
-    Self::Reg(reg)
-  }
-}
-
-impl From<&instr::Reg> for Name {
-  fn from(reg: &instr::Reg) -> Self {
-    Self::Reg(*reg)
-  }
-}
-
 impl IR {
   pub fn new() -> Self {
     Self {
@@ -55,25 +16,16 @@ impl IR {
       blocks: vec![],
     }
   }
+}
 
-  pub fn block(&self, blkref: BlockRef) -> &Block {
-    self.blocks[blkref.0].as_ref().unwrap()
-  }
-
-  pub fn block_mut(&mut self, blkref: BlockRef) -> &mut Block {
-    self.blocks[blkref.0].as_mut().unwrap()
-  }
-
+////////////////////////////////////////////////////////////////////////////////////
+// Block creation and iteration
+////////////////////////////////////////////////////////////////////////////////////
+impl IR {
   pub fn push_block(&mut self, blk: Block) -> BlockRef {
     let idx = self.blocks.len();
     self.blocks.push(Some(blk));
     BlockRef(idx)
-  }
-
-  pub fn remove_block(&mut self, blkref: BlockRef) {
-    // Caller is responsible for ensuring there are no references to this block elsewhere in the IR
-    assert!(self.blocks[blkref.0].is_some());
-    self.blocks[blkref.0] = None;
   }
 
   pub fn iter_blocks(&self) -> impl Iterator<Item=BlockRef> {
@@ -85,6 +37,25 @@ impl IR {
       }
     }
     blkrefs.into_iter()
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////////
+// Blocks
+////////////////////////////////////////////////////////////////////////////////////
+impl IR {
+  pub fn block(&self, blkref: BlockRef) -> &Block {
+    self.blocks[blkref.0].as_ref().unwrap()
+  }
+
+  pub fn block_mut(&mut self, blkref: BlockRef) -> &mut Block {
+    self.blocks[blkref.0].as_mut().unwrap()
+  }
+
+  pub fn remove_block(&mut self, blkref: BlockRef) {
+    // Caller is responsible for ensuring there are no references to this block elsewhere in the IR
+    assert!(self.blocks[blkref.0].is_some());
+    self.blocks[blkref.0] = None;
   }
 
   pub fn iter_instrs(&self, blk: BlockRef) -> impl Iterator<Item=Ref> {
@@ -126,8 +97,13 @@ impl IR {
   pub fn last_instr(&self, blkref: BlockRef) -> Option<&Instr> {
     self.instr(self.last_ref_in_block(blkref))
   }
+}
 
-  pub fn prev_ref_in_block(&self, r: Ref) -> Option<Ref> {
+////////////////////////////////////////////////////////////////////////////////////
+// Instructions
+////////////////////////////////////////////////////////////////////////////////////
+impl IR {
+  pub fn instr_prev(&self, r: Ref) -> Option<Ref> {
     let Ref::Instr(b, mut i) = r else { return None };
     let blk = self.block(b);
     while i > blk.instrs.start() {
@@ -139,7 +115,7 @@ impl IR {
     None
   }
 
-  pub fn next_ref_in_block(&self, r: Ref) -> Option<Ref> {
+  pub fn instr_next(&self, r: Ref) -> Option<Ref> {
     let Ref::Instr(b, mut i) = r else { return None };
     let blk = self.block(b);
     loop {
@@ -174,7 +150,9 @@ impl IR {
   }
 }
 
+////////////////////////////////////////////////////////////////////////////////////
 // Constants
+////////////////////////////////////////////////////////////////////////////////////
 impl IR {
   pub fn const_new(&mut self, val: i16) -> Ref {
     // Search existing constants for a duplicate (TODO: Make this into a hash-tbl if it gets slow)
@@ -200,6 +178,9 @@ impl IR {
 
 }
 
+////////////////////////////////////////////////////////////////////////////////////
+// Phi
+////////////////////////////////////////////////////////////////////////////////////
 impl IR {
   fn phi_populate<S: Into<Name>>(&mut self, sym: S, phiref: Ref) {
     let sym: Name = sym.into();
@@ -327,3 +308,34 @@ impl Block {
     }
   }
 }
+
+
+impl Ref {
+  pub fn is_const(self) -> bool {
+    let Ref::Const(_) = self else { return false };
+    true
+  }
+
+  pub fn unwrap_instr(self) -> (BlockRef, DVecIndex) {
+    let Ref::Instr(b, i) = self else { panic!("expected instr ref") };
+    (b, i)
+  }
+
+  pub fn unwrap_block(self) -> BlockRef {
+    let Ref::Block(blkref) = self else { panic!("expected block ref") };
+    blkref
+  }
+
+  pub fn unwrap_symbol(self) -> sym::SymbolRef {
+    let Ref::Symbol(symref) = self else { panic!("expected symbol ref") };
+    symref
+  }
+
+  pub fn unwrap_func(self) -> usize {
+    let Ref::Func(idx) = self else { panic!("expected function ref") };
+    idx
+  }
+}
+
+impl From<instr::Reg> for Name { fn from(reg: instr::Reg) -> Self { Self::Reg(reg) } }
+impl From<&instr::Reg> for Name { fn from(reg: &instr::Reg) -> Self { Self::Reg(*reg) } }
