@@ -111,6 +111,11 @@ impl IR {
     let idx = self.block_mut(blkref).instrs.push_back(instr);
     Ref::Instr(blkref, idx)
   }
+
+  pub fn block_instr_prepend(&mut self, blkref: BlockRef, instr: Instr) -> Ref {
+    let idx = self.block_mut(blkref).instrs.push_front(instr);
+    Ref::Instr(blkref, idx)
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -198,10 +203,10 @@ impl IR {
 impl IR {
   fn phi_populate<S: Into<Name>>(&mut self, sym: S, phiref: Ref) {
     let sym: Name = sym.into();
-    let Ref::Instr(blk, idx) = phiref else { panic!("Invalid ref") };
+    let Ref::Instr(blk, _) = phiref else { panic!("Invalid ref") };
 
     let preds = self.block(blk).preds.clone(); // ARGH: Need to break borrow on 'self' so we can recurse
-    assert!(self.block_mut(blk).instrs[idx].opcode == Opcode::Phi);
+    assert!(self.instr(phiref).unwrap().opcode == Opcode::Phi);
 
     // recurse each pred
     let mut refs = vec![];
@@ -210,7 +215,7 @@ impl IR {
     }
 
     // update the phi with operands
-    self.block_mut(blk).instrs[idx].operands = refs;
+    self.instr_mut(phiref).unwrap().operands = refs;
 
     // TODO: Remove trivial phis
   }
@@ -218,14 +223,13 @@ impl IR {
   fn phi_create(&mut self, sym: Name, blk: BlockRef) -> Ref {
     // create phi node (without operands) to terminate recursion
 
-    let idx = self.block_mut(blk).instrs.push_front(Instr {
+    let vref = self.block_instr_prepend(blk, Instr {
       typ: Type::U16, // TODO: SANITY CHECK THAT NO OTHER SIZES CAN GO THROUGH A PHI!!
       attrs: Attribute::NONE,
       opcode: Opcode::Phi,
       operands: vec![],
     });
 
-    let vref = Ref::Instr(blk, idx);
     self.set_var(sym, blk, vref);
 
     vref
@@ -311,6 +315,11 @@ impl IR {
 }
 
 impl Ref {
+  pub fn is_instr(self) -> bool {
+    let Ref::Instr(_, _) = self else { return false };
+    true
+  }
+
   pub fn is_const(self) -> bool {
     let Ref::Const(_) = self else { return false };
     true

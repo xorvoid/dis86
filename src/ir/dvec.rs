@@ -2,6 +2,15 @@ use std::ops::{Index, IndexMut, Range};
 
 pub type DVecIndex = i64;
 
+// Requirements:
+//  - Iterate all instrs (start to finish)
+//  - Get ref to last item
+//  - Get the total count
+//  - Get previous ref (from a ref)
+//  - Get next ref (from a ref)
+//  - Lookup item (from a ref)
+//  - Insert front / back / before / after
+
 // Double-ended Vector
 #[derive(Debug)]
 pub struct DVec<T> {
