@@ -2,7 +2,7 @@ pub use crate::ir::opcode::Opcode;
 use crate::asm::instr;
 use crate::sym;
 use crate::types::Type;
-use crate::ir::dvec::{DVec, DVecIndex};
+use crate::ir::block_data::InstrData;
 use std::collections::HashMap;
 
 // SSA IR Definitions
@@ -14,7 +14,7 @@ use std::collections::HashMap;
 pub enum Ref {
   //None,
   Const(ConstRef),
-  Instr(BlockRef, DVecIndex),
+  Instr(BlockRef, usize),
   Init(instr::Reg),
   Block(BlockRef),
   Symbol(sym::SymbolRef),
@@ -51,7 +51,7 @@ pub struct Block {
   pub name: String,
   pub defs: HashMap<Name, Ref>,
   pub preds: Vec<BlockRef>,
-  pub(super) instrs: DVec<Instr>,
+  pub(super) data: InstrData,
   pub sealed: bool, // has all predecessors?
   pub incomplete_phis: Vec<(Name, Ref)>,
 }

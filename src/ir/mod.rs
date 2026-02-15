@@ -1,4 +1,4 @@
-mod dvec;
+mod block_data;
 mod opcode;
 mod def;
 mod methods;

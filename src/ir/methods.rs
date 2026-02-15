@@ -2,7 +2,7 @@ use crate::asm::instr;
 use crate::ir::def::*;
 use crate::sym;
 use crate::types::Type;
-use crate::ir::dvec::{DVec, DVecIndex};
+use crate::ir::block_data::{self, InstrData};
 use std::collections::HashMap;
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -20,21 +20,22 @@ impl IR {
     }
   }
 
-  pub fn new_block(&mut self, name: &str) -> Block {
-    Block {
+  pub fn add_block(&mut self, name: &str) -> BlockRef {
+    let idx = self.blocks.len();
+    let blkref = BlockRef(idx);
+
+    let blk = Block {
       name: name.to_string(),
       defs: HashMap::new(),
       preds: vec![],
-      instrs: DVec::new(),
+      data: InstrData::new(blkref),
       sealed: false,
       incomplete_phis: vec![],
-    }
-  }
+    };
 
-  pub fn push_block(&mut self, blk: Block) -> BlockRef {
-    let idx = self.blocks.len();
     self.blocks.push(Some(blk));
-    BlockRef(idx)
+
+    blkref
   }
 }
 
@@ -54,7 +55,16 @@ impl IR {
   }
 
   pub fn iter_instrs(&self, blk: BlockRef) -> impl Iterator<Item=Ref> {
-    self.block(blk).instrs.range().map(move |idx| Ref::Instr(blk, idx))
+    // NOTE: Not the most efficent, but this prevents holding an immutable reference
+    // which would prevent mutation during the iteration
+    let data = &self.block(blk).data;
+    let mut refs = vec![];
+    let mut next = data.first();
+    while let Some(cur) = next {
+      refs.push(cur);
+      next = data.next(cur);
+    }
+    refs.into_iter()
   }
 }
 
@@ -77,7 +87,7 @@ impl IR {
   }
 
   pub fn block_last(&self, blkref: BlockRef) -> Ref {
-    Ref::Instr(blkref, self.block(blkref).instrs.last_idx().unwrap())
+    self.block(blkref).data.last().unwrap()
   }
 
   pub fn block_last_instr(&self, blkref: BlockRef) -> Option<&Instr> {
@@ -104,17 +114,15 @@ impl IR {
   }
 
   pub fn block_instr_count(&mut self, blkref: BlockRef) -> usize {
-    self.block(blkref).instrs.count()
+    self.block(blkref).data.count()
   }
 
   pub fn block_instr_append(&mut self, blkref: BlockRef, instr: Instr) -> Ref {
-    let idx = self.block_mut(blkref).instrs.push_back(instr);
-    Ref::Instr(blkref, idx)
+    self.block_mut(blkref).data.insert(instr, block_data::Loc::Last)
   }
 
   pub fn block_instr_prepend(&mut self, blkref: BlockRef, instr: Instr) -> Ref {
-    let idx = self.block_mut(blkref).instrs.push_front(instr);
-    Ref::Instr(blkref, idx)
+    self.block_mut(blkref).data.insert(instr, block_data::Loc::First)
   }
 }
 
@@ -123,40 +131,44 @@ impl IR {
 ////////////////////////////////////////////////////////////////////////////////////
 impl IR {
   pub fn instr_prev(&self, r: Ref) -> Option<Ref> {
-    let Ref::Instr(b, mut i) = r else { return None };
+    let Ref::Instr(b, _) = r else { return None };
     let blk = self.block(b);
-    while i > blk.instrs.start() {
-      i -= 1;
-      if blk.instrs[i].opcode != Opcode::Nop {
-        return Some(Ref::Instr(b, i));
+
+    let mut iref = Some(r);
+    while let Some(r) = iref {
+      if self.instr(r).unwrap().opcode != Opcode::Nop {
+        return Some(r);
       }
+      iref = blk.data.prev(r);
     }
     None
   }
 
   pub fn instr_next(&self, r: Ref) -> Option<Ref> {
-    let Ref::Instr(b, mut i) = r else { return None };
+    let Ref::Instr(b, _) = r else { return None };
     let blk = self.block(b);
-    loop {
-      i += 1;
-      if i >= blk.instrs.end() { return None }
-      if blk.instrs[i].opcode != Opcode::Nop {
-        return Some(Ref::Instr(b, i));
+
+    let mut iref = Some(r);
+    while let Some(r) = iref {
+      if self.instr(r).unwrap().opcode != Opcode::Nop {
+        return Some(r);
       }
+      iref = blk.data.next(r);
     }
+    None
   }
 
   pub fn instr(&self, r: Ref) -> Option<&Instr> {
-    if let Ref::Instr(b, i) = r {
-      Some(&self.block(b).instrs[i])
+    if let Ref::Instr(b, _) = r {
+      Some(self.block(b).data.lookup(r))
     } else {
       None
     }
   }
 
   pub fn instr_mut(&mut self, r: Ref) -> Option<&mut Instr> {
-    if let Ref::Instr(b, i) = r {
-      Some(&mut self.block_mut(b).instrs[i])
+    if let Ref::Instr(b, _) = r {
+      Some(self.block_mut(b).data.lookup_mut(r))
     } else {
       None
     }
@@ -325,7 +337,7 @@ impl Ref {
     true
   }
 
-  pub fn unwrap_instr(self) -> (BlockRef, DVecIndex) {
+  pub fn unwrap_instr(self) -> (BlockRef, usize) {
     let Ref::Instr(b, i) = self else { panic!("expected instr ref") };
     (b, i)
   }

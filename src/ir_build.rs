@@ -105,8 +105,7 @@ impl<'a> IRBuilder<'a> {
   }
 
   fn new_block(&mut self, name: &str) -> BlockRef {
-    let blk = self.ir.new_block(name);
-    self.ir.push_block(blk)
+    self.ir.add_block(name)
   }
 
   fn get_block(&mut self, effective: SegOff) -> BlockRef {

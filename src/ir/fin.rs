@@ -43,15 +43,15 @@ impl Finalizer {
     let instr = ir.instr(r).unwrap();
     let dest_blkref = instr.operands[oper_idx];
 
-    // generate new block
-    let mut new_blk = ir.new_block(&format!("phi_{:04}", num));
+    // append a new block to the ir
+    let new_blkref = ir.add_block(&format!("phi_{:04}", num));
+    let new_blk = ir.block_mut(new_blkref);
+
+    // seal block
     new_blk.sealed = true;
 
     // add preds to new blk
     new_blk.preds.push(blkref);
-
-    // append the block to the ir
-    let new_blkref = ir.push_block(new_blk);
 
     // have the new block jump to the original destination
     ir.block_instr_append(new_blkref, Instr {
