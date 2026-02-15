@@ -107,7 +107,7 @@ impl IR {
     self.block(blkref).instrs.count()
   }
 
-  pub fn block_append_instr(&mut self, blkref: BlockRef, instr: Instr) -> Ref {
+  pub fn block_instr_append(&mut self, blkref: BlockRef, instr: Instr) -> Ref {
     let idx = self.block_mut(blkref).instrs.push_back(instr);
     Ref::Instr(blkref, idx)
   }

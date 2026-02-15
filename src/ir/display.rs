@@ -161,9 +161,8 @@ impl Formatter {
     for bref in ir.iter_blocks() {
       let blk = ir.block(bref);
       self.fmt_blkhdr(bref, blk)?;
-      for idx in blk.instrs.range() {
-        let iref = Ref::Instr(bref, idx);
-        let instr = &blk.instrs[idx];
+      for iref in ir.iter_instrs(bref) {
+        let instr = ir.instr(iref).unwrap();
         if instr.opcode == Opcode::Nop { continue; }
         self.fmt_instr(ir, iref, instr)?;
       }
@@ -187,9 +186,9 @@ pub fn display_ir_with_uses(ir: &IR) -> Result<String, std::fmt::Error> {
   for bref in ir.iter_blocks() {
     let blk = ir.block(bref);
     r.fmt_blkhdr(bref, blk)?;
-    for idx in blk.instrs.range() {
-      let iref = Ref::Instr(bref, idx);
-      let instr = &blk.instrs[idx];
+
+    for iref in ir.iter_instrs(bref) {
+      let instr = ir.instr(iref).unwrap();
       if instr.opcode == Opcode::Nop { continue; }
 
       let n = n_uses.get(&iref).unwrap_or(&0);

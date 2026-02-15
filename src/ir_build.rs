@@ -223,7 +223,7 @@ impl<'a> IRBuilder<'a> {
       operands,
     };
 
-    self.ir.block_append_instr(self.cur, instr)
+    self.ir.block_instr_append(self.cur, instr)
   }
 
   fn append_jmp(&mut self, next: BlockRef) {

@@ -47,19 +47,19 @@ impl Finalizer {
     let mut new_blk = ir.new_block(&format!("phi_{:04}", num));
     new_blk.sealed = true;
 
-    // have the new block jump to the original destination
-    new_blk.instrs.push_back(Instr {
-      typ: crate::types::Type::Void,
-      attrs: Attribute::NONE,
-      opcode: Opcode::Jmp,
-      operands: vec![dest_blkref],
-    });
-
     // add preds to new blk
     new_blk.preds.push(blkref);
 
     // append the block to the ir
     let new_blkref = ir.push_block(new_blk);
+
+    // have the new block jump to the original destination
+    ir.block_instr_append(new_blkref, Instr {
+      typ: crate::types::Type::Void,
+      attrs: Attribute::NONE,
+      opcode: Opcode::Jmp,
+      operands: vec![dest_blkref],
+    });
 
     // update the jne instruction to jump to the new blk
     let instr = ir.instr_mut(r).unwrap();
