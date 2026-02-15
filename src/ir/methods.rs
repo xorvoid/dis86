@@ -124,6 +124,10 @@ impl IR {
   pub fn block_instr_prepend(&mut self, blkref: BlockRef, instr: Instr) -> Ref {
     self.block_mut(blkref).data.insert(instr, block_data::Loc::First)
   }
+
+  pub fn block_instr_insert_before(&mut self, blkref: BlockRef, before: Ref, instr: Instr) -> Ref {
+    self.block_mut(blkref).data.insert(instr, block_data::Loc::Before(before))
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////
@@ -134,7 +138,7 @@ impl IR {
     let Ref::Instr(b, _) = r else { return None };
     let blk = self.block(b);
 
-    let mut iref = Some(r);
+    let mut iref = blk.data.prev(r);
     while let Some(r) = iref {
       if self.instr(r).unwrap().opcode != Opcode::Nop {
         return Some(r);
@@ -148,7 +152,7 @@ impl IR {
     let Ref::Instr(b, _) = r else { return None };
     let blk = self.block(b);
 
-    let mut iref = Some(r);
+    let mut iref = blk.data.next(r);
     while let Some(r) = iref {
       if self.instr(r).unwrap().opcode != Opcode::Nop {
         return Some(r);

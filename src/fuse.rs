@@ -48,6 +48,69 @@ pub fn fuse_adjacent_writevar16_to_writevar32(ir: &mut IR) {
   }
 }
 
+/*
+From:
+--------------------------------------------
+  t1    = u16      readvar16  sym
+  t2    = u16      readvar16  sym@+2
+To:
+--------------------------------------------
+  tmp   = u32      readvar32 sym
+  t1    = u16      lower16 tmp
+  t2    = u16      upper16 tmp
+*/
+pub fn fuse_adjacent_readvar16_to_readvar32(ir: &mut IR) {
+  // FIXME: THIS FUNCTION IS MESSY... CAN WE MAKE IT CLEANER???
+  for b in ir.iter_blocks() {
+    for r in ir.iter_instrs(b) {
+
+      // Find high read16: E.g. 'readvar16 val@+2' where 'var' is u32
+      let high_ref = r;
+      let high_instr = ir.instr(high_ref).unwrap();
+      if high_instr.opcode != Opcode::ReadVar16 { continue; }
+      let Ref::Symbol(high_symref) = &high_instr.operands[0] else { continue };
+      let high_sym = high_symref.def(&ir.symbols);
+      if high_symref.off() != 2 { continue; }
+      if high_symref.sz() != 2 { continue; }
+      if high_sym.size != 4 { continue; }
+
+      // Find low read16: E.g. 'readvar16 var' where 'var' is u32
+      let Some(low_ref) = ir.instr_prev(high_ref) else { continue };
+      let low_instr = ir.instr(low_ref).unwrap();
+      if low_instr.opcode != Opcode::ReadVar16 { continue; }
+      let Ref::Symbol(low_symref) = &low_instr.operands[0] else { continue };
+      let low_sym = low_symref.def(&ir.symbols);
+      if low_symref.off() != 0 { continue; }
+      if low_symref.sz() != 2 { continue; }
+      if low_sym as *const _ != high_sym as *const _ { continue; }
+
+      // New sequence: ReadVar32, Lower, Upper
+      let symref = sym::SymbolRef::join_adjacent(&ir.symbols, *low_symref, *high_symref).unwrap();
+
+      let loadval = ir.block_instr_insert_before(b, low_ref, Instr {
+        typ: Type::U32,
+        attrs: Attribute::NONE,
+        opcode: Opcode::ReadVar32,
+        operands: vec![Ref::Symbol(symref)],
+      });
+
+      *ir.instr_mut(low_ref).unwrap() = Instr {
+        typ: Type::U16,
+        attrs: Attribute::NONE,
+        opcode: Opcode::Lower16,
+        operands: vec![loadval],
+      };
+
+      *ir.instr_mut(high_ref).unwrap() = Instr {
+        typ: Type::U16,
+        attrs: Attribute::NONE,
+        opcode: Opcode::Upper16,
+        operands: vec![loadval],
+      };
+    }
+  }
+}
+
 fn is_fusable_load16_to_load32(ir: &IR, high_ref: Ref, low_ref: Ref) -> bool {
   let Some(high_instr) = ir.instr(high_ref) else { return false };
   let Some(low_instr) = ir.instr(low_ref) else { return false };
@@ -134,5 +197,6 @@ pub fn fuse_make32_load16_to_load32(ir: &mut IR) {
 
 pub fn fuse_mem(ir: &mut IR) {
   fuse_adjacent_writevar16_to_writevar32(ir);
+  fuse_adjacent_readvar16_to_readvar32(ir);
   fuse_make32_load16_to_load32(ir);
 }

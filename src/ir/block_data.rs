@@ -105,6 +105,20 @@ impl InstrData {
         }
         self.last = Some(r);
       }
+      Loc::Before(rref) => {
+        let next = rref;
+        let prev = self.prev(rref); // possibly None, if first
+
+        self.lookup_link_mut(r).next = Some(next);
+        self.lookup_link_mut(r).prev = prev;
+
+        self.lookup_link_mut(next).prev = Some(r);
+
+        match prev {
+          Some(prev) => self.lookup_link_mut(prev).next = Some(r),
+          None => self.first = Some(r),
+        }
+      }
       _ => panic!("UNIMPL INSERT METHOD"),
     }
 
