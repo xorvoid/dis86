@@ -183,6 +183,16 @@ impl IR {
     if instr.opcode != op { return None }
     Some((instr, r))
   }
+
+  pub fn instr_matches_one(&self, r: Ref, ops: &[Opcode]) -> Option<(&Instr, Ref)> {
+    let instr = self.instr(r)?;
+    for op in ops {
+      if &instr.opcode == op {
+        return Some((instr, r));
+      }
+    }
+    None
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////

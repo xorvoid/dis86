@@ -134,9 +134,10 @@ To:
   t4 = eq t1 #0
 */
 pub fn reduce_equal_zero_32(ir: &mut IR) {
+  let ops = &[Opcode::Eq, Opcode::Neq];
   for b in ir.iter_blocks() {
     for r in ir.iter_instrs(b) {
-      let Some((eq_instr, eq_ref)) = ir.instr_matches(r, Opcode::Eq) else {continue};
+      let Some((eq_instr, eq_ref)) = ir.instr_matches_one(r, ops) else {continue};
       let Some(k) = ir.const_lookup(eq_instr.operands[1]) else {continue};
       if k != 0 { continue; }
       let Some((or_instr, _)) = ir.instr_matches(eq_instr.operands[0], Opcode::Or) else {continue};
