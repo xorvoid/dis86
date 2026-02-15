@@ -16,7 +16,7 @@ impl Finalizer {
   // one or more target block contain phis
   fn insert_intermediate_phi_blocks(&mut self, ir: &mut IR) {
     for blkref in ir.iter_blocks() {
-      let r = ir.last_ref_in_block(blkref);
+      let r = ir.block_last(blkref);
       let exits = ir.block_exits(blkref);
       if exits.len() <= 1 { continue; }
       let mut old_to_new = HashMap::new();
@@ -44,7 +44,7 @@ impl Finalizer {
     let dest_blkref = instr.operands[oper_idx];
 
     // generate new block
-    let mut new_blk = Block::new(&format!("phi_{:04}", num));
+    let mut new_blk = ir.new_block(&format!("phi_{:04}", num));
     new_blk.sealed = true;
 
     // have the new block jump to the original destination

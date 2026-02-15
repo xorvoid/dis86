@@ -105,7 +105,8 @@ impl<'a> IRBuilder<'a> {
   }
 
   fn new_block(&mut self, name: &str) -> BlockRef {
-    self.ir.push_block(Block::new(name))
+    let blk = self.ir.new_block(name);
+    self.ir.push_block(blk)
   }
 
   fn get_block(&mut self, effective: SegOff) -> BlockRef {
@@ -265,7 +266,7 @@ impl<'a> IRBuilder<'a> {
     let next_bref = self.get_block(next);
 
     // Make sure the last instruction is a jump or ret
-    match self.ir.last_instr(self.cur).map(|ins| ins.opcode) {
+    match self.ir.block_last_instr(self.cur).map(|ins| ins.opcode) {
       Some(Opcode::Jmp) => (),
       Some(Opcode::Jne) => (),
       Some(Opcode::JmpTbl) => (),

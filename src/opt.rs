@@ -401,7 +401,7 @@ pub fn deadblock_elimination(ir: &mut IR) {
       }
     }
 
-    ir.remove_block(blkref);
+    ir.block_remove(blkref);
   }
 }
 

@@ -5,6 +5,9 @@ use crate::types::Type;
 use crate::ir::dvec::{DVec, DVecIndex};
 use std::collections::HashMap;
 
+////////////////////////////////////////////////////////////////////////////////////
+// Creation
+////////////////////////////////////////////////////////////////////////////////////
 impl IR {
   pub fn new() -> Self {
     Self {
@@ -16,18 +19,29 @@ impl IR {
       blocks: vec![],
     }
   }
-}
 
-////////////////////////////////////////////////////////////////////////////////////
-// Block creation and iteration
-////////////////////////////////////////////////////////////////////////////////////
-impl IR {
+  pub fn new_block(&mut self, name: &str) -> Block {
+    Block {
+      name: name.to_string(),
+      defs: HashMap::new(),
+      preds: vec![],
+      instrs: DVec::new(),
+      sealed: false,
+      incomplete_phis: vec![],
+    }
+  }
+
   pub fn push_block(&mut self, blk: Block) -> BlockRef {
     let idx = self.blocks.len();
     self.blocks.push(Some(blk));
     BlockRef(idx)
   }
+}
 
+////////////////////////////////////////////////////////////////////////////////////
+// Iteration
+////////////////////////////////////////////////////////////////////////////////////
+impl IR {
   pub fn iter_blocks(&self) -> impl Iterator<Item=BlockRef> {
     // FIXME: Can we avoid the intermediate vec?? (Without holding &self hostage?)
     let mut blkrefs = vec![];
@@ -37,6 +51,10 @@ impl IR {
       }
     }
     blkrefs.into_iter()
+  }
+
+  pub fn iter_instrs(&self, blk: BlockRef) -> impl Iterator<Item=Ref> {
+    self.block(blk).instrs.range().map(move |idx| Ref::Instr(blk, idx))
   }
 }
 
@@ -52,22 +70,22 @@ impl IR {
     self.blocks[blkref.0].as_mut().unwrap()
   }
 
-  pub fn remove_block(&mut self, blkref: BlockRef) {
+  pub fn block_remove(&mut self, blkref: BlockRef) {
     // Caller is responsible for ensuring there are no references to this block elsewhere in the IR
     assert!(self.blocks[blkref.0].is_some());
     self.blocks[blkref.0] = None;
   }
 
-  pub fn iter_instrs(&self, blk: BlockRef) -> impl Iterator<Item=Ref> {
-    self.block(blk).instrs.range().map(move |idx| Ref::Instr(blk, idx))
-  }
-
-  pub fn last_ref_in_block(&self, blkref: BlockRef) -> Ref {
+  pub fn block_last(&self, blkref: BlockRef) -> Ref {
     Ref::Instr(blkref, self.block(blkref).instrs.last_idx().unwrap())
   }
 
+  pub fn block_last_instr(&self, blkref: BlockRef) -> Option<&Instr> {
+    self.instr(self.block_last(blkref))
+  }
+
   pub fn block_exits(&self, blkref: BlockRef) -> Vec<BlockRef> {
-    let instr = self.last_instr(blkref).unwrap();
+    let instr = self.block_last_instr(blkref).unwrap();
 
     match instr.opcode {
       Opcode::RetFar | Opcode::RetNear => vec![],
@@ -92,10 +110,6 @@ impl IR {
   pub fn block_append_instr(&mut self, blkref: BlockRef, instr: Instr) -> Ref {
     let idx = self.block_mut(blkref).instrs.push_back(instr);
     Ref::Instr(blkref, idx)
-  }
-
-  pub fn last_instr(&self, blkref: BlockRef) -> Option<&Instr> {
-    self.instr(self.last_ref_in_block(blkref))
   }
 }
 
@@ -295,20 +309,6 @@ impl IR {
     n_uses
   }
 }
-
-impl Block {
-  pub fn new(name: &str) -> Self {
-    Self {
-      name: name.to_string(),
-      defs: HashMap::new(),
-      preds: vec![],
-      instrs: DVec::new(),
-      sealed: false,
-      incomplete_phis: vec![],
-    }
-  }
-}
-
 
 impl Ref {
   pub fn is_const(self) -> bool {
