@@ -1,16 +1,18 @@
 use crate::asm::instr;
 use crate::ir::def::*;
 use crate::sym;
-use crate::types::Type;
+use crate::types::{Type, TypeDatabase};
 use crate::ir::block_data::{self, InstrData};
 use std::collections::HashMap;
+use std::rc::Rc;
 
 ////////////////////////////////////////////////////////////////////////////////////
 // Creation
 ////////////////////////////////////////////////////////////////////////////////////
 impl IR {
-  pub fn new() -> Self {
+  pub fn new(types: Rc<TypeDatabase>) -> Self {
     Self {
+      types,
       consts: vec![],
       symbols: sym::SymbolMap::new(),
       funcs: vec![],

@@ -1,10 +1,11 @@
 use crate::asm::instr;
 use crate::config::Config;
 use crate::ir::*;
-use crate::types::Type;
+use crate::access;
+use crate::types::{Type, TypeDatabase};
 use std::cmp::Ordering;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Table {
   Param,
   Local,
@@ -13,23 +14,23 @@ pub enum Table {
 }
 
 // Id is a reference to lookup the cooresponding Symbol
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct Id {
   table: Table,
   idx: usize,
 }
 
 // Region is information about a byte range region
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Region {
   pub off: i32,
   pub sz: u16,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SymbolRef {
   id: Id,
-  pub access_region: Region,   // Access using this region with the symbol
+  pub region: Region,   // Access using this region with the symbol
 }
 
 impl SymbolRef {
@@ -51,18 +52,18 @@ impl SymbolRef {
   }
 
   pub fn off(&self) -> i32 {
-    self.access_region.off
+    self.region.off
   }
 
   pub fn sz(&self) -> u16 {
-    self.access_region.sz
+    self.region.sz
   }
 
   pub fn get_type<'a>(&self, map: &'a SymbolMap) -> &'a Type {
     &self.def(map).typ
   }
 
-  pub fn join_adjacent(map: &SymbolMap, low: SymbolRef, high: SymbolRef) -> Option<SymbolRef> {
+  pub fn join_adjacent(map: &SymbolMap, low: &SymbolRef, high: &SymbolRef) -> Option<SymbolRef> {
     let low_sym = low.def(map);
     let high_sym = high.def(map);
     if low_sym as *const _ != high_sym as *const _ {
@@ -74,15 +75,24 @@ impl SymbolRef {
     }
     Some(SymbolRef {
       id: low.id,
-      access_region: Region {
-        off: low.access_region.off,
-        sz: low.access_region.sz + high.access_region.sz,
+      region: Region {
+        off: low.region.off,
+        sz: low.region.sz + high.region.sz,
       }
     })
   }
-
-
 }
+
+/////////////////////////////////////////////////////////////////
+
+pub fn determine_access_path(types: &TypeDatabase, map: &SymbolMap, sym: &SymbolRef) -> access::Access {
+  let typ = sym.get_type(map);
+  let off = sym.region.off;
+  assert!(off >= 0);
+  access::from_type_and_offset(types, typ, off as usize, sym.region.sz as usize)
+}
+
+/////////////////////////////////////////////////////////////////
 
 #[derive(Debug, Clone)]
 pub struct SymbolDef {
@@ -227,7 +237,7 @@ impl SymbolMap {
             table,
             idx: i,
           },
-          access_region: Region {
+          region: Region {
             off: off - sym.start(),
             sz,
           }
@@ -246,7 +256,7 @@ impl SymbolMap {
             table,
             idx: i,
           },
-          access_region: Region {
+          region: Region {
             off: 0,
             sz: sym.size,
           }

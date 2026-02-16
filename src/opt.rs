@@ -524,7 +524,7 @@ pub fn mem_symbol_to_ref(ir: &mut IR) {
       if (instr.attrs & Attribute::MAY_ESCAPE) != 0 { continue }; // don't life any memory ref that might escape
 
       if instr.opcode == Opcode::WriteVar16 {
-        let Ref::Symbol(symref) = instr.operands[0] else { continue };
+        let Ref::Symbol(symref) = &instr.operands[0] else { continue };
         if symref.table() != sym::Table::Local { continue; }
         if symref.def(&ir.symbols).size != 2 { continue; }
 
@@ -537,7 +537,7 @@ pub fn mem_symbol_to_ref(ir: &mut IR) {
         // Add the def
         ir.set_var(name, b, r);
       } else if instr.opcode == Opcode::ReadVar16 {
-        let Ref::Symbol(symref) = instr.operands[0] else { continue };
+        let Ref::Symbol(symref) = &instr.operands[0] else { continue };
         if symref.table() != sym::Table::Local { continue; }
         if symref.def(&ir.symbols).size != 2 { continue; }
 

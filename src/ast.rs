@@ -557,12 +557,14 @@ impl<'a> Builder<'a> {
     let expr = Expr::Name(sym.name.clone());
     let typ = symref.get_type(&self.ir.symbols);
     //println!("enter symbol_to_expr_recurse");
-    let r = self.symbol_to_expr_recurse(expr, typ, symref.access_region);
+    let r = self.symbol_to_expr_recurse(expr, typ, symref.region);
     //println!("leave symbol_to_expr_recurse");
     r
   }
 
   fn symbol_to_expr_recurse(&self, mut expr: Expr, typ: &Type, mut access: sym::Region) -> Expr {
+    // FIXME: Unify this and the "access" code
+
     // println!("symbol_to_expr_recurse");
     // println!("  expr:   {:?}", expr);
     // println!("  type:   {:?}", typ);
@@ -588,7 +590,7 @@ impl<'a> Builder<'a> {
         Type::Struct(struct_ref) => {
           let access_start = access.off as usize;
           let access_end = access_start + access.sz as usize;
-          let s = self.cfg.type_builder.lookup_struct(*struct_ref).unwrap();
+          let s = self.cfg.types.lookup_struct(*struct_ref).unwrap();
           for mbr in &s.members {
             let mbr_start = mbr.off as usize;
             let mbr_end = mbr_start + mbr.typ.size_in_bytes().unwrap();

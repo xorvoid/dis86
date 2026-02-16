@@ -12,6 +12,7 @@ pub mod segoff;
 pub mod spec;
 pub mod config;
 pub mod types;
+pub mod access;
 
 // Subsystems
 pub mod asm;

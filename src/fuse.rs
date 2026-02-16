@@ -33,26 +33,31 @@ pub fn fuse_adjacent_writevar16_to_writevar32(ir: &mut IR) {
       // Same symbol?
       if sym1 as *const _ != sym2 as *const _ { continue; }
 
-      // Symbol is 32-bit?
-      if sym1.size != 4 { continue; }
+      // Compute the access paths to figure out the actual access element size
+      let access1 = sym::determine_access_path(&ir.types, &ir.symbols, symref1);
+      let access2 = sym::determine_access_path(&ir.types, &ir.symbols, symref2);
+      if &access1.path != &access2.path { continue; }
+      if &access1.typ != &access2.typ { continue; }
 
-      // Symbol refs are 16-bit?
-      if symref1.sz() != 2 { continue; }
-      if symref2.sz() != 2 { continue; }
+      // Access symbol is 32-bit?
+      if access1.typ != Type::U32 && access1.typ != Type::I32 { continue; }
+
+      // Access sizes are 16-bit?
+      if access1.sz != 2 { continue; }
+      if access2.sz != 2 { continue; }
 
       // Fuse the symbol and extract the values
-
       let low_val;
       let high_val;
       let symref;
-      if symref1.off() == 0 && symref2.off() == 2 {
+      if symref1.off() + 2 == symref2.off() {
         low_val = ref1_instr.operands[1];
         high_val = ref2_instr.operands[1];
-        symref = sym::SymbolRef::join_adjacent(&ir.symbols, *symref1, *symref2).unwrap();
-      } else if symref1.off() == 2 && symref2.off() == 0 {
+        symref = sym::SymbolRef::join_adjacent(&ir.symbols, symref1, symref2).unwrap();
+      } else if symref2.off() + 2 == symref1.off() {
         low_val = ref2_instr.operands[1];
         high_val = ref1_instr.operands[1];
-        symref = sym::SymbolRef::join_adjacent(&ir.symbols, *symref2, *symref1).unwrap();
+        symref = sym::SymbolRef::join_adjacent(&ir.symbols, symref2, symref1).unwrap();
       } else {
         continue;
       }
@@ -111,7 +116,7 @@ pub fn fuse_adjacent_readvar16_to_readvar32(ir: &mut IR) {
       if low_sym as *const _ != high_sym as *const _ { continue; }
 
       // New sequence: ReadVar32, Lower, Upper
-      let symref = sym::SymbolRef::join_adjacent(&ir.symbols, *low_symref, *high_symref).unwrap();
+      let symref = sym::SymbolRef::join_adjacent(&ir.symbols, low_symref, high_symref).unwrap();
 
       let loadval = ir.block_instr_insert_before(b, low_ref, Instr {
         typ: Type::U32,

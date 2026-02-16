@@ -69,7 +69,7 @@ impl<'a> IRBuilder<'a> {
       spec,
       binary,
 
-      ir: IR::new(),
+      ir: IR::new(cfg.types.clone()),
       addrmap: HashMap::new(),
       cur: BlockRef(0),
       special: None,

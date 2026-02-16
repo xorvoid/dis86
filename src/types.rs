@@ -99,12 +99,12 @@ impl fmt::Display for Type {
 
 
 #[derive(Debug)]
-pub struct Builder {
+pub struct TypeDatabase {
   structs: Vec<config::Struct>,
   basetypes: HashMap<String, Type>,
 }
 
-impl Builder {
+impl TypeDatabase {
   pub fn new() -> Self {
     let mut basetypes = HashMap::new();
     basetypes.insert("void".to_string(), Type::Void);

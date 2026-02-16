@@ -1,7 +1,8 @@
 use crate::segoff::SegOff;
 use crate::bsl;
-use crate::types::{self, Type};
+use crate::types::{Type, TypeDatabase};
 use crate::asm::instr::Reg;
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct Func {
@@ -61,7 +62,7 @@ pub struct TextSectionRegion {
 
 #[derive(Debug)]
 pub struct Config {
-  pub type_builder: types::Builder,
+  pub types: Rc<TypeDatabase>,
   pub structs: Vec<Struct>,
   pub funcs: Vec<Func>,
   pub indirects: Vec<Indirect>,
@@ -140,7 +141,7 @@ impl Config {
 impl Config {
   pub fn from_path(path: &str) -> Result<Config, String> {
     let mut cfg = Config {
-      type_builder: types::Builder::new(),
+      types: Rc::new(TypeDatabase::new()), // dummy
       structs: vec![],
       funcs: vec![],
       indirects: vec![],
@@ -155,15 +156,19 @@ impl Config {
       .ok_or_else(|| format!("Failed to parse config"))?;
 
 
-    cfg.parse_structs(&root)?; // Important for this to go first and build types
-    cfg.parse_functions(&root)?;
-    cfg.parse_globals(&root)?;
-    cfg.parse_text_section(&root)?;
+    let mut types = TypeDatabase::new();
+    cfg.parse_structs(&root, &mut types)?; // Important for this to go first and build types
+    cfg.parse_functions(&root, &types)?;
+    cfg.parse_globals(&root, &types)?;
+    cfg.parse_text_section(&root, &types)?;
+
+    // final
+    cfg.types = Rc::new(types);
 
     Ok(cfg)
   }
 
-  fn parse_functions(&mut self, root: &bsl::Root) -> Result<(), String> {
+  fn parse_functions(&mut self, root: &bsl::Root, types: &TypeDatabase) -> Result<(), String> {
     let func = root.get_node("dis86.functions")
       .ok_or_else(|| format!("Failed to get the functions node"))?;
 
@@ -207,7 +212,7 @@ impl Config {
       };
       let args: i16 = args_str.parse()
         .map_err(|_| format!("Expected u16 for '{}.args', got '{}'", key, args_str))?;
-      let ret: Type = self.type_builder.parse_type(ret_str)
+      let ret: Type = types.parse_type(ret_str)
         .map_err(|err| format!("Expected type for '{}.ret', got '{}' | {}", key, ret_str, err))?;
 
       let regargs = match regargs {
@@ -253,7 +258,7 @@ impl Config {
     Ok(())
   }
 
-  fn parse_structs(&mut self, root: &bsl::Root) -> Result<(), String> {
+  fn parse_structs(&mut self, root: &bsl::Root, types: &mut TypeDatabase) -> Result<(), String> {
     let structures = root.get_node("dis86.structures")
       .ok_or_else(|| format!("Failed to get the structures node"))?;
 
@@ -283,7 +288,7 @@ impl Config {
 
         let off = parse_u16(off_str)
           .map_err(|_| format!("Expected u16 hex for '{}.members.{}.off', got '{}'", name, key, off_str))?;
-        let typ = self.type_builder.parse_type(type_str)?;
+        let typ = types.parse_type(type_str)?;
         // let typ: Type = match type_str.parse() {
         //   Ok(typ) => typ,
         //   Err(err) => {
@@ -307,14 +312,14 @@ impl Config {
         members,
       };
 
-      self.type_builder.append_struct(&s);
+      types.append_struct(&s);
       self.structs.push(s);
     }
 
     Ok(())
   }
 
-  fn parse_globals(&mut self, root: &bsl::Root) -> Result<(), String> {
+  fn parse_globals(&mut self, root: &bsl::Root, types: &TypeDatabase) -> Result<(), String> {
     let glob = root.get_node("dis86.globals")
       .ok_or_else(|| format!("Failed to get the globals node"))?;
 
@@ -329,7 +334,7 @@ impl Config {
 
       let off = parse_u16(off_str)
         .map_err(|_| format!("Expected u16 hex for '{}.off', got '{}'", key, off_str))?;
-      let typ = match self.type_builder.parse_type(type_str) {
+      let typ = match types.parse_type(type_str) {
         Ok(typ) => typ,
         Err(err) => {
           // FIXME: Make this a hard error.. currently the configs have undefined struct names.. need to support that first :-(
@@ -347,7 +352,7 @@ impl Config {
     Ok(())
   }
 
-  fn parse_text_section(&mut self, root: &bsl::Root) -> Result<(), String> {
+  fn parse_text_section(&mut self, root: &bsl::Root, types: &TypeDatabase) -> Result<(), String> {
     let func = root.get_node("dis86.text_section")
       .ok_or_else(|| format!("Failed to get the text_section node"))?;
 
@@ -367,7 +372,7 @@ impl Config {
         .map_err(|_| format!("Expected segoff for '{}.start', got '{}'", key, start_str))?;
       let end: SegOff = end_str.parse()
         .map_err(|_| format!("Expected segoff for '{}.end', got '{}'", key, end_str))?;
-      let typ: Type = self.type_builder.parse_type(type_str)
+      let typ: Type = types.parse_type(type_str)
         .map_err(|err| format!("Expected type for '{}.type', got '{}' | {}", key, type_str, err))?;
       let access: Option<SegOff> = match access_str {
         None => None,

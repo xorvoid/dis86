@@ -1,9 +1,10 @@
 pub use crate::ir::opcode::Opcode;
 use crate::asm::instr;
 use crate::sym;
-use crate::types::Type;
+use crate::types::{Type, TypeDatabase};
 use crate::ir::block_data::InstrData;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 // SSA IR Definitions
 
@@ -58,6 +59,7 @@ pub struct Block {
 
 #[derive(Debug)]
 pub struct IR {
+  pub types: Rc<TypeDatabase>,
   pub consts: Vec<i16>,
   pub symbols: sym::SymbolMap,
   pub funcs: Vec<String>,
