@@ -2,47 +2,73 @@ use crate::ir::*;
 use crate::sym;
 use crate::types::Type;
 
+/*
+From:
+--------------------------------------------
+        void     writevar16  sym      t1
+        void     writevar16  sym@+2   t2
+To:
+--------------------------------------------
+ t3  =  u32    make32      t2     t1
+        void   writevar32  sym    t3
+*/
 pub fn fuse_adjacent_writevar16_to_writevar32(ir: &mut IR) {
   // FIXME: THIS FUNCTION IS MESSY... CAN WE MAKE IT CLEANER???
   for b in ir.iter_blocks() {
     for r in ir.iter_instrs(b) {
 
-      // Find low write16: E.g. 'writevar16 _local_0028          dx.3' where _local_0028 is u32
-      let low_ref = r;
-      let low_instr = ir.instr(low_ref).unwrap();
-      if low_instr.opcode != Opcode::WriteVar16 { continue; }
-      let Ref::Symbol(low_symref) = &low_instr.operands[0] else { continue };
-      let low_sym = low_symref.def(&ir.symbols);
-      if low_symref.off() != 0 { continue; }
-      if low_symref.sz() != 2 { continue; }
-      if low_sym.size != 4 { continue; }
+      // Find two WriteVar16 in sequence
+      let ref1 = r;
+      let ref1_instr = ir.instr(ref1).unwrap();
+      if ref1_instr.opcode != Opcode::WriteVar16 { continue; }
+      let Ref::Symbol(symref1) = &ref1_instr.operands[0] else { continue };
+      let sym1 = symref1.def(&ir.symbols);
 
-      // Find high write16: E.g. 'writevar16 _local_0028@2        ax.3' where _local_0028 is u32
-      let Some(high_ref) = ir.instr_prev(low_ref) else { continue };
-      let high_instr = ir.instr(high_ref).unwrap();
-      if high_instr.opcode != Opcode::WriteVar16 { continue; }
-      let Ref::Symbol(high_symref) = &high_instr.operands[0] else { continue };
-      let high_sym = high_symref.def(&ir.symbols);
-      if high_symref.off() != 2 { continue; }
-      if high_symref.sz() != 2 { continue; }
-      if low_sym as *const _ != high_sym as *const _ { continue; }
+      let Some(ref2) = ir.instr_prev(ref1) else { continue };
+      let ref2_instr = ir.instr(ref2).unwrap();
+      if ref2_instr.opcode != Opcode::WriteVar16 { continue; }
+      let Ref::Symbol(symref2) = &ref2_instr.operands[0] else { continue };
+      let sym2 = symref2.def(&ir.symbols);
+
+      // Same symbol?
+      if sym1 as *const _ != sym2 as *const _ { continue; }
+
+      // Symbol is 32-bit?
+      if sym1.size != 4 { continue; }
+
+      // Symbol refs are 16-bit?
+      if symref1.sz() != 2 { continue; }
+      if symref2.sz() != 2 { continue; }
+
+      // Fuse the symbol and extract the values
+
+      let low_val;
+      let high_val;
+      let symref;
+      if symref1.off() == 0 && symref2.off() == 2 {
+        low_val = ref1_instr.operands[1];
+        high_val = ref2_instr.operands[1];
+        symref = sym::SymbolRef::join_adjacent(&ir.symbols, *symref1, *symref2).unwrap();
+      } else if symref1.off() == 2 && symref2.off() == 0 {
+        low_val = ref2_instr.operands[1];
+        high_val = ref1_instr.operands[1];
+        symref = sym::SymbolRef::join_adjacent(&ir.symbols, *symref2, *symref1).unwrap();
+      } else {
+        continue;
+      }
 
       // New sequence: Make32 and WriteVar32
-      let symref = sym::SymbolRef::join_adjacent(&ir.symbols, *low_symref, *high_symref).unwrap();
-
-      let low_val = low_instr.operands[1];
-      let high_val = high_instr.operands[1];
-      *ir.instr_mut(high_ref).unwrap() = Instr {
+      *ir.instr_mut(ref2).unwrap() = Instr {
         typ: Type::U32,
         attrs: Attribute::NONE,
         opcode: Opcode::Make32,
         operands: vec![high_val, low_val],
       };
-      *ir.instr_mut(low_ref).unwrap() = Instr {
+      *ir.instr_mut(ref1).unwrap() = Instr {
         typ: Type::Void,
         attrs: Attribute::MAY_ESCAPE,
         opcode: Opcode::WriteVar32,
-        operands: vec![Ref::Symbol(symref), high_ref],
+        operands: vec![Ref::Symbol(symref), ref2],
       };
     }
   }
