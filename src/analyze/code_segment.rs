@@ -1,6 +1,7 @@
 use crate::segoff::{Seg, Off, SegOff};
 use crate::binfmt::mz;
 use crate::binary::Binary;
+use crate::config::Func;
 
 #[derive(Debug, Clone)]
 pub struct Region {
@@ -25,54 +26,69 @@ impl CodeSegment {
   }
 }
 
-// Should basically match those that were manually found in annotations.py
-pub fn find_code_segments(binary: &Binary) -> Vec<CodeSegment> {
-  let exe = binary.exe().unwrap(); // FIXME
-  let seginfo = exe.seginfo.as_ref().unwrap(); // FIXME
-  let ovr = exe.ovr.as_ref().unwrap(); // FIXME
+pub struct CodeSegments(pub Vec<CodeSegment>);
 
-  // Collect ordinary code segments and stub segments
-  let mut code_segments = vec![];
-  let mut stub_segments = vec![];
-  for s in seginfo {
-    let region = Region {
-      seg: Seg::Normal(s.seg),
-      skip_off: s.minoff as u32,
-      size: s.size() as u32,
-    };
-    if s.typ == mz::SegInfoType::CODE && s.size() != 0 {
-      code_segments.push(CodeSegment { primary: region, stub: None, });
-    }
-    else if s.typ == mz::SegInfoType::STUB {
-      stub_segments.push(region);
-    }
-  }
+impl CodeSegments {
+  // Should basically match those that were manually found in annotations.py
+  pub fn from_binary(binary: &Binary) -> CodeSegments {
+    let exe = binary.exe().unwrap(); // FIXME
+    let seginfo = exe.seginfo.as_ref().unwrap(); // FIXME
+    let ovr = exe.ovr.as_ref().unwrap(); // FIXME
 
-  // Iterate all overlay segments and match them up with the stubs
-  for (i, seg) in ovr.segs.iter().enumerate() {
-    let end = seg.data_offset + seg.segment_size as u32;
-    let region = Region {
+    // Collect ordinary code segments and stub segments
+    let mut code_segments = vec![];
+    let mut stub_segments = vec![];
+    for s in seginfo {
+      let region = Region {
+        seg: Seg::Normal(s.seg),
+        skip_off: s.minoff as u32,
+        size: s.size() as u32,
+      };
+      if s.typ == mz::SegInfoType::CODE && s.size() != 0 {
+        code_segments.push(CodeSegment { primary: region, stub: None, });
+      }
+      else if s.typ == mz::SegInfoType::STUB {
+        stub_segments.push(region);
+      }
+    }
+
+    // Iterate all overlay segments and match them up with the stubs
+    for (i, seg) in ovr.segs.iter().enumerate() {
+      let end = seg.data_offset + seg.segment_size as u32;
+      let region = Region {
       seg: Seg::Overlay(i as u16),
-      skip_off: 0,
-      size: seg.segment_size as u32,
-    };
-    let stub = stub_segments[i].clone();
-    assert!(stub.skip_off == 0);
-    code_segments.push(CodeSegment { primary: region, stub: Some(stub) });
+        skip_off: 0,
+        size: seg.segment_size as u32,
+      };
+      let stub = stub_segments[i].clone();
+      assert!(stub.skip_off == 0);
+      code_segments.push(CodeSegment { primary: region, stub: Some(stub) });
+    }
+
+    CodeSegments(code_segments)
   }
 
-  code_segments
-}
-
-pub fn dump_code_segments(code_segments: &[CodeSegment]) {
-  for (i, s) in code_segments.iter().enumerate() {
-    let seg_str = format!("{},", s.primary.seg);
-    let mut ex = "".to_string();
-    if let Some(stub) = &s.stub {
-      ex = format!("    entry-seg: {},   entry-seg-size: {}",
-                   stub.seg, stub.size);
+  pub fn find_for_function(&self, func: &Func) -> Option<&CodeSegment> {
+    let func_seg = func.start.seg;
+    for c in &self.0 {
+      if c.primary.seg == func.start.seg {
+        return Some(c);
+      }
     }
-    println!("{:3} | seg: {:<15} skip_off: 0x{:04x},   size: {:>6}{}",
-             i, seg_str, s.primary.skip_off, s.primary.size, ex);
+    None
+  }
+
+
+  pub fn dump(&self) {
+    for (i, s) in self.0.iter().enumerate() {
+      let seg_str = format!("{},", s.primary.seg);
+      let mut ex = "".to_string();
+      if let Some(stub) = &s.stub {
+        ex = format!("    entry-seg: {},   entry-seg-size: {}",
+                     stub.seg, stub.size);
+      }
+      println!("{:3} | seg: {:<15} skip_off: 0x{:04x},   size: {:>6}{}",
+               i, seg_str, s.primary.skip_off, s.primary.size, ex);
+    }
   }
 }

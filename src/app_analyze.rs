@@ -4,21 +4,21 @@ use crate::segoff::{Seg, Off, SegOff};
 use crate::util::range_set::RangeSet;
 use crate::binfmt::mz;
 
-use crate::analyze::code_segment::{self, CodeSegment};
+use crate::analyze::code_segment::{self, CodeSegment, CodeSegments};
 use crate::analyze::instr_details::{self, InstrDetails};
 use crate::analyze::func_details::{self, FuncDetails};
 
 struct Analyze {
   cfg: Config,
   binary: Binary,
-  code_segments: Option<Vec<CodeSegment>>,
+  code_segments: CodeSegments,
 }
 
 impl Analyze {
   fn new(cfg: &Config, exe_path: &str) -> Self {
     let fmt = Fmt::Exe(exe_path.to_string());
     let binary = Binary::from_fmt(&fmt, Some(cfg)).unwrap();
-    let code_segments = Some(code_segment::find_code_segments(&binary));
+    let code_segments = CodeSegments::from_binary(&binary);
 
     Self {
       cfg: cfg.clone(),
@@ -66,20 +66,19 @@ impl Analyze {
     }
   }
 
-  fn find_code_segment_for_function(&self, func: &Func) -> Option<&CodeSegment> {
-    let code_segments = self.code_segments.as_ref().unwrap();
-    let func_seg = func.start.seg;
-    for c in code_segments {
-      if c.primary.seg == func.start.seg {
-        return Some(c);
-      }
-    }
-    None
+  fn analyze_code_segments_and_report(&self) {
+    self.code_segments.dump();
+    for c in &self.code_segments.0 {
+      println!("Segment {}", c.primary.seg);
+      println!("===============================");
+      self.analyze_code_segment(c);
+      println!("");
+  }
   }
 
   fn analyze_function(&self, name: &str) -> FuncDetails {
     let func = self.cfg.func_lookup_by_name(name).unwrap(); // FIXME
-    let code_seg = self.find_code_segment_for_function(func).unwrap(); // FIXME
+    let code_seg = self.code_segments.find_for_function(func).unwrap(); // FIXME
     assert!(func.start >= code_seg.start());
     func_details::func_details(func, code_seg, &self.binary)
   }
@@ -89,23 +88,9 @@ pub fn run(cfg: &Config, exe_path: &str) -> i32 {
   let mut a = Analyze::new(cfg, exe_path);
 
   let d = a.analyze_function("F_jawn_unknown_17");
-
   println!("========================");
   println!("infered end:   {}", d.inferred_end_addr);
   println!("return method: {}", d.return_kind);
-
-  //dump_info(exe_path);
-
-  // let code_segments = find_code_segements(exe_path);
-  // //dump_code_segments(&code_segments);
-  // for c in &code_segments[..5] {
-  //   println!("Segment {}", c.primary.seg);
-  //   println!("===============================");
-  //   analyze_code_segment(cfg, c);
-  //   println!("");
-  // }
-
-  //analyze_function(cfg, exe_path, "F_navigator");
 
   1
 }
