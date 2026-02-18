@@ -20,10 +20,10 @@ impl Fmt {
 
 struct Data(Vec<u8>);
 
-pub struct Binary<'a> {
+pub struct Binary {
   main: Data,
   overlays: Vec<Data>,
-  config: Option<&'a Config>,
+  config: Option<Config>,
   segmap: Option<Vec<u16>>,
 }
 
@@ -36,8 +36,8 @@ fn build_segmap(exe: &binfmt::mz::Exe) -> Option<Vec<u16>> {
   Some(out)
 }
 
-impl<'a> Binary<'a> {
-  pub fn from_fmt(fmt: &Fmt, config: Option<&'a Config>) -> Result<Self, String> {
+impl Binary {
+  pub fn from_fmt(fmt: &Fmt, config: Option<&Config>) -> Result<Self, String> {
     let path = fmt.path();
 
     let data = std::fs::read(path).map_err(
@@ -56,18 +56,18 @@ impl<'a> Binary<'a> {
     Ok(binary)
   }
 
-  pub fn from_exe(exe: &binfmt::mz::Exe, config: Option<&'a Config>) -> Self {
+  pub fn from_exe(exe: &binfmt::mz::Exe, config: Option<&Config>) -> Self {
     let main = Data(exe.exe_data().to_vec());
     let mut overlays = vec![];
     for i in 0..exe.num_overlay_segments() {
       overlays.push(Data(exe.overlay_data(i).to_vec()));
     }
     let segmap = build_segmap(&exe);
-    Binary { main, overlays, config, segmap, }
+    Binary { main, overlays, config: config.cloned(), segmap, }
   }
 
-  pub fn from_raw(data: &[u8], config: Option<&'a Config>) -> Self {
-    Self { main: Data(data.to_vec()), overlays: vec![], config, segmap: None }
+  pub fn from_raw(data: &[u8], config: Option<&Config>) -> Self {
+    Self { main: Data(data.to_vec()), overlays: vec![], config: config.cloned(), segmap: None }
   }
 
   pub fn region(&self, start: SegOff, end: SegOff) -> &[u8] {
@@ -90,15 +90,15 @@ impl<'a> Binary<'a> {
     Seg::Normal(segmap[(old/8) as usize])
   }
 
-  pub fn lookup_call(&self, from: SegOff, to: SegOff) -> Option<&'a config::Func> {
+  pub fn lookup_call(&self, from: SegOff, to: SegOff) -> Option<&config::Func> {
     match &from.seg {
-      Seg::Normal(_) => cfg_func(self.config, to),
+      Seg::Normal(_) => cfg_func(self.config.as_ref(), to),
       Seg::Overlay(_) => {
         // We're calling from an overlay, so we need to remap the dest seg before making the call...
         let Seg::Normal(seg) = to.seg else { return None; /*panic!("Unexpected destination segment as overlay!") */ };
         let remapped_seg = self.remap_to_segment(seg);
         let to_modified = SegOff { seg: remapped_seg, off: to.off };
-        cfg_func(self.config, to_modified)
+        cfg_func(self.config.as_ref(), to_modified)
       }
     }
   }

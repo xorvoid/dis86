@@ -46,7 +46,7 @@ struct IRBuilder<'a> {
   instrs: &'a [instr::Instr],
   cfg: &'a Config,
   spec: &'a spec::Spec<'a>,
-  binary: &'a binary::Binary<'a>,
+  binary: &'a binary::Binary,
 
   ir: IR,
   addrmap: HashMap<SegOff, BlockRef>,
