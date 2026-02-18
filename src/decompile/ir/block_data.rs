@@ -1,4 +1,4 @@
-use crate::ir::def::*;
+use super::def::*;
 
 // Requirements:
 //  - Iterate all instrs (start to finish)

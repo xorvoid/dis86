@@ -1,6 +1,6 @@
 use crate::asm::instr;
 use crate::config::Config;
-use crate::ir::*;
+use crate::decompile::ir::*;
 use crate::access;
 use crate::types::{Type, TypeDatabase};
 use std::cmp::Ordering;

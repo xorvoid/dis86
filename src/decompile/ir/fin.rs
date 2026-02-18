@@ -1,4 +1,4 @@
-use crate::ir::def::*;
+use super::def::*;
 use std::collections::HashMap;
 
 struct Finalizer {

@@ -7,13 +7,9 @@ use crate::util::range_set::RangeSet;
 use crate::asm;
 use crate::asm::instr::{self, Instr, Opcode};
 use crate::asm::decode::Decoder;
+use crate::asm::intel_syntax::instr_str;
 use std::collections::HashSet;
 use std::fmt;
-
-// FIXME: THIS WRAPPER IS CRAZY
-fn instr_str(ins: &instr::Instr) -> String {
-  crate::asm::intel_syntax::format(ins.addr, Some(ins), &[], false).unwrap()
-}
 
 // FIXME: UNIFY BACK WITH ir_build::jump_targets
 fn jump_targets(ins: &instr::Instr) -> Option<Vec<SegOff>> {

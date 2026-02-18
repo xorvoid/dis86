@@ -1,8 +1,8 @@
-pub use crate::ir::opcode::Opcode;
+pub use super::opcode::Opcode;
+use super::block_data::InstrData;
 use crate::asm::instr;
-use crate::sym;
+use crate::decompile::sym;
 use crate::types::{Type, TypeDatabase};
-use crate::ir::block_data::InstrData;
 use std::collections::HashMap;
 use std::rc::Rc;
 

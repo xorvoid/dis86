@@ -97,3 +97,7 @@ pub fn format(addr: SegOff, ins: Option<&Instr>, bytes: &[u8], with_detail: bool
   }
   Ok(s.trim_end().to_string())
 }
+
+pub fn instr_str(ins: &Instr) -> String {
+  format(ins.addr, Some(ins), &[], false).unwrap()
+}

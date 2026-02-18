@@ -1,8 +1,8 @@
+use super::def::*;
+use super::block_data::{self, InstrData};
+use crate::decompile::sym;
 use crate::asm::instr;
-use crate::ir::def::*;
-use crate::sym;
 use crate::types::{Type, TypeDatabase};
-use crate::ir::block_data::{self, InstrData};
 use std::collections::HashMap;
 use std::rc::Rc;
 

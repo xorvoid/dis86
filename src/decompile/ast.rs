@@ -1,8 +1,8 @@
-use crate::ir;
-use crate::sym;
+use crate::decompile::ir;
+use crate::decompile::sym;
+use crate::decompile::control_flow::{self, ControlFlow, Detail, ElemId};
 use crate::types::*;
 use crate::config::Config;
-use crate::control_flow::{self, ControlFlow, Detail, ElemId};
 use std::collections::{HashMap, HashSet};
 
 const OPT_DEFINE_TEMPS_AT_USE: bool = false;

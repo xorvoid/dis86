@@ -1,4 +1,4 @@
-use crate::ir;
+use super::super::ir;
 use std::fmt::Write;
 
 pub fn gen_graphviz_dotfile(ir: &ir::IR) -> Result<String, std::fmt::Error> {

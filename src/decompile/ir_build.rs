@@ -1,18 +1,15 @@
+use crate::decompile::sym;
+use crate::decompile::ir::*;
 use crate::asm::instr;
 use crate::binary;
 use crate::segoff::{Seg, Off, SegOff};
 use crate::config::{self, Config};
 use crate::spec;
-use crate::sym;
-use crate::ir::*;
 use crate::types::{Type, ArraySize};
+use crate::asm::intel_syntax::instr_str;
 use std::collections::{HashSet, HashMap};
 
 const DEBUG: bool = false;
-
-fn instr_str(ins: &instr::Instr) -> String {
-  crate::asm::intel_syntax::format(ins.addr, Some(ins), &[], false).unwrap()
-}
 
 fn operand_is_stack_reg(operand: &instr::Operand) -> bool {
   let instr::Operand::Reg(instr::OperandReg(reg)) = operand else { return false };
