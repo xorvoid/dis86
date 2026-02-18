@@ -27,3 +27,4 @@ pub mod gen;
 
 // Main application glue
 pub mod app;
+pub mod app_analyze;

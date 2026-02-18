@@ -25,6 +25,9 @@ fn print_help() {
   println!("  --binary-exe      path to MZ format exe on the filesystem (exactly 1 --binary-* flag required)");
   println!("  --binary-raw      path to raw binary on the filesystem (exactly 1 --binary-* flag required)");
   println!("");
+  println!("MODE: ANALYZE");
+  println!("  --analyze         analyze the binary using the configuration annotations");
+  println!("");
   println!("MODE: ADDRESS RANGE");
   println!("  --start-addr      start seg:off address (maybe required)");
   println!("  --end-addr        end seg:off address (maybe required)");
@@ -69,6 +72,8 @@ struct Args {
   start_addr: Option<SegOff>,
   end_addr: Option<SegOff>,
   name: Option<String>,
+
+  analyze: bool,
 
   emit_dis: Option<String>,
   emit_ir_initial: Option<String>,
@@ -124,6 +129,7 @@ fn parse_args() -> Result<Args, pico_args::Error> {
   let mut args = Args {
     config:          pargs.value_from_str("--config")?,
     binary:          parse_binary_fmt(&mut pargs)?,
+    analyze:         false,
     start_addr:      pargs.opt_value_from_str("--start-addr")?,
     end_addr:        pargs.opt_value_from_str("--end-addr")?,
     name:            pargs.opt_value_from_str("--name")?,
@@ -143,6 +149,7 @@ fn parse_args() -> Result<Args, pico_args::Error> {
   };
 
   let mut remaining = pargs.finish();
+  args.analyze       = match_flag(&mut remaining, "--analyze");
   args.build_pin_all = match_flag(&mut remaining, "--build-pin-all");
   args.codegen_hydra = match_flag(&mut remaining, "--codegen-hydra");
 
@@ -165,6 +172,11 @@ pub fn run() -> i32 {
   };
 
   let cfg = Config::from_path(&args.config).unwrap();
+
+  if args.analyze {
+    let binary::Fmt::Exe(path) = &args.binary else { panic!("expected --binary-exe in --analyze mode") };
+    return crate::app_analyze::run(&cfg, path);
+  }
 
   let spec = if let Some(name) = args.name.as_ref() {
     spec::Spec::from_config_name(&cfg, name)

@@ -13,9 +13,7 @@ impl<'a> Spec<'a> {
     let Some(func) = cfg.func_lookup_by_name(name) else {
       panic!("Failed to lookup function named: {}", name);
     };
-    let Some(start) = func.start else {
-      panic!("Function has no 'start' addr defined in config");
-    };
+    let start = func.start;
     let Some(end) = func.end else {
       panic!("Function has no 'end' addr defined in config");
     };

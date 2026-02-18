@@ -4,10 +4,10 @@ use crate::types::{Type, TypeDatabase};
 use crate::asm::instr::Reg;
 use std::rc::Rc;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Func {
   pub name: String,
-  pub start: Option<SegOff>,
+  pub start: SegOff,
   pub end: Option<SegOff>,
   pub entry: Option<SegOff>,
   pub mode: CallMode,
@@ -17,7 +17,7 @@ pub struct Func {
   pub dont_pop_args: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Indirect {
   pub addr: SegOff,
   pub ret: Type,
@@ -44,14 +44,14 @@ pub struct StructMember {
   pub off: u16,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Global {
   pub name: String,
   pub offset: u16,
   pub typ: Type,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TextSectionRegion {
   pub name: String,
   pub start: SegOff,
@@ -60,7 +60,7 @@ pub struct TextSectionRegion {
   pub access: Option<SegOff>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Config {
   pub types: Rc<TypeDatabase>,
   pub structs: Vec<Struct>,
@@ -71,10 +71,10 @@ pub struct Config {
 }
 
 impl Func {
+  // FIXME: Does not need to be an Option
   fn entry(&self) -> Option<SegOff> {
     if let Some(entry) = self.entry { return Some(entry); }
-    if let Some(start) = self.start { return Some(start); }
-    None
+    Some(self.start)
   }
 }
 
@@ -193,10 +193,8 @@ impl Config {
 
       let regargs = f.get_str("regargs");
 
-      let start: Option<SegOff> = if start_str.len() == 0 { None } else {
-        Some(start_str.parse()
-             .map_err(|_| format!("Expected segoff for '{}.start', got '{}'", key, start_str))?)
-      };
+      let start: SegOff = start_str.parse()
+        .map_err(|_| format!("Expected segoff for '{}.start', got '{}'", key, start_str))?;
       let end: Option<SegOff> = if end_str.len() == 0 { None } else {
         Some(end_str.parse()
              .map_err(|_| format!("Expected segoff for '{}.end', got '{}'", key, end_str))?)
@@ -244,9 +242,6 @@ impl Config {
         if mode != CallMode::Far {
           panic!("Cannot have an indirect near call: {}", key);
         }
-        let Some(start) = start else {
-          panic!("Expected start address to be defined for an indirect");
-        };
         self.indirects.push(Indirect {
           addr: start,
           ret,
