@@ -5,7 +5,7 @@ use crate::binary::Binary;
 use crate::asm::instr::Instr;
 use crate::asm::decode::Decoder;
 use crate::asm::intel_syntax::instr_str;
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::fmt;
 
 use crate::analyze::instr_details::{self, ReturnKind, Next};
@@ -50,17 +50,17 @@ impl FuncDetails {
     assert!(func.start >= code_seg.start());
     let code_seg_end = code_seg.end();
 
-    let mut work = vec![]; // used as a stack
-    work.push(func.start);
+    let mut discovered = HashSet::new();
+    let mut queued = BTreeSet::new();
 
-    let mut known_targets = HashSet::new();
-    known_targets.insert(func.start);
+    discovered.insert(func.start);
+    queued.insert(func.start);
 
     let mut largest_addr = func.start;
     let mut return_kind = None;
 
     // Iterate over blocks
-    while let Some(loc) = work.pop() {
+    while let Some(loc) = queued.pop_first() {
       let mut block = Block {
         start: loc,
         exits: vec![], // not yet known
@@ -99,9 +99,9 @@ impl FuncDetails {
           }
           Next::Jump(targets) => {
             for tgt in &targets {
-              if known_targets.get(tgt).is_some() { continue; }
-              known_targets.insert(*tgt);
-              work.push(*tgt);
+              if discovered.get(tgt).is_some() { continue; }
+              discovered.insert(*tgt);
+              queued.insert(*tgt);
             }
             // Add exits to block
             block.exits = targets;
