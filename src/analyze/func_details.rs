@@ -82,7 +82,7 @@ impl FuncDetails {
         block.instrs.push(instr);
 
         // Compute instr details
-        let mut details = instr_details::instr_details(&instr);
+        let details = instr_details::instr_details(&instr);
 
         // Figure out what to do next
         match details.next {

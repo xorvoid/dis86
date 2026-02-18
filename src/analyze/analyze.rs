@@ -1,5 +1,6 @@
 use crate::binary::{Binary, Fmt};
 use crate::config::Config;
+use crate::segoff::Seg;
 use crate::util::range_set::RangeSet;
 
 use crate::analyze::code_segment::{CodeSegment, CodeSegments};
@@ -8,7 +9,7 @@ use crate::analyze::func_details::FuncDetails;
 pub struct Analyze {
   cfg: Config,
   binary: Binary,
-  code_segments: CodeSegments,
+  pub code_segments: CodeSegments,
 }
 
 impl Analyze {
@@ -28,7 +29,9 @@ impl Analyze {
     self.binary.exe().unwrap().print();
   }
 
-  pub fn analyze_code_segment(&self, code_seg: &CodeSegment) {
+  pub fn analyze_code_segment(&self, seg: Seg) {
+    let code_seg = self.code_segments.find_by_segment(seg).unwrap();
+
     let mut r = RangeSet::new();
     for f in &self.cfg.funcs {
       if f.start.seg != code_seg.primary.seg { continue };
@@ -63,15 +66,15 @@ impl Analyze {
     }
   }
 
-  pub fn analyze_code_segments_and_report(&self) {
-    self.code_segments.dump();
-    for c in &self.code_segments.0 {
-      println!("Segment {}", c.primary.seg);
-      println!("===============================");
-      self.analyze_code_segment(c);
-      println!("");
-    }
-  }
+  // pub fn analyze_code_segments_and_report(&self) {
+  //   self.code_segments.dump();
+  //   for c in &self.code_segments.0 {
+  //     println!("Segment {}", c.primary.seg);
+  //     println!("===============================");
+  //     self.analyze_code_segment(c);
+  //     println!("");
+  //   }
+  // }
 
   pub fn analyze_function(&self, name: &str) -> FuncDetails {
     let func = self.cfg.func_lookup_by_name(name).unwrap(); // FIXME

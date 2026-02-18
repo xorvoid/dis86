@@ -67,6 +67,15 @@ impl CodeSegments {
     CodeSegments(code_segments)
   }
 
+  pub fn find_by_segment(&self, seg: Seg) -> Option<&CodeSegment> {
+    for c in &self.0 {
+      if c.primary.seg == seg {
+        return Some(c);
+      }
+    }
+    None
+  }
+
   pub fn find_for_function(&self, func: &Func) -> Option<&CodeSegment> {
     for c in &self.0 {
       if c.primary.seg == func.start.seg {
@@ -75,7 +84,6 @@ impl CodeSegments {
     }
     None
   }
-
 
   pub fn dump(&self) {
     for (i, s) in self.0.iter().enumerate() {
