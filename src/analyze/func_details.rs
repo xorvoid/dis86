@@ -8,21 +8,7 @@ use crate::asm::intel_syntax::instr_str;
 use std::collections::HashSet;
 use std::fmt;
 
-use crate::analyze::instr_details;
-
-pub enum ReturnKind {
-  Near,
-  Far,
-}
-
-impl fmt::Display for ReturnKind {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    match self {
-      ReturnKind::Near => write!(f, "near"),
-      ReturnKind::Far  => write!(f, "far"),
-    }
-  }
-}
+use crate::analyze::instr_details::{self, ReturnKind, Next};
 
 pub struct FuncDetails {
   pub inferred_end_addr: SegOff,
@@ -37,59 +23,100 @@ impl fmt::Display for FuncDetails {
   }
 }
 
-pub fn func_details(func: &Func, code_seg: &CodeSegment, binary: &Binary) -> FuncDetails {
-  assert!(func.start >= code_seg.start());
+struct Block {
+  start: SegOff,
+  exits: Vec<SegOff>,
+  instrs: Vec<Instr>,
+}
 
-  let mut work = vec![]; // used as a stack
-  work.push(func.start);
-
-  let mut known_targets = HashSet::new();
-  known_targets.insert(func.start);
-
-  let mut block_active = false;
-  let mut largest_addr = func.start;
-  let mut ret_near = false;
-
-  let end = code_seg.end();
-  while let Some(loc) = work.pop() {
-    if !block_active {
-      println!("Block: {}", loc);
-      println!("-------------------------------");
-      block_active = true;
+impl fmt::Display for Block {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "Block {} | exits: [", self.start)?;
+    for (i, exit) in self.exits.iter().enumerate() {
+      if i != 0 { write!(f, ", ")?; }
+      write!(f, "{}", exit)?;
     }
-
-    let instr = decode_one_instr(&binary, loc, end).unwrap();
-    assert!(instr.rep.is_none()); // UNIMPL
-    let end_addr = instr.end_addr();
-      if end_addr > largest_addr { largest_addr = end_addr; }
-
-    // FIXME: THIS API IS INSANE
-    println!("{} | {}", loc, instr_str(&instr));
-
-    let mut d = instr_details::instr_details(&instr);
-    if !ret_near && d.ret_near {
-      ret_near = true;
+    writeln!(f, "]")?;
+    writeln!(f, "------------------------------------")?;
+    for instr in &self.instrs {
+      writeln!(f, "{} | {}", instr.addr, instr_str(instr))?;
     }
-    if d.fallthrough {
-      work.append(&mut d.next);
-      continue;
-    }
-
-    // block done
-    block_active = false;
-    println!("");
-
-    for tgt in d.next {
-      if known_targets.get(&tgt).is_none() {
-        known_targets.insert(tgt);
-        work.push(tgt);
-      }
-    }
+    Ok(())
   }
+}
 
-  FuncDetails {
-    inferred_end_addr: largest_addr,
-    return_kind: if ret_near { ReturnKind::Near } else { ReturnKind::Far },
+impl FuncDetails {
+  pub fn build(func: &Func, code_seg: &CodeSegment, binary: &Binary) -> FuncDetails {
+    assert!(func.start >= code_seg.start());
+    let code_seg_end = code_seg.end();
+
+    let mut work = vec![]; // used as a stack
+    work.push(func.start);
+
+    let mut known_targets = HashSet::new();
+    known_targets.insert(func.start);
+
+    let mut largest_addr = func.start;
+    let mut return_kind = None;
+
+    // Iterate over blocks
+    while let Some(loc) = work.pop() {
+      let mut block = Block {
+        start: loc,
+        exits: vec![], // not yet known
+        instrs: vec![],
+      };
+
+      let mut addr = loc;
+
+      // Iterate over instructions in the block (until we reach a terminator)
+      let mut block_complete = false;
+      while !block_complete {
+        // Decode next instruction
+        let instr = decode_one_instr(&binary, addr, code_seg_end).unwrap();
+        assert!(instr.rep.is_none()); // UNIMPL
+        let end_addr = instr.end_addr();
+        if end_addr > largest_addr { largest_addr = end_addr; }
+
+        // Add instr to the block
+        block.instrs.push(instr);
+
+        // Compute instr details
+        let mut details = instr_details::instr_details(&instr);
+
+        // Figure out what to do next
+        match details.next {
+          Next::Fallthrough(target) => {
+            addr = target;
+            continue;
+          }
+          Next::Return(ret) => {
+            if return_kind.is_none() {
+              return_kind = Some(ret);
+            }
+            block.exits = vec![];
+            block_complete = true;
+          }
+          Next::Jump(targets) => {
+            for tgt in &targets {
+              if known_targets.get(tgt).is_some() { continue; }
+              known_targets.insert(*tgt);
+              work.push(*tgt);
+            }
+            // Add exits to block
+            block.exits = targets;
+            block_complete = true;
+          }
+        }
+      }
+
+      println!("{}", block);
+    }
+
+    FuncDetails {
+      inferred_end_addr: largest_addr,
+      return_kind: return_kind.unwrap(),
+    }
   }
 }
 

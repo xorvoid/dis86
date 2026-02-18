@@ -1,11 +1,30 @@
 use crate::asm::instr::{Instr, Opcode, Operand};
 use crate::asm::intel_syntax::instr_str;
 use crate::segoff::SegOff;
+use std::fmt;
+
+pub enum ReturnKind {
+  Near,
+  Far,
+}
+
+impl fmt::Display for ReturnKind {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      ReturnKind::Near => write!(f, "near"),
+      ReturnKind::Far  => write!(f, "far"),
+    }
+  }
+}
+
+pub enum Next {
+  Fallthrough(SegOff),     // ordinary instruction fallthrough
+  Return(ReturnKind),      // return instr (block terminator)
+  Jump(Vec<SegOff>),       // jump targets (block terminator)
+}
 
 pub struct InstrDetails {
-  pub next: Vec<SegOff>,
-  pub fallthrough: bool,
-  pub ret_near: bool,
+  pub next: Next,
 }
 
 // FIXME: UNIFY BACK WITH ir_build::jump_targets
@@ -53,15 +72,10 @@ fn jump_targets(ins: &Instr) -> Option<Vec<SegOff>> {
 
 pub fn instr_details(ins: &Instr) -> InstrDetails {
   if let Some(tgts) = jump_targets(ins) {
-    return InstrDetails {
-      next: tgts,
-      fallthrough: false,
-      ret_near: false,
-    };
+    return InstrDetails { next: Next::Jump(tgts) };
   }
 
-  let mut is_ret = false;
-  let mut ret_near = false;
+  let mut ret = None;
 
   // TODO COMPLETE THIS
   match ins.opcode {
@@ -93,23 +107,15 @@ pub fn instr_details(ins: &Instr) -> InstrDetails {
     Opcode::OP_INT        => (),
     Opcode::OP_CLD        => (),
 
-    Opcode::OP_RET        => { is_ret = true; ret_near = true; }
-    Opcode::OP_RETF       => is_ret = true,
+    Opcode::OP_RET        => ret = Some(ReturnKind::Near),
+    Opcode::OP_RETF       => ret = Some(ReturnKind::Far),
 
     _ => panic!("UNIMPL OPCODE"),
   };
 
-  if is_ret {
-    return InstrDetails {
-      next: vec![],
-      fallthrough: false,
-      ret_near,
-    };
+  if let Some(ret) = ret {
+    return InstrDetails { next: Next::Return(ret) };
   }
 
-  InstrDetails {
-    next: vec![ins.end_addr()],
-    fallthrough: true,
-    ret_near: false,
-  }
+  InstrDetails { next: Next::Fallthrough(ins.end_addr()) }
 }

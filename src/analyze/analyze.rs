@@ -3,7 +3,7 @@ use crate::config::Config;
 use crate::util::range_set::RangeSet;
 
 use crate::analyze::code_segment::{CodeSegment, CodeSegments};
-use crate::analyze::func_details::{self, FuncDetails};
+use crate::analyze::func_details::FuncDetails;
 
 pub struct Analyze {
   cfg: Config,
@@ -77,6 +77,6 @@ impl Analyze {
     let func = self.cfg.func_lookup_by_name(name).unwrap(); // FIXME
     let code_seg = self.code_segments.find_for_function(func).unwrap(); // FIXME
     assert!(func.start >= code_seg.start());
-    func_details::func_details(func, code_seg, &self.binary)
+    FuncDetails::build(func, code_seg, &self.binary)
   }
 }
