@@ -1,5 +1,6 @@
 use crate::segoff::{Seg, Off, SegOff};
 use crate::binfmt::mz;
+use crate::binary::Binary;
 
 #[derive(Debug, Clone)]
 pub struct Region {
@@ -25,12 +26,9 @@ impl CodeSegment {
 }
 
 // Should basically match those that were manually found in annotations.py
-pub fn find_code_segments(exe_path: &str) -> Vec<CodeSegment> {
-  let Ok(data) = std::fs::read(exe_path) else {
-    panic!("Failed to read file: {}", exe_path);
-  };
-  let exe = mz::Exe::decode(&data).unwrap();
-  let seginfo = exe.seginfo.unwrap(); // FIXME
+pub fn find_code_segments(binary: &Binary) -> Vec<CodeSegment> {
+  let exe = binary.exe().unwrap(); // FIXME
+  let seginfo = exe.seginfo.as_ref().unwrap(); // FIXME
   let ovr = exe.ovr.as_ref().unwrap(); // FIXME
 
   // Collect ordinary code segments and stub segments

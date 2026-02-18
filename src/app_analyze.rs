@@ -10,25 +10,25 @@ use crate::analyze::func_details::{self, FuncDetails};
 
 struct Analyze {
   cfg: Config,
-  exe_path: String,
+  binary: Binary,
   code_segments: Option<Vec<CodeSegment>>,
 }
 
 impl Analyze {
   fn new(cfg: &Config, exe_path: &str) -> Self {
+    let fmt = Fmt::Exe(exe_path.to_string());
+    let binary = Binary::from_fmt(&fmt, Some(cfg)).unwrap();
+    let code_segments = Some(code_segment::find_code_segments(&binary));
+
     Self {
       cfg: cfg.clone(),
-      exe_path: exe_path.to_string(),
-      code_segments: None,
+      binary,
+      code_segments,
     }
   }
 
   fn dump_info(&self) {
-    let Ok(data) = std::fs::read(&self.exe_path) else {
-      panic!("Failed to read file: {}", self.exe_path);
-    };
-    let exe = mz::Exe::decode(&data).unwrap();
-    exe.print();
+    self.binary.exe().unwrap().print();
   }
 
   fn analyze_code_segment(&self, code_seg: &CodeSegment) {
@@ -81,17 +81,12 @@ impl Analyze {
     let func = self.cfg.func_lookup_by_name(name).unwrap(); // FIXME
     let code_seg = self.find_code_segment_for_function(func).unwrap(); // FIXME
     assert!(func.start >= code_seg.start());
-
-    let fmt = Fmt::Exe(self.exe_path.to_string());
-    let binary = Binary::from_fmt(&fmt, Some(&self.cfg)).unwrap();
-
-    func_details::func_details(func, code_seg, &binary)
+    func_details::func_details(func, code_seg, &self.binary)
   }
 }
 
 pub fn run(cfg: &Config, exe_path: &str) -> i32 {
   let mut a = Analyze::new(cfg, exe_path);
-  a.code_segments = Some(code_segment::find_code_segments(&a.exe_path)); // KLUDGY FIXME
 
   let d = a.analyze_function("F_jawn_unknown_17");
 

@@ -25,6 +25,7 @@ pub struct Binary {
   overlays: Vec<Data>,
   config: Option<Config>,
   segmap: Option<Vec<u16>>,
+  exe: Option<binfmt::mz::Exe>, // if loaded from exe format
 }
 
 fn build_segmap(exe: &binfmt::mz::Exe) -> Option<Vec<u16>> {
@@ -63,11 +64,11 @@ impl Binary {
       overlays.push(Data(exe.overlay_data(i).to_vec()));
     }
     let segmap = build_segmap(&exe);
-    Binary { main, overlays, config: config.cloned(), segmap, }
+    Binary { main, overlays, config: config.cloned(), segmap, exe: Some(exe.clone()) }
   }
 
-  pub fn from_raw(data: &[u8], config: Option<&Config>) -> Self {
-    Self { main: Data(data.to_vec()), overlays: vec![], config: config.cloned(), segmap: None }
+  pub fn from_raw(data: &[u8], config: Option<&Config>) -> Binary {
+    Binary { main: Data(data.to_vec()), overlays: vec![], config: config.cloned(), segmap: None, exe: None }
   }
 
   pub fn region(&self, start: SegOff, end: SegOff) -> &[u8] {
@@ -101,6 +102,10 @@ impl Binary {
         cfg_func(self.config.as_ref(), to_modified)
       }
     }
+  }
+
+  pub fn exe(&self) -> Option<&binfmt::mz::Exe> {
+    self.exe.as_ref()
   }
 }
 
