@@ -26,7 +26,15 @@ impl fmt::Display for ReturnKind {
 
 pub struct FuncDetails {
   pub inferred_end_addr: SegOff,
-  pub return_kind: ReturnKind,
+  pub return_kind:       ReturnKind,
+}
+
+impl fmt::Display for FuncDetails {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    writeln!(f, "inferred_end_addr: {}", self.inferred_end_addr)?;
+    writeln!(f, "return_kind:       {}", self.return_kind)?;
+    Ok(())
+  }
 }
 
 pub fn func_details(func: &Func, code_seg: &CodeSegment, binary: &Binary) -> FuncDetails {

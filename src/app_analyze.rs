@@ -89,8 +89,7 @@ pub fn run(cfg: &Config, exe_path: &str) -> i32 {
 
   let d = a.analyze_function("F_jawn_unknown_17");
   println!("========================");
-  println!("infered end:   {}", d.inferred_end_addr);
-  println!("return method: {}", d.return_kind);
+  println!("{}", d);
 
   1
 }
