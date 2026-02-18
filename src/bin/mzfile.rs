@@ -64,9 +64,9 @@ fn cmd_extract(args: &[String]) {
   }
 }
 
-fn find_segment_info<'a>(exe: &mz::Exe<'a>, addr: SegOff) -> &'a mz::SegInfo {
+fn find_segment_info<'a>(exe: &'a mz::Exe, addr: SegOff) -> &'a mz::SegInfo {
   let mut found = None;
-  let Some(seginfo) = exe.seginfo else {
+  let Some(seginfo) = exe.seginfo.as_ref() else {
     panic!("Binary has no segment info, cannot map {}", addr);
   };
   for s in seginfo {
@@ -81,7 +81,7 @@ fn find_segment_info<'a>(exe: &mz::Exe<'a>, addr: SegOff) -> &'a mz::SegInfo {
   ret
 }
 
-fn find_stub_info<'a>(exe: &'a mz::Exe<'_>, addr: SegOff) -> &'a mz::OverlayStub {
+fn find_stub_info<'a>(exe: &'a mz::Exe, addr: SegOff) -> &'a mz::OverlayStub {
   let Some(ovr) = exe.ovr.as_ref() else {
     panic!("Binary has no overlay info, cannot map {}", addr);
   };
@@ -148,7 +148,7 @@ fn cmd_dis(args: &[String]) {
 
   let exe = mz::Exe::decode(&data).unwrap();
 
-  let Some(seginfo) = exe.seginfo else {
+  let Some(seginfo) = exe.seginfo.as_ref() else {
     panic!("Binary has no seginfo: needed to do full disassemble");
   };
 

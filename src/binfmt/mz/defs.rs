@@ -78,13 +78,13 @@ pub struct OverlayInfo {
 }
 
 #[derive(Debug, Clone)]
-pub struct Exe<'a> {
-  pub hdr: &'a Header,
+pub struct Exe {
+  pub hdr: Header,
   pub exe_start: u32,
   pub exe_end: u32,
-  pub relocs: &'a [Reloc],
-  pub fbov: Option<&'a FBOV>,
-  pub seginfo: Option<&'a [SegInfo]>,
+  pub relocs: Vec<Reloc>,
+  pub fbov: Option<FBOV>,
+  pub seginfo: Option<Vec<SegInfo>>,
   pub ovr: Option<OverlayInfo>,
-  pub rawdata: &'a [u8],
+  pub rawdata: Vec<u8>,
 }

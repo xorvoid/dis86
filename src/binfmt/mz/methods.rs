@@ -1,7 +1,7 @@
 use crate::binfmt::mz::*;
 use crate::segoff::{Seg, Off, SegOff};
 
-impl<'a> Exe<'a> {
+impl Exe {
   pub fn exe_data(&self) -> &[u8] {
     &self.rawdata[self.exe_start as usize..self.exe_end as usize]
   }

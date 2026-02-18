@@ -1,6 +1,6 @@
 use crate::binfmt::mz::*;
 
-impl<'a> Exe<'a> {
+impl Exe {
   pub fn print_hdr(&self) {
     // Load everything to stack because rust thinks it's unaligned and complains otherwise...
     let magic    = self.hdr.magic;
@@ -122,13 +122,13 @@ impl<'a> Exe<'a> {
   pub fn print(&self) {
     Self::print_hdr(self);
     Self::print_relocs(&self.relocs);
-    if let Some(fbov) = self.fbov {
+    if let Some(fbov) = &self.fbov {
       Self::print_fbov(fbov);
     }
-    if let Some(seginfo) = self.seginfo {
+    if let Some(seginfo) = &self.seginfo {
       Self::print_seginfo(seginfo);
     }
-    if let Some(ovr) = self.ovr.as_ref() {
+    if let Some(ovr) = &self.ovr {
       Self::print_overlayinfo(ovr);
     }
   }

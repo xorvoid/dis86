@@ -28,7 +28,7 @@ pub struct Binary {
 }
 
 fn build_segmap(exe: &binfmt::mz::Exe) -> Option<Vec<u16>> {
-  let segmap = exe.seginfo?;
+  let segmap = exe.seginfo.as_ref()?;
   let mut out = vec![];
   for s in segmap {
     out.push(s.seg);

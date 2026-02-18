@@ -1,6 +1,6 @@
 use crate::binfmt::mz::*;
 
-fn decode_exe<'a>(data: &'a [u8]) -> Result<Exe<'a>, String> {
+fn decode_exe(data: &[u8]) -> Result<Exe, String> {
   // Decode the header
   let hdr = decode_hdr(data)?;
 
@@ -27,24 +27,25 @@ fn decode_exe<'a>(data: &'a [u8]) -> Result<Exe<'a>, String> {
       let segnum = fbov.segnum; // unaligned
       return Err(format!("Negative FBOV segnum: {}", segnum));
     }
-    seginfo = Some(unsafe { util::try_slice_from_bytes(&data[fbov.exeinfo as usize..], fbov.segnum as usize) }?);
+    let slice = unsafe { util::try_slice_from_bytes(&data[fbov.exeinfo as usize..], fbov.segnum as usize) }?;
+    seginfo = Some(slice.to_vec());
   }
 
   // Optional overlay info
   let mut ovr = None;
   if let Some(fbov) = fbov {
-    ovr = Some(overlay::decode_overlay_info(data, exe_start, fbov, seginfo.unwrap())?);
+    ovr = Some(overlay::decode_overlay_info(data, exe_start, fbov, seginfo.as_ref().unwrap())?);
   }
 
   Ok(Exe {
-    hdr,
+    hdr: hdr.clone(),
     exe_start,
     exe_end,
-    relocs,
-    fbov,
+    relocs: relocs.to_vec(),
+    fbov: fbov.cloned(),
     seginfo,
     ovr,
-    rawdata: data,
+    rawdata: data.to_vec(),
   })
 }
 
@@ -71,14 +72,14 @@ fn decode_fbov<'a>(data: &'a [u8]) -> Option<&'a FBOV> {
   Some(fbov)
 }
 
-impl<'a> Exe<'a> {
+impl Exe {
   #[cfg(target_endian = "big")]
-  pub fn decode(data: &'a [u8]) -> Result<Self, String> {
+  pub fn decode(data: &[u8]) -> Result<Self, String> {
     panic!("MZ decoding only works on little-endian machines");
   }
 
   #[cfg(target_endian = "little")]
-  pub fn decode(data: &'a [u8]) -> Result<Self, String> {
+  pub fn decode(data: &[u8]) -> Result<Self, String> {
     decode_exe(data)
   }
 }
