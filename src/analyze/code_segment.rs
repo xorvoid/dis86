@@ -54,7 +54,6 @@ impl CodeSegments {
 
     // Iterate all overlay segments and match them up with the stubs
     for (i, seg) in ovr.segs.iter().enumerate() {
-      let end = seg.data_offset + seg.segment_size as u32;
       let region = Region {
       seg: Seg::Overlay(i as u16),
         skip_off: 0,
@@ -69,7 +68,6 @@ impl CodeSegments {
   }
 
   pub fn find_for_function(&self, func: &Func) -> Option<&CodeSegment> {
-    let func_seg = func.start.seg;
     for c in &self.0 {
       if c.primary.seg == func.start.seg {
         return Some(c);

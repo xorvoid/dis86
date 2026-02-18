@@ -14,6 +14,8 @@ pub enum Loc {
   First,
   Last,
   Before(Ref), // Ref::InstrRef
+
+  #[allow(dead_code)]
   After(Ref),  // Ref::InstrRef
 }
 

@@ -2,7 +2,7 @@ use super::code_segment::CodeSegment;
 use crate::segoff::SegOff;
 use crate::config::Func;
 use crate::binary::Binary;
-use crate::asm::instr::{self, Instr, Opcode};
+use crate::asm::instr::Instr;
 use crate::asm::decode::Decoder;
 use crate::asm::intel_syntax::instr_str;
 use std::collections::HashSet;
@@ -96,6 +96,6 @@ pub fn func_details(func: &Func, code_seg: &CodeSegment, binary: &Binary) -> Fun
 // FIXME: THIS FUNCTION IS WAY TOO COMPLICATED FOR ITS SIMPLE TASK: APIs NEED IMPROVEMENT
 fn decode_one_instr(binary: &Binary, loc: SegOff, end: SegOff) -> Option<Instr> {
   let mut decoder = Decoder::new(binary.region_iter(loc, end));
-  let (instr, raw) = decoder.try_next().unwrap()?;
+  let (instr, _raw) = decoder.try_next().unwrap()?;
   Some(instr)
 }

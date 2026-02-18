@@ -47,6 +47,7 @@ impl RangeSet {
     })
   }
 
+  #[allow(dead_code)]
   pub fn span_start(&self) -> Option<u32> {
     Some(self.span()?.start)
   }
