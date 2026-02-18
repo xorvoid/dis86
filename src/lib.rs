@@ -16,6 +16,7 @@ pub mod access;
 
 // Subsystems
 pub mod asm;
+pub mod analyze;
 pub mod decompile;
 
 // Main application glue
