@@ -60,29 +60,37 @@ impl Analyze {
     }
 
     let gaps = r.gaps_within(seg_start, seg_end);
-
-    if gaps.len() == 0 {
-      println!("Complete!");
-      return;
+    let mut total_gap = 0;
+    for gap in &gaps {
+      total_gap += gap.end - gap.start;
     }
 
-    println!("");
-    println!("Gaps:");
-    println!("-------------------------------");
-    for gap in gaps {
-      println!("  [ 0x{:04x}, 0x{:04x} )   size: {}", gap.start, gap.end, gap.end - gap.start);
+    let total_size = code_seg.primary.size;
+    let perc = if total_size > 0 {
+      100.0 * (1.0 - (total_gap as f64) / (total_size as f64))
+    } else {
+      100.0
+    };
+    println!("Percent annotated: {:.2}", perc);
+
+    if gaps.len() > 0 {
+      println!("Gaps:");
+      for gap in &gaps {
+        println!("   [ 0x{:04x}, 0x{:04x} )   size: {}", gap.start, gap.end, gap.end - gap.start);
+      }
     }
   }
 
-  // pub fn analyze_code_segments_and_report(&self) {
-  //   self.code_segments.dump();
-  //   for c in &self.code_segments.0 {
-  //     println!("Segment {}", c.primary.seg);
-  //     println!("===============================");
-  //     self.analyze_code_segment(c);
-  //     println!("");
-  //   }
-  // }
+  pub fn analyze_code_segments_and_report(&self) {
+    self.code_segments.dump();
+    for c in &self.code_segments.0 {
+      let seg = c.primary.seg;
+      println!("Segment {}", seg);
+      println!("===============================");
+      self.analyze_code_segment(seg);
+      println!("");
+    }
+  }
 
   pub fn analyze_function(&self, name: &str) -> FuncDetails {
     let func = self.cfg.func_lookup_by_name(name).unwrap(); // FIXME
