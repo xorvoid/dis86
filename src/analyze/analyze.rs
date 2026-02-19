@@ -198,7 +198,7 @@ impl FunctionNames {
         self.used.insert(name.clone());
         return name;
       }
-    n += 1;
+      n += 1;
     }
   }
 }
@@ -222,9 +222,10 @@ fn generate_annotations(functions: &BTreeMap<SegOff, Result<FuncDetails, String>
       current_seg = Some(seg);
     }
 
-    let name = match cfg.func_lookup(*addr) {
-      Some(func) => func.name.clone(),
-      None       => function_names.compute_unique(&seg_name),
+
+    let (name, ret, args) = match cfg.func_lookup(*addr) {
+      Some(func) => (func.name.clone(), func.ret.clone(), func.args),
+      None       => (function_names.compute_unique(&seg_name), None, None),
     };
 
     match result {
@@ -234,16 +235,26 @@ fn generate_annotations(functions: &BTreeMap<SegOff, Result<FuncDetails, String>
           println!("start: {}  end: {}  indirect_calls: {}",
                    details.start_addr, details.end_addr_inferred, details.indirect_calls);
         } else {
-          let name  = format!("\"{}\",", name);
-          let start = format!("\"{}\",", details.start_addr);
-          let end   = format!("\"{}\"", details.end_addr_inferred);
-          let flags = if details.return_kind == ReturnKind::Near {
+          let name     = format!("\"{}\",", name);
+          let start    = format!("\"{}\",", details.start_addr);
+          let end      = format!("\"{}\"", details.end_addr_inferred);
+          let flags    = if details.return_kind == ReturnKind::Near {
             ", flags = \"NEAR\""
           } else {
             ""
           };
 
-          println!("    F( {:<30} None,   None,        {} {}{} ),", name, start, end, flags);
+          let ret_str  = match ret {
+            Some(ret) => format!("\"{}\",", ret),
+            None      => "None,".to_string(),
+          };
+
+          let args_str  = match args {
+            Some(args) => format!("{},", args),
+            None       => "None,".to_string(),
+          };
+
+          println!("    F( {:<30} {:<7} {:<12} {} {}{} ),", name, ret_str, args_str, start, end, flags);
         }
       }
       Err(err) => {
