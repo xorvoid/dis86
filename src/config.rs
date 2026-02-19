@@ -160,6 +160,17 @@ impl Config {
     }
     self.text_region_lookup_by_access(access)
   }
+
+  pub fn text_regions_matching_segment(&self, seg: Seg) -> Vec<&TextSectionRegion> {
+    let mut ret = vec![];
+    // TODO: Consider something better than linear search
+    for r in &self.text_section {
+      if seg == r.start.seg {
+        ret.push(r);
+      }
+    }
+    ret
+  }
 }
 
 impl Config {

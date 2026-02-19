@@ -41,6 +41,8 @@ impl Analyze {
     let code_seg = self.code_segments.find_by_segment(seg).unwrap();
 
     let mut r = RangeSet::new();
+
+    // Add all ranges implied by function config
     for f in &self.cfg.funcs {
       if f.start.seg != code_seg.primary.seg { continue };
       let Some(end) = &f.end else {
@@ -48,6 +50,11 @@ impl Analyze {
         continue;
       };
       r.insert(f.start.off.0 as u32, end.off.0 as u32);
+    }
+
+    // Add all ranges implied by the text section data
+    for t in self.cfg.text_regions_matching_segment(code_seg.primary.seg) {
+      r.insert(t.start.off.0 as u32, t.end.off.0 as u32);
     }
 
     let seg_start = code_seg.primary.skip_off;
