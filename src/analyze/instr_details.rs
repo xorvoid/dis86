@@ -25,10 +25,11 @@ pub enum Next {
 
 pub struct InstrDetails {
   pub next: Next,
+  pub call: Option<SegOff>,
 }
 
 // FIXME: UNIFY BACK WITH ir_build::jump_targets
-fn jump_targets(ins: &Instr) -> Option<Vec<SegOff>> {
+fn jump_targets(ins: &Instr) -> Result<Option<Vec<SegOff>>, String> {
   // Filter for branch instructions
   let (oper_num, fallthrough) = match &ins.opcode {
     Opcode::OP_JA   => (0, true),
@@ -51,7 +52,7 @@ fn jump_targets(ins: &Instr) -> Option<Vec<SegOff>> {
     Opcode::OP_JP   => (0, true),
     Opcode::OP_JS   => (0, true),
     Opcode::OP_LOOP => (1, true),
-    _ => return None,
+    _ => return Ok(None),
   };
 
   let mut targets = vec![];
@@ -60,62 +61,156 @@ fn jump_targets(ins: &Instr) -> Option<Vec<SegOff>> {
     Operand::Rel(rel) => {
       targets.push(ins.rel_addr(rel));
     }
-    _ => panic!("Unsupported branch instruction: '{}' | {:?}", instr_str(ins), ins.operands[oper_num]),
+    _ => {
+      return Err(format!("Unsupported branch instruction: '{}' | {:?}", instr_str(ins), ins.operands[oper_num]));
+    }
   };
 
   if fallthrough {
     targets.push(ins.end_addr());
   }
 
-  Some(targets)
+  Ok(Some(targets))
 }
 
-pub fn instr_details(ins: &Instr) -> InstrDetails {
-  if let Some(tgts) = jump_targets(ins) {
-    return InstrDetails { next: Next::Jump(tgts) };
+pub fn instr_details(ins: &Instr) -> Result<InstrDetails, String> {
+  if let Some(tgts) = jump_targets(ins)? {
+    return Ok(InstrDetails { next: Next::Jump(tgts), call: None });
   }
 
+  let mut call = None;
   let mut ret = None;
 
-  // TODO COMPLETE THIS
+  // NOTE: Need to complete this. We don't support everything because we're being overly conservative.
+  // Need to carefully think about the other instructions before adding them.
   match ins.opcode {
-    // Ordinary instr
-    Opcode::OP_PUSH       => (),
-    Opcode::OP_POP        => (),
-    Opcode::OP_MOV        => (),
+    Opcode::OP_AAA        => (),
+    Opcode::OP_AAS        => (),
+    Opcode::OP_ADC        => (),
     Opcode::OP_ADD        => (),
-    Opcode::OP_SUB        => (),
-    Opcode::OP_MUL        => (),
+    Opcode::OP_AND        => (),
+    Opcode::OP_CALL       => {
+      let Operand::Rel(rel) = &ins.operands[0] else {
+        return Err(format!("Unsupported operand to CALL for '{}'", instr_str(ins)));
+      };
+      call = Some(ins.rel_addr(rel));
+    }
+    Opcode::OP_CALLF      => {
+      let Operand::Far(far) = &ins.operands[0] else {
+        return Err(format!("Unsupported operand to CALLF for '{}'", instr_str(ins)));
+      };
+      call = Some(SegOff::new_normal(far.seg, far.off));
+    }
+    Opcode::OP_CBW        => (),
+    Opcode::OP_CLC        => (),
+    Opcode::OP_CLD        => (),
+    Opcode::OP_CLI        => (),
+    Opcode::OP_CMC        => (),
+    Opcode::OP_CMP        => (),
+    Opcode::OP_CMPS       => (),
+    Opcode::OP_CWD        => (),
+    Opcode::OP_DAA        => (),
+    Opcode::OP_DAS        => (),
+    Opcode::OP_DEC        => (),
+    Opcode::OP_DIV        => (),
+    Opcode::OP_ENTER      => (),
+    // Opcode::OP_HLT     => (),
     Opcode::OP_IMUL       => (),
     Opcode::OP_IMUL_TRUNC => (),
-    Opcode::OP_XOR        => (),
-    Opcode::OP_AND        => (),
-    Opcode::OP_OR         => (),
-    Opcode::OP_LES        => (),
-    Opcode::OP_LEA        => (),
-    Opcode::OP_CBW        => (),
-    Opcode::OP_CWD        => (),
-    Opcode::OP_SHL        => (),
-    Opcode::OP_SHR        => (),
-    Opcode::OP_ENTER      => (),
-    Opcode::OP_LEAVE      => (),
-    Opcode::OP_CALL       => (),
-    Opcode::OP_CALLF      => (),
-    Opcode::OP_CMP        => (),
+    Opcode::OP_IN         => (),
     Opcode::OP_INC        => (),
-    Opcode::OP_DEC        => (),
+    Opcode::OP_INS        => (),
     Opcode::OP_INT        => (),
-    Opcode::OP_CLD        => (),
-
+    // Opcode::OP_INTO    => (),
+    // Opcode::OP_INVAL   => (),
+    // Opcode::OP_IRET    => (),
+    // Opcode::OP_JA      => (),
+    // Opcode::OP_JAE     => (),
+    // Opcode::OP_JB      => (),
+    // Opcode::OP_JBE     => (),
+    // Opcode::OP_JCXZ    => (),
+    // Opcode::OP_JE      => (),
+    // Opcode::OP_JG      => (),
+    // Opcode::OP_JGE     => (),
+    // Opcode::OP_JL      => (),
+    // Opcode::OP_JLE     => (),
+    // Opcode::OP_JMP     => (),
+    // Opcode::OP_JMPF    => (),
+    // Opcode::OP_JNE     => (),
+    // Opcode::OP_JNO     => (),
+    // Opcode::OP_JNP     => (),
+    // Opcode::OP_JNS     => (),
+    // Opcode::OP_JO      => (),
+    // Opcode::OP_JP      => (),
+    // Opcode::OP_JS      => (),
+    Opcode::OP_LAHF       => (),
+    Opcode::OP_LDS        => (),
+    Opcode::OP_LEA        => (),
+    Opcode::OP_LEAVE      => (),
+    Opcode::OP_LES        => (),
+    Opcode::OP_LODS       => (),
+    // Opcode::OP_LOOP    => (),
+    // Opcode::OP_LOOPE   => (),
+    // Opcode::OP_LOOPNE  => (),
+    Opcode::OP_MOV        => (),
+    Opcode::OP_MOVS       => (),
+    Opcode::OP_MUL        => (),
+    Opcode::OP_NEG        => (),
+    Opcode::OP_NOP        => (),
+    Opcode::OP_NOT        => (),
+    Opcode::OP_OR         => (),
+    Opcode::OP_OUT        => (),
+    Opcode::OP_OUTS       => (),
+    Opcode::OP_POP        => (),
+    Opcode::OP_POPA       => (),
+    Opcode::OP_POPF       => (),
+    Opcode::OP_PUSH       => (),
+    Opcode::OP_PUSHA      => (),
+    Opcode::OP_PUSHF      => (),
+    Opcode::OP_RCL        => (),
+    Opcode::OP_RCR        => (),
     Opcode::OP_RET        => ret = Some(ReturnKind::Near),
     Opcode::OP_RETF       => ret = Some(ReturnKind::Far),
+    Opcode::OP_ROL        => (),
+    Opcode::OP_ROR        => (),
+    Opcode::OP_SAHF       => (),
+    Opcode::OP_SAR        => (),
+    Opcode::OP_SBB        => (),
+    Opcode::OP_SCAS       => (),
+    Opcode::OP_SETO       => (),
+    Opcode::OP_SETNO      => (),
+    Opcode::OP_SETA       => (),
+    Opcode::OP_SETAE      => (),
+    Opcode::OP_SETB       => (),
+    Opcode::OP_SETBE      => (),
+    Opcode::OP_SETE       => (),
+    Opcode::OP_SETG       => (),
+    Opcode::OP_SETGE      => (),
+    Opcode::OP_SETL       => (),
+    Opcode::OP_SETLE      => (),
+    Opcode::OP_SETP       => (),
+    Opcode::OP_SETS       => (),
+    Opcode::OP_SETNE      => (),
+    Opcode::OP_SETNP      => (),
+    Opcode::OP_SETNS      => (),
+    Opcode::OP_SHL        => (),
+    Opcode::OP_SHR        => (),
+    Opcode::OP_STC        => (),
+    Opcode::OP_STD        => (),
+    Opcode::OP_STI        => (),
+    Opcode::OP_STOS       => (),
+    Opcode::OP_SUB        => (),
+    Opcode::OP_TEST       => (),
+    Opcode::OP_XCHG       => (),
+    Opcode::OP_XLAT       => (),
+    Opcode::OP_XOR        => (),
 
-    _ => panic!("UNIMPL OPCODE"),
+    _ => panic!("UNIMPL Opcode for {}", instr_str(ins)),
   };
 
   if let Some(ret) = ret {
-    return InstrDetails { next: Next::Return(ret) };
+    return Ok(InstrDetails { next: Next::Return(ret), call: None });
   }
 
-  InstrDetails { next: Next::Fallthrough(ins.end_addr()) }
+  Ok(InstrDetails { next: Next::Fallthrough(ins.end_addr()), call })
 }

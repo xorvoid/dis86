@@ -9,11 +9,12 @@ pub fn run(cfg: &Config, exe_path: &str) -> i32 {
   // println!("========================");
   // println!("{}", d);
 
-  let seg: Seg = "overlay_0000".parse().unwrap();
-  println!("Segment: {}", seg);
-  println!("-----------------------------------");
-  a.analyze_code_segment(seg);
+  // let seg: Seg = "overlay_0000".parse().unwrap();
+  // println!("Segment: {}", seg);
+  // println!("-----------------------------------");
+  // a.analyze_code_segment_NEW(seg);
 
+  a.scan_for_all_functions();
 
   1
 }

@@ -30,6 +30,14 @@ pub struct SegOff {
 }
 
 impl SegOff {
+  pub fn new_normal(seg: u16, off: u16) -> SegOff {
+    SegOff { seg: Seg::Normal(seg), off: Off(off) }
+  }
+
+  pub fn new_overlay(seg: u16, off: u16) -> SegOff {
+    SegOff { seg: Seg::Overlay(seg), off: Off(off) }
+  }
+
   pub fn abs_normal(&self) -> usize {
     (self.seg.unwrap_normal() as usize) * 16 + (self.off.0 as usize)
   }

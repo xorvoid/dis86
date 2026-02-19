@@ -1,7 +1,7 @@
 use crate::segoff::{Seg, Off, SegOff};
 use crate::binfmt::mz;
 use crate::binary::Binary;
-use crate::config::Func;
+use crate::config::{Config, Func};
 
 #[derive(Debug, Clone)]
 pub struct Region {
@@ -77,12 +77,7 @@ impl CodeSegments {
   }
 
   pub fn find_for_function(&self, func: &Func) -> Option<&CodeSegment> {
-    for c in &self.0 {
-      if c.primary.seg == func.start.seg {
-        return Some(c);
-      }
-    }
-    None
+    self.find_by_segment(func.start.seg)
   }
 
   pub fn dump(&self) {
@@ -96,5 +91,22 @@ impl CodeSegments {
       println!("{:3} | seg: {:<15} skip_off: 0x{:04x},   size: {:>6}{}",
                i, seg_str, s.primary.skip_off, s.primary.size, ex);
     }
+  }
+}
+
+#[derive(Debug)]
+pub struct CodeDetail {
+  pub function_entries: Vec<Func>,
+}
+
+impl CodeDetail {
+  pub fn build(code_seg: &CodeSegment, cfg: &Config) -> CodeDetail {
+    let mut function_entries = vec![];
+    for f in &cfg.funcs {
+      if f.start.seg != code_seg.primary.seg { continue };
+      function_entries.push(f.clone());
+    }
+
+    CodeDetail { function_entries }
   }
 }

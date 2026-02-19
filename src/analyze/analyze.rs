@@ -1,10 +1,13 @@
 use crate::binary::{Binary, Fmt};
 use crate::config::Config;
-use crate::segoff::Seg;
+use crate::segoff::{Seg, SegOff};
 use crate::util::range_set::RangeSet;
 
-use crate::analyze::code_segment::{CodeSegment, CodeSegments};
-use crate::analyze::func_details::FuncDetails;
+use super::workqueue::WorkQueue;
+use super::code_segment::{CodeSegment, CodeSegments, CodeDetail};
+use super::func_details::FuncDetails;
+
+use std::collections::BTreeMap;
 
 pub struct Analyze {
   cfg: Config,
@@ -80,6 +83,59 @@ impl Analyze {
     let func = self.cfg.func_lookup_by_name(name).unwrap(); // FIXME
     let code_seg = self.code_segments.find_for_function(func).unwrap(); // FIXME
     assert!(func.start >= code_seg.start());
-    FuncDetails::build(func, code_seg, &self.binary)
+    FuncDetails::build(func.start, code_seg, &self.binary).unwrap() // HAX FIXME
+  }
+
+  pub fn analyze_function_by_start(&self, start: SegOff) -> Result<FuncDetails, String> {
+    let Some(code_seg) = self.code_segments.find_by_segment(start.seg) else {
+      return Err(format!("Failed to find code segement"));
+    };
+    assert!(start >= code_seg.start());
+    FuncDetails::build(start, code_seg, &self.binary)
+  }
+
+  pub fn analyze_code_segment_NEW(&self, seg: Seg) {
+    let code_seg = self.code_segments.find_by_segment(seg).unwrap();
+    let detail = CodeDetail::build(code_seg, &self.cfg);
+
+    for func in &detail.function_entries {
+      let func_detail = FuncDetails::build(func.start, code_seg, &self.binary).unwrap();  // HAX FIXME
+
+      println!("function name: {}", func.name);
+      println!("-----------------------------");
+      println!("{}", func_detail);
+    }
+  }
+
+  // Scan known functions to find new functions, then scan those, return a big list of all found functions
+  pub fn scan_for_all_functions(&self) {
+    let mut workqueue = WorkQueue::new();
+
+    // init work queue with known config functions
+    for f in &self.cfg.funcs {
+      workqueue.insert(f.start);
+    }
+
+    let mut functions = BTreeMap::new();
+    while let Some(addr) = workqueue.pop() {
+      let result = self.analyze_function_by_start(addr);
+      functions.insert(addr, result);
+    }
+
+    for (addr, result) in functions {
+      print!("function {} | ", addr);
+      match result {
+        Ok(details) => {
+          println!("start: {}  end: {}", details.start_addr, details.end_addr_inferred);
+          // Add all new calls to the work queue
+          for call in &details.calls {
+            workqueue.insert(*call);
+          }
+        }
+        Err(err) => {
+          println!("error: '{}'", err);
+        }
+      }
+    }
   }
 }

@@ -1,23 +1,35 @@
 use super::code_segment::CodeSegment;
+use super::workqueue::WorkQueue;
 use crate::segoff::SegOff;
-use crate::config::Func;
 use crate::binary::Binary;
 use crate::asm::instr::Instr;
 use crate::asm::decode::Decoder;
 use crate::asm::intel_syntax::instr_str;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::BTreeSet;
 use std::fmt;
 
 use crate::analyze::instr_details::{self, ReturnKind, Next};
 
+const DEBUG: bool = false;
+//const DEBUG: bool = true;
+
 pub struct FuncDetails {
-  pub inferred_end_addr: SegOff,
+  pub start_addr:        SegOff,
+  pub end_addr_inferred: SegOff,
+  pub calls:             BTreeSet<SegOff>,
   pub return_kind:       ReturnKind,
 }
 
 impl fmt::Display for FuncDetails {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    writeln!(f, "inferred_end_addr: {}", self.inferred_end_addr)?;
+    writeln!(f, "start_addr:        {}", self.start_addr)?;
+    writeln!(f, "end_addr_inferred: {}", self.end_addr_inferred)?;
+    write!(f,   "calls:             [")?;
+    for (i, c) in self.calls.iter().enumerate() {
+      if i != 0 { write!(f, ", ")?; }
+      write!(f, "{}", c)?;
+    }
+    writeln!(f, "]")?;
     writeln!(f, "return_kind:       {}", self.return_kind)?;
     Ok(())
   }
@@ -46,21 +58,19 @@ impl fmt::Display for Block {
 }
 
 impl FuncDetails {
-  pub fn build(func: &Func, code_seg: &CodeSegment, binary: &Binary) -> FuncDetails {
-    assert!(func.start >= code_seg.start());
+  pub fn build(func_start: SegOff, code_seg: &CodeSegment, binary: &Binary) -> Result<FuncDetails, String> {
+    assert!(func_start >= code_seg.start());
     let code_seg_end = code_seg.end();
 
-    let mut discovered = HashSet::new();
-    let mut queued = BTreeSet::new();
+    let mut workqueue = WorkQueue::new();
+    workqueue.insert(func_start);
 
-    discovered.insert(func.start);
-    queued.insert(func.start);
-
-    let mut largest_addr = func.start;
+    let mut largest_addr = func_start;
+    let mut calls = BTreeSet::new();
     let mut return_kind = None;
 
     // Iterate over blocks
-    while let Some(loc) = queued.pop_first() {
+    while let Some(loc) = workqueue.pop() {
       let mut block = Block {
         start: loc,
         exits: vec![], // not yet known
@@ -74,15 +84,22 @@ impl FuncDetails {
       while !block_complete {
         // Decode next instruction
         let instr = decode_one_instr(&binary, addr, code_seg_end).unwrap();
-        assert!(instr.rep.is_none()); // UNIMPL
         let end_addr = instr.end_addr();
         if end_addr > largest_addr { largest_addr = end_addr; }
+
+        if DEBUG { println!("INSTR | {} | {}", instr.addr, instr_str(&instr)); }
 
         // Add instr to the block
         block.instrs.push(instr);
 
         // Compute instr details
-        let details = instr_details::instr_details(&instr);
+        let details = instr_details::instr_details(&instr)?;
+
+        // Handle calls
+        if let Some(call) = details.call {
+          if DEBUG { println!("Call to {}", call); }
+          calls.insert(call);
+        }
 
         // Figure out what to do next
         match details.next {
@@ -99,9 +116,7 @@ impl FuncDetails {
           }
           Next::Jump(targets) => {
             for tgt in &targets {
-              if discovered.get(tgt).is_some() { continue; }
-              discovered.insert(*tgt);
-              queued.insert(*tgt);
+              workqueue.insert(*tgt);
             }
             // Add exits to block
             block.exits = targets;
@@ -110,13 +125,15 @@ impl FuncDetails {
         }
       }
 
-      println!("{}", block);
+      if DEBUG { println!("{}", block); }
     }
 
-    FuncDetails {
-      inferred_end_addr: largest_addr,
+    Ok(FuncDetails {
+      start_addr: func_start,
+      end_addr_inferred: largest_addr,
+      calls,
       return_kind: return_kind.unwrap(),
-    }
+    })
   }
 }
 
