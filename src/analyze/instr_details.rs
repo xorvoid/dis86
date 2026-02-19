@@ -6,13 +6,15 @@ use std::fmt;
 pub enum ReturnKind {
   Near,
   Far,
+  Interrupt,
 }
 
 impl fmt::Display for ReturnKind {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
-      ReturnKind::Near => write!(f, "near"),
-      ReturnKind::Far  => write!(f, "far"),
+      ReturnKind::Near      => write!(f, "near"),
+      ReturnKind::Far       => write!(f, "far"),
+      ReturnKind::Interrupt => write!(f, "interrupt"),
     }
   }
 }
@@ -23,9 +25,14 @@ pub enum Next {
   Jump(Vec<SegOff>),       // jump targets (block terminator)
 }
 
+pub enum Call {
+  Direct(SegOff),
+  Indirect,
+}
+
 pub struct InstrDetails {
   pub next: Next,
-  pub call: Option<SegOff>,
+  pub call: Option<Call>,
 }
 
 // FIXME: UNIFY BACK WITH ir_build::jump_targets
@@ -90,16 +97,24 @@ pub fn instr_details(ins: &Instr) -> Result<InstrDetails, String> {
     Opcode::OP_ADD        => (),
     Opcode::OP_AND        => (),
     Opcode::OP_CALL       => {
-      let Operand::Rel(rel) = &ins.operands[0] else {
+      if let Operand::Rel(rel) = &ins.operands[0] {
+        let addr = ins.rel_addr(rel);
+        call = Some(Call::Direct(addr));
+      } else if let Operand::Mem(_) = &ins.operands[0] {
+        call = Some(Call::Indirect);
+      } else {
         return Err(format!("Unsupported operand to CALL for '{}'", instr_str(ins)));
-      };
-      call = Some(ins.rel_addr(rel));
+      }
     }
     Opcode::OP_CALLF      => {
-      let Operand::Far(far) = &ins.operands[0] else {
+      if let Operand::Far(far) = &ins.operands[0] {
+        let addr = SegOff::new_normal(far.seg, far.off);
+        call = Some(Call::Direct(addr));
+      } else if let Operand::Mem(_) = &ins.operands[0] {
+        call = Some(Call::Indirect);
+      } else {
         return Err(format!("Unsupported operand to CALLF for '{}'", instr_str(ins)));
-      };
-      call = Some(SegOff::new_normal(far.seg, far.off));
+      }
     }
     Opcode::OP_CBW        => (),
     Opcode::OP_CLC        => (),
@@ -123,7 +138,7 @@ pub fn instr_details(ins: &Instr) -> Result<InstrDetails, String> {
     Opcode::OP_INT        => (),
     // Opcode::OP_INTO    => (),
     // Opcode::OP_INVAL   => (),
-    // Opcode::OP_IRET    => (),
+    Opcode::OP_IRET       => (),
     // Opcode::OP_JA      => (),
     // Opcode::OP_JAE     => (),
     // Opcode::OP_JB      => (),

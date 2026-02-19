@@ -8,7 +8,7 @@ use crate::asm::intel_syntax::instr_str;
 use std::collections::BTreeSet;
 use std::fmt;
 
-use crate::analyze::instr_details::{self, ReturnKind, Next};
+use crate::analyze::instr_details::{self, ReturnKind, Next, Call};
 
 const DEBUG: bool = false;
 //const DEBUG: bool = true;
@@ -16,7 +16,8 @@ const DEBUG: bool = false;
 pub struct FuncDetails {
   pub start_addr:        SegOff,
   pub end_addr_inferred: SegOff,
-  pub calls:             BTreeSet<SegOff>,
+  pub direct_calls:      BTreeSet<SegOff>,
+  pub indirect_calls:    usize,
   pub return_kind:       ReturnKind,
 }
 
@@ -24,12 +25,13 @@ impl fmt::Display for FuncDetails {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     writeln!(f, "start_addr:        {}", self.start_addr)?;
     writeln!(f, "end_addr_inferred: {}", self.end_addr_inferred)?;
-    write!(f,   "calls:             [")?;
-    for (i, c) in self.calls.iter().enumerate() {
+    write!(f,   "direct_calls:      [")?;
+    for (i, c) in self.direct_calls.iter().enumerate() {
       if i != 0 { write!(f, ", ")?; }
       write!(f, "{}", c)?;
     }
     writeln!(f, "]")?;
+    writeln!(f, "indirect_calls:    {}", self.indirect_calls)?;
     writeln!(f, "return_kind:       {}", self.return_kind)?;
     Ok(())
   }
@@ -66,7 +68,8 @@ impl FuncDetails {
     workqueue.insert(func_start);
 
     let mut largest_addr = func_start;
-    let mut calls = BTreeSet::new();
+    let mut direct_calls = BTreeSet::new();
+    let mut indirect_calls = 0;
     let mut return_kind = None;
 
     // Iterate over blocks
@@ -96,9 +99,16 @@ impl FuncDetails {
         let details = instr_details::instr_details(&instr)?;
 
         // Handle calls
-        if let Some(call) = details.call {
-          if DEBUG { println!("Call to {}", call); }
-          calls.insert(call);
+        match &details.call {
+          Some(Call::Direct(addr)) => {
+            if DEBUG { println!("Call to {}", addr); }
+            direct_calls.insert(*addr);
+          }
+          Some(Call::Indirect) => {
+            if DEBUG { println!("Indirect call"); }
+            indirect_calls += 1;
+          }
+          None => (),
         }
 
         // Figure out what to do next
@@ -131,7 +141,8 @@ impl FuncDetails {
     Ok(FuncDetails {
       start_addr: func_start,
       end_addr_inferred: largest_addr,
-      calls,
+      direct_calls,
+      indirect_calls,
       return_kind: return_kind.unwrap(),
     })
   }

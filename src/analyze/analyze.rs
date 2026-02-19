@@ -119,6 +119,14 @@ impl Analyze {
     let mut functions = BTreeMap::new();
     while let Some(addr) = workqueue.pop() {
       let result = self.analyze_function_by_start(addr);
+
+      // Add all new calls to the work queue
+      // if let Ok(details) = &result {
+      //   for call in &details.direct_calls {
+      //     workqueue.insert(*call);
+      //   }
+      // }
+
       functions.insert(addr, result);
     }
 
@@ -138,14 +146,11 @@ impl Analyze {
         None => "UNKNOWN".to_string(),
       };
 
-      print!("Function: {:<25} |  addr: {}  | ", name, addr);
+      print!("Function: {:<35} |  addr: {}  | ", name, addr);
       match result {
         Ok(details) => {
-          println!("start: {}  end: {}", details.start_addr, details.end_addr_inferred);
-          // Add all new calls to the work queue
-          for call in &details.calls {
-            workqueue.insert(*call);
-          }
+          println!("start: {}  end: {}  indirect_calls: {}",
+                   details.start_addr, details.end_addr_inferred, details.indirect_calls);
         }
         Err(err) => {
           println!("error: '{}'", err);
