@@ -122,8 +122,23 @@ impl Analyze {
       functions.insert(addr, result);
     }
 
+    // Print out a report
+    let mut current_seg = None;
     for (addr, result) in functions {
-      print!("function {} | ", addr);
+      let seg = addr.seg;
+      if Some(seg) != current_seg {
+        println!("");
+        println!("Segment {}", seg);
+        println!("--------------------------------------------------------------------------------------------------------------------------------------------------------");
+        current_seg = Some(seg);
+      }
+
+      let name = match self.cfg.func_lookup(addr) {
+        Some(func) => func.name.clone(),
+        None => "UNKNOWN".to_string(),
+      };
+
+      print!("Function: {:<25} |  addr: {}  | ", name, addr);
       match result {
         Ok(details) => {
           println!("start: {}  end: {}", details.start_addr, details.end_addr_inferred);
