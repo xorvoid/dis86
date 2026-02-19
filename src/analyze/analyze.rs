@@ -7,7 +7,7 @@ use super::workqueue::WorkQueue;
 use super::code_segment::{CodeSegment, CodeSegments, CodeDetail};
 use super::func_details::{FuncDetails, ReturnKind};
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 pub struct Analyze {
   cfg: Config,
@@ -26,6 +26,11 @@ impl Analyze {
       binary,
       code_segments,
     }
+  }
+
+  fn cfg_code_segment_name(&self, seg: Seg) -> Option<&str> {
+    let code_seg = self.cfg.code_seg_lookup(seg)?;
+    Some(&code_seg.name)
   }
 
   pub fn dump_info(&self) {
@@ -169,22 +174,58 @@ fn dump_functions(functions: &BTreeMap<SegOff, Result<FuncDetails, String>>, cfg
   }
 }
 
+struct FunctionNames {
+  used: HashSet<String>,
+}
+
+impl FunctionNames {
+  fn from_cfg(cfg: &Config) -> FunctionNames {
+    let mut used = HashSet::new();
+    for func in &cfg.funcs {
+      assert!(used.get(&func.name).is_none());
+      used.insert(func.name.clone());
+    }
+    FunctionNames { used }
+  }
+
+  fn compute_unique(&mut self, base: &str) -> String {
+    // Try a bunch of names until we find a unique one
+    // NOTE: THIS IS VERY INEFFICENT... Falls apart to O(n^2) over many calls
+    let mut n = 1;
+    loop {
+      let name = format!("F_{}_unknown_{}", base, n);
+      if self.used.get(&name).is_none() {
+        self.used.insert(name.clone());
+        return name;
+      }
+    n += 1;
+    }
+  }
+}
+
 fn generate_annotations(functions: &BTreeMap<SegOff, Result<FuncDetails, String>>, cfg: &Config) {
+  let mut function_names = FunctionNames::from_cfg(cfg);
+
   let mut current_seg = None;
   for (addr, result) in functions {
     let seg = addr.seg;
+
+    let seg_name = match cfg.code_seg_lookup(seg) {
+      Some(cs) => cs.name.clone(),
+      None => format!("_{}", seg),
+    };
+
     if Some(seg) != current_seg {
       println!("");
       println!("    ##################################################################################################################");
-      println!("    ## Section {}", seg);
+      println!("    ## Section {}: {}", seg, seg_name);
       current_seg = Some(seg);
     }
 
     let name = match cfg.func_lookup(*addr) {
       Some(func) => func.name.clone(),
-      None => "UNKNOWN".to_string(),
+      None       => function_names.compute_unique(&seg_name),
     };
-
 
     match result {
       Ok(details) => {

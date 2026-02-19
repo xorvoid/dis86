@@ -1,8 +1,14 @@
-use crate::segoff::SegOff;
+use crate::segoff::{Seg, SegOff};
 use crate::bsl;
 use crate::types::{Type, TypeDatabase};
 use crate::asm::instr::Reg;
 use std::rc::Rc;
+
+#[derive(Debug, Clone)]
+pub struct CodeSeg {
+  pub seg: Seg,
+  pub name: String,
+}
 
 #[derive(Debug, Clone)]
 pub struct Func {
@@ -64,6 +70,7 @@ pub struct TextSectionRegion {
 pub struct Config {
   pub types: Rc<TypeDatabase>,
   pub structs: Vec<Struct>,
+  pub code_segs: Vec<CodeSeg>,
   pub funcs: Vec<Func>,
   pub indirects: Vec<Indirect>,
   pub globals: Vec<Global>,
@@ -86,6 +93,16 @@ impl Func {
 }
 
 impl Config {
+  pub fn code_seg_lookup(&self, seg: Seg) -> Option<&CodeSeg> {
+    // TODO: Consider something better than linear search
+    for c in &self.code_segs {
+      if seg == c.seg {
+        return Some(c)
+      }
+    }
+    None
+  }
+
   pub fn func_lookup(&self, addr: SegOff) -> Option<&Func> {
     // TODO: Consider something better than linear search
     for f in &self.funcs {
@@ -150,6 +167,7 @@ impl Config {
     let mut cfg = Config {
       types: Rc::new(TypeDatabase::new()), // dummy
       structs: vec![],
+      code_segs: vec![],
       funcs: vec![],
       indirects: vec![],
       globals: vec![],
@@ -165,6 +183,7 @@ impl Config {
 
     let mut types = TypeDatabase::new();
     cfg.parse_structs(&root, &mut types)?; // Important for this to go first and build types
+    cfg.parse_code_segs(&root)?;
     cfg.parse_functions(&root, &types)?;
     cfg.parse_globals(&root, &types)?;
     cfg.parse_text_section(&root, &types)?;
@@ -173,6 +192,27 @@ impl Config {
     cfg.types = Rc::new(types);
 
     Ok(cfg)
+  }
+
+  fn parse_code_segs(&mut self, root: &bsl::Root) -> Result<(), String> {
+    let code_segs = root.get_node("dis86.code_segments")
+      .ok_or_else(|| format!("Failed to get the code_segments node"))?;
+
+    for (key, val) in code_segs.iter() {
+      let f = val.as_node()
+        .ok_or_else(|| format!("Expected code_seg properties"))?;
+
+      let seg_str = f.get_str("seg")
+        .ok_or_else(|| format!("No function 'seg' property for '{}'", key))?;
+      let name = f.get_str("name")
+        .ok_or_else(|| format!("No function 'name' property for '{}'", key))?;
+
+      let seg: Seg = seg_str.parse()
+        .map_err(|_| format!("Expected segoff for '{}.end', got '{}'", key, seg_str))?;
+
+      self.code_segs.push(CodeSeg { seg, name: name.to_string() });
+    }
+    Ok(())
   }
 
   fn parse_functions(&mut self, root: &bsl::Root, types: &TypeDatabase) -> Result<(), String> {
