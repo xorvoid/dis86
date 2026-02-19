@@ -5,7 +5,7 @@ use crate::util::range_set::RangeSet;
 
 use super::workqueue::WorkQueue;
 use super::code_segment::{CodeSegment, CodeSegments, CodeDetail};
-use super::func_details::FuncDetails;
+use super::func_details::{FuncDetails, ReturnKind};
 
 use std::collections::BTreeMap;
 
@@ -108,7 +108,7 @@ impl Analyze {
   }
 
   // Scan known functions to find new functions, then scan those, return a big list of all found functions
-  pub fn scan_for_all_functions(&self) {
+  pub fn scan_for_all_functions(&self, emit_annotation_format: bool) {
     let mut workqueue = WorkQueue::new();
 
     // init work queue with known config functions
@@ -130,31 +130,83 @@ impl Analyze {
       functions.insert(addr, result);
     }
 
-    // Print out a report
-    let mut current_seg = None;
-    for (addr, result) in functions {
-      let seg = addr.seg;
-      if Some(seg) != current_seg {
-        println!("");
-        println!("Segment {}", seg);
-        println!("--------------------------------------------------------------------------------------------------------------------------------------------------------");
-        current_seg = Some(seg);
+    if emit_annotation_format {
+      // Synthesize annotations
+      generate_annotations(&functions, &self.cfg);
+    } else {
+      // Print out a report
+      dump_functions(&functions, &self.cfg);
+    }
+  }
+}
+
+fn dump_functions(functions: &BTreeMap<SegOff, Result<FuncDetails, String>>, cfg: &Config) {
+  let mut current_seg = None;
+  for (addr, result) in functions {
+    let seg = addr.seg;
+    if Some(seg) != current_seg {
+      println!("");
+      println!("Segment {}", seg);
+      println!("--------------------------------------------------------------------------------------------------------------------------------------------------------");
+      current_seg = Some(seg);
+    }
+
+    let name = match cfg.func_lookup(*addr) {
+      Some(func) => func.name.clone(),
+      None => "UNKNOWN".to_string(),
+    };
+
+    print!("Function: {:<35} |  addr: {}  | ", name, addr);
+    match result {
+      Ok(details) => {
+        println!("start: {}  end: {}  indirect_calls: {}",
+                 details.start_addr, details.end_addr_inferred, details.indirect_calls);
       }
+      Err(err) => {
+        println!("error: '{}'", err);
+      }
+    }
+  }
+}
 
-      let name = match self.cfg.func_lookup(addr) {
-        Some(func) => func.name.clone(),
-        None => "UNKNOWN".to_string(),
-      };
+fn generate_annotations(functions: &BTreeMap<SegOff, Result<FuncDetails, String>>, cfg: &Config) {
+  let mut current_seg = None;
+  for (addr, result) in functions {
+    let seg = addr.seg;
+    if Some(seg) != current_seg {
+      println!("");
+      println!("    ##################################################################################################################");
+      println!("    ## Section {}", seg);
+      current_seg = Some(seg);
+    }
 
-      print!("Function: {:<35} |  addr: {}  | ", name, addr);
-      match result {
-        Ok(details) => {
+    let name = match cfg.func_lookup(*addr) {
+      Some(func) => func.name.clone(),
+      None => "UNKNOWN".to_string(),
+    };
+
+
+    match result {
+      Ok(details) => {
+        if details.indirect_calls > 0 {
+          print!("    # IGNORED INDIRECT CALLS | {} | {} | ", name, addr);
           println!("start: {}  end: {}  indirect_calls: {}",
                    details.start_addr, details.end_addr_inferred, details.indirect_calls);
+        } else {
+          let name  = format!("\"{}\",", name);
+          let start = format!("\"{}\",", details.start_addr);
+          let end   = format!("\"{}\"", details.end_addr_inferred);
+          let flags = if details.return_kind == ReturnKind::Near {
+            ", flags = \"NEAR\""
+          } else {
+            ""
+          };
+
+          println!("    F( {:<30} None,   None,        {} {}{} ),", name, start, end, flags);
         }
-        Err(err) => {
-          println!("error: '{}'", err);
-        }
+      }
+      Err(err) => {
+        println!("    # IGNORED ERROR | {} | {} | error: '{}'", name, addr, err);
       }
     }
   }

@@ -409,17 +409,24 @@ impl IRBuilder<'_> {
   fn return_vals(&mut self) -> Vec<Ref> {
     let ax = self.ir.get_var(instr::Reg::AX, self.cur);
     let dx = self.ir.get_var(instr::Reg::DX, self.cur);
-    if let Some(func) = self.spec.func {
-      // Use the retval in the config defn
-      match &func.ret {
-        Type::Void => vec![], // no return value
-        Type::U8 | Type::I8 | Type::U16 | Type::I16 => vec![ax],
-        Type::U32 | Type::I32  => vec![ax, dx],
-        _ => panic!("Unsupported function return type: {}", func.ret),
-      }
-    } else {
+    let ax_dx = vec![ax, dx];
+
+    let Some(func) = self.spec.func else {
       // Assume worst case: DX:AX return
-      vec![ax, dx]
+      return ax_dx;
+    };
+
+    let Some(ret) = &func.ret else {
+      // Assume worst case: DX:AX return
+      return ax_dx;
+    };
+
+    // Use type based return information
+    match ret {
+      Type::Void => vec![], // no return value
+      Type::U8 | Type::I8 | Type::U16 | Type::I16 => vec![ax],
+      Type::U32 | Type::I32  => vec![ax, dx],
+      _ => panic!("Unsupported function return type: {}", ret),
     }
   }
 
@@ -579,8 +586,9 @@ impl IRBuilder<'_> {
     let mut operands = vec![Ref::Func(idx)];
     operands.append(&mut self.load_args_from_stack(nargs));
 
-    let ret_ref = self.append_instr(func.ret.clone(), Opcode::CallArgs, operands);
-    self.save_return_value(&func.ret, ret_ref);
+    let ret_type = func.return_type_defaulted();
+    let ret_ref = self.append_instr(ret_type.clone(), Opcode::CallArgs, operands);
+    self.save_return_value(&ret_type, ret_ref);
 
     if func.dont_pop_args {
       let sp = self.ir.get_var(instr::Reg::SP, self.cur);

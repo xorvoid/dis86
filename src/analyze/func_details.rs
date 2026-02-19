@@ -8,7 +8,8 @@ use crate::asm::intel_syntax::instr_str;
 use std::collections::BTreeSet;
 use std::fmt;
 
-use crate::analyze::instr_details::{self, ReturnKind, Next, Call};
+use crate::analyze::instr_details::{self, Next, Call};
+pub use crate::analyze::instr_details::ReturnKind;
 
 const DEBUG: bool = false;
 //const DEBUG: bool = true;

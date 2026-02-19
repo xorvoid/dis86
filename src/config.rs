@@ -11,7 +11,7 @@ pub struct Func {
   pub end: Option<SegOff>,
   pub entry: Option<SegOff>,
   pub mode: CallMode,
-  pub ret: Type,
+  pub ret: Option<Type>,
   pub args: Option<u16>,  // None means "unknown", Some(0) means "no args"
   pub regargs: Option<Vec<Reg>>,
   pub dont_pop_args: bool,
@@ -75,6 +75,13 @@ impl Func {
   fn entry(&self) -> Option<SegOff> {
     if let Some(entry) = self.entry { return Some(entry); }
     Some(self.start)
+  }
+
+  pub fn return_type_defaulted(&self) -> Type {
+    match &self.ret {
+      Some(ret) => ret.clone(),
+      None => Type::U32,  // when we don't have more information, we can pessimize and assume u32 might be returned
+    }
   }
 }
 
@@ -208,10 +215,16 @@ impl Config {
         "far" => CallMode::Far,
         _ => panic!("Unsupported mode '{}'", mode_str)
       };
-      let args: i16 = args_str.parse()
-        .map_err(|_| format!("Expected u16 for '{}.args', got '{}'", key, args_str))?;
-      let ret: Type = types.parse_type(ret_str)
-        .map_err(|err| format!("Expected type for '{}.ret', got '{}' | {}", key, ret_str, err))?;
+      let mut args: i16 = -1;
+      if args_str != "None" {
+        args = args_str.parse()
+          .map_err(|_| format!("Expected u16 for '{}.args', got '{}'", key, args_str))?;
+      }
+      let mut ret: Option<Type> = None;
+      if ret_str != "None" {
+        ret = Some(types.parse_type(ret_str)
+          .map_err(|err| format!("Expected type for '{}.ret', got '{}' | {}", key, ret_str, err))?);
+      }
 
       let regargs = match regargs {
         None => None,
@@ -244,7 +257,7 @@ impl Config {
         }
         self.indirects.push(Indirect {
           addr: start,
-          ret,
+          ret: ret.unwrap(), // FIXME IS THIS OKAY?
           args: args as u16,
         });
       }

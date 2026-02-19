@@ -4,6 +4,7 @@ use crate::segoff::{SegOff, Seg, Off};
 use crate::binary::Binary;
 use std::fmt;
 
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum ReturnKind {
   Near,
   Far,
