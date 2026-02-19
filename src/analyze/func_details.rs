@@ -86,7 +86,7 @@ impl FuncDetails {
       let mut block_complete = false;
       while !block_complete {
         // Decode next instruction
-        let instr = decode_one_instr(&binary, addr, code_seg_end).unwrap();
+        let instr = decode_one_instr(&binary, addr, code_seg_end)?;
         let end_addr = instr.end_addr();
         if end_addr > largest_addr { largest_addr = end_addr; }
 
@@ -96,7 +96,7 @@ impl FuncDetails {
         block.instrs.push(instr);
 
         // Compute instr details
-        let details = instr_details::instr_details(&instr)?;
+        let details = instr_details::instr_details(&instr, &binary)?;
 
         // Handle calls
         match &details.call {
@@ -149,8 +149,8 @@ impl FuncDetails {
 }
 
 // FIXME: THIS FUNCTION IS WAY TOO COMPLICATED FOR ITS SIMPLE TASK: APIs NEED IMPROVEMENT
-fn decode_one_instr(binary: &Binary, loc: SegOff, end: SegOff) -> Option<Instr> {
+fn decode_one_instr(binary: &Binary, loc: SegOff, end: SegOff) -> Result<Instr, String> {
   let mut decoder = Decoder::new(binary.region_iter(loc, end));
-  let (instr, _raw) = decoder.try_next().unwrap()?;
-  Some(instr)
+  let (instr, _raw) = decoder.try_next()?.unwrap();
+  Ok(instr)
 }

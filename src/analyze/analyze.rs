@@ -121,11 +121,11 @@ impl Analyze {
       let result = self.analyze_function_by_start(addr);
 
       // Add all new calls to the work queue
-      // if let Ok(details) = &result {
-      //   for call in &details.direct_calls {
-      //     workqueue.insert(*call);
-      //   }
-      // }
+      if let Ok(details) = &result {
+        for call in &details.direct_calls {
+          workqueue.insert(*call);
+        }
+      }
 
       functions.insert(addr, result);
     }

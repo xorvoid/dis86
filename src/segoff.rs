@@ -8,11 +8,19 @@ pub enum Seg {
 }
 
 impl Seg {
+  pub fn is_normal(self) -> bool {
+    if let Seg::Normal(_) = self { true } else { false }
+  }
+  pub fn is_overlay(self) -> bool {
+    if let Seg::Overlay(_) = self { true } else { false }
+  }
+}
+
+impl Seg {
   pub fn unwrap_normal(self) -> u16 {
     let Seg::Normal(seg) = self else { panic!("Expected Seg::Normal") };
     seg
   }
-
   pub fn unwrap_overlay(self) -> u16 {
     let Seg::Overlay(seg) = self else { panic!("Expected Seg::Overlay") };
     seg

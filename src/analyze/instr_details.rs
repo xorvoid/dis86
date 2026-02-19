@@ -1,6 +1,7 @@
 use crate::asm::instr::{Instr, Opcode, Operand};
 use crate::asm::intel_syntax::instr_str;
-use crate::segoff::SegOff;
+use crate::segoff::{SegOff, Seg, Off};
+use crate::binary::Binary;
 use std::fmt;
 
 pub enum ReturnKind {
@@ -28,6 +29,36 @@ pub enum Next {
 pub enum Call {
   Direct(SegOff),
   Indirect,
+}
+
+fn determine_callf(ins: &Instr, binary: &Binary) -> Result<Call, String> {
+  // FIXME: UNIFY WITH ir_build::process_callf
+  if let Operand::Far(far) = &ins.operands[0] {
+    let seg = if ins.addr.seg.is_overlay() {
+      // Far calls from overlays need to be remapped
+      binary.remap_to_segment(far.seg)
+    } else {
+      // Otherwise: Normal
+      Seg::Normal(far.seg)
+    };
+    let addr = SegOff { seg, off: Off(far.off) };
+    Ok(Call::Direct(addr))
+  } else if let Operand::Mem(_) = &ins.operands[0] {
+    Ok(Call::Indirect)
+  } else {
+    Err(format!("Unsupported operand to CALLF for '{}'", instr_str(ins)))
+  }
+}
+
+fn determine_calln(ins: &Instr, binary: &Binary) -> Result<Call, String> {
+  if let Operand::Rel(rel) = &ins.operands[0] {
+    let addr = ins.rel_addr(rel);
+    Ok(Call::Direct(addr))
+  } else if let Operand::Mem(_) = &ins.operands[0] {
+    Ok(Call::Indirect)
+  } else {
+    Err(format!("Unsupported operand to CALL for '{}'", instr_str(ins)))
+  }
 }
 
 pub struct InstrDetails {
@@ -80,7 +111,9 @@ fn jump_targets(ins: &Instr) -> Result<Option<Vec<SegOff>>, String> {
   Ok(Some(targets))
 }
 
-pub fn instr_details(ins: &Instr) -> Result<InstrDetails, String> {
+pub fn instr_details(ins: &Instr, binary: &Binary) -> Result<InstrDetails, String> {
+  let is_overlay = ins.addr.seg.is_overlay();
+
   if let Some(tgts) = jump_targets(ins)? {
     return Ok(InstrDetails { next: Next::Jump(tgts), call: None });
   }
@@ -96,26 +129,8 @@ pub fn instr_details(ins: &Instr) -> Result<InstrDetails, String> {
     Opcode::OP_ADC        => (),
     Opcode::OP_ADD        => (),
     Opcode::OP_AND        => (),
-    Opcode::OP_CALL       => {
-      if let Operand::Rel(rel) = &ins.operands[0] {
-        let addr = ins.rel_addr(rel);
-        call = Some(Call::Direct(addr));
-      } else if let Operand::Mem(_) = &ins.operands[0] {
-        call = Some(Call::Indirect);
-      } else {
-        return Err(format!("Unsupported operand to CALL for '{}'", instr_str(ins)));
-      }
-    }
-    Opcode::OP_CALLF      => {
-      if let Operand::Far(far) = &ins.operands[0] {
-        let addr = SegOff::new_normal(far.seg, far.off);
-        call = Some(Call::Direct(addr));
-      } else if let Operand::Mem(_) = &ins.operands[0] {
-        call = Some(Call::Indirect);
-      } else {
-        return Err(format!("Unsupported operand to CALLF for '{}'", instr_str(ins)));
-      }
-    }
+    Opcode::OP_CALL       => call = Some(determine_calln(ins, binary)?),
+    Opcode::OP_CALLF      => call = Some(determine_callf(ins, binary)?),
     Opcode::OP_CBW        => (),
     Opcode::OP_CLC        => (),
     Opcode::OP_CLD        => (),
