@@ -37,7 +37,7 @@ impl Analyze {
     self.binary.exe().unwrap().print();
   }
 
-  pub fn analyze_code_segment(&self, seg: Seg) {
+  pub fn analyze_code_segment(&self, seg: Seg) -> (u32, u32) {
     let code_seg = self.code_segments.find_by_segment(seg).unwrap();
 
     let mut r = RangeSet::new();
@@ -86,17 +86,27 @@ impl Analyze {
         println!("   [ 0x{:04x}, 0x{:04x} )   size: {}", gap.start, gap.end, gap.end - gap.start);
       }
     }
+
+    (total_gap, total_size)
   }
 
   pub fn analyze_code_segments_and_report(&self) {
-    self.code_segments.dump();
+    //self.code_segments.dump();
+    let mut total_gap = 0;
+    let mut total_size = 0;
     for c in &self.code_segments.0 {
       let seg = c.primary.seg;
       println!("Segment {}", seg);
       println!("===============================");
-      self.analyze_code_segment(seg);
+      let (gap, size) = self.analyze_code_segment(seg);
+      total_gap += gap;
+      total_size += size;
       println!("");
     }
+
+    let perc = 100.0 * (1.0 - (total_gap as f64) / (total_size as f64));
+    println!("Total completion: {} / {} = {:.2} %", total_size - total_gap, total_size, perc);
+
   }
 
   pub fn analyze_function(&self, name: &str) -> FuncDetails {
@@ -197,7 +207,9 @@ impl FunctionNames {
   fn from_cfg(cfg: &Config) -> FunctionNames {
     let mut used = HashSet::new();
     for func in &cfg.funcs {
-      assert!(used.get(&func.name).is_none());
+      if used.get(&func.name).is_some() {
+        panic!("Duplicate function name in the config: {}", func.name);
+      }
       used.insert(func.name.clone());
     }
     FunctionNames { used }
