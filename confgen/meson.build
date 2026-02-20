@@ -1,4 +1,4 @@
-
+project('confgen', 'c')
 
 SRC = [
   'generate.py',
