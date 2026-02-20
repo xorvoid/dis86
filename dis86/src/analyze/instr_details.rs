@@ -51,7 +51,7 @@ fn determine_callf(ins: &Instr, binary: &Binary) -> Result<Call, String> {
   }
 }
 
-fn determine_calln(ins: &Instr, binary: &Binary) -> Result<Call, String> {
+fn determine_calln(ins: &Instr, _binary: &Binary) -> Result<Call, String> {
   if let Operand::Rel(rel) = &ins.operands[0] {
     let addr = ins.rel_addr(rel);
     Ok(Call::Direct(addr))
@@ -113,8 +113,6 @@ fn jump_targets(ins: &Instr) -> Result<Option<Vec<SegOff>>, String> {
 }
 
 pub fn instr_details(ins: &Instr, binary: &Binary) -> Result<InstrDetails, String> {
-  let is_overlay = ins.addr.seg.is_overlay();
-
   if let Some(tgts) = jump_targets(ins)? {
     return Ok(InstrDetails { next: Next::Jump(tgts), call: None });
   }

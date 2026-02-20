@@ -4,7 +4,7 @@ use crate::segoff::{Seg, SegOff};
 use crate::util::range_set::RangeSet;
 
 use super::workqueue::WorkQueue;
-use super::code_segment::{CodeSegment, CodeSegments, CodeDetail};
+use super::code_segment::{CodeSegments};
 use super::func_details::{FuncDetails, ReturnKind};
 
 use std::collections::{BTreeMap, HashSet};
@@ -26,11 +26,6 @@ impl Analyze {
       binary,
       code_segments,
     }
-  }
-
-  fn cfg_code_segment_name(&self, seg: Seg) -> Option<&str> {
-    let code_seg = self.cfg.code_seg_lookup(seg)?;
-    Some(&code_seg.name)
   }
 
   pub fn dump_info(&self) {
@@ -122,19 +117,6 @@ impl Analyze {
     };
     assert!(start >= code_seg.start());
     FuncDetails::build(start, code_seg, &self.binary)
-  }
-
-  pub fn analyze_code_segment_NEW(&self, seg: Seg) {
-    let code_seg = self.code_segments.find_by_segment(seg).unwrap();
-    let detail = CodeDetail::build(code_seg, &self.cfg);
-
-    for func in &detail.function_entries {
-      let func_detail = FuncDetails::build(func.start, code_seg, &self.binary).unwrap();  // HAX FIXME
-
-      println!("function name: {}", func.name);
-      println!("-----------------------------");
-      println!("{}", func_detail);
-    }
   }
 
   // Scan known functions to find new functions, then scan those, return a big list of all found functions
