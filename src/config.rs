@@ -103,6 +103,16 @@ impl Config {
     None
   }
 
+  pub fn code_seg_lookup_by_name(&self, name: &str) -> Option<&CodeSeg> {
+    // TODO: Consider something better than linear search
+    for c in &self.code_segs {
+      if name == &c.name {
+        return Some(c)
+      }
+    }
+    None
+  }
+
   pub fn func_lookup(&self, addr: SegOff) -> Option<&Func> {
     // TODO: Consider something better than linear search
     for f in &self.funcs {
@@ -132,6 +142,17 @@ impl Config {
       }
     }
     None
+  }
+
+  pub fn func_lookup_by_seg(&self, seg: Seg) -> Vec<&Func> {
+    // TODO: Consider something better than linear search
+    let mut ret = vec![];
+    for f in &self.funcs {
+      if seg == f.start.seg {
+        ret.push(f);
+      }
+    }
+    ret
   }
 
   pub fn text_region_lookup_by_start_addr(&self, addr: SegOff) -> Option<&TextSectionRegion> {

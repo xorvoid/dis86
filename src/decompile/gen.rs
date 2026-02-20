@@ -428,6 +428,7 @@ impl<'a> Gen<'a> {
     self.endline()?;
     self.varmaps_undef(&func.varmaps, imp)?;
     self.leave_block()?;
+    self.endline()?;
     Ok(())
   }
 }

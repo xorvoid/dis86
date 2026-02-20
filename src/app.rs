@@ -12,7 +12,7 @@ use crate::decompile::sym;
 use crate::decompile::opt;
 use crate::decompile::fuse;
 use crate::decompile::control_flow;
-use crate::spec;
+use crate::spec::{self, Spec};
 use std::fs::File;
 use std::io::Write;
 
@@ -34,6 +34,9 @@ fn print_help() {
   println!("");
   println!("MODE: FUNCTION NAME");
   println!("  --name            lookup address range by name in config (maybe required)");
+  println!("");
+  println!("MODE: CODE SEGMENT NAME");
+  println!("  --codeseg-name    decompile all config defined functions in the segment (maybe required)");
   println!("");
   println!("EMIT MODES:");
   println!("  --emit-dis        path to emit disassembly (optional)");
@@ -72,6 +75,7 @@ struct Args {
   start_addr: Option<SegOff>,
   end_addr: Option<SegOff>,
   name: Option<String>,
+  codeseg_name: Option<String>,
 
   analyze: bool,
 
@@ -133,6 +137,7 @@ fn parse_args() -> Result<Args, pico_args::Error> {
     start_addr:      pargs.opt_value_from_str("--start-addr")?,
     end_addr:        pargs.opt_value_from_str("--end-addr")?,
     name:            pargs.opt_value_from_str("--name")?,
+    codeseg_name:    pargs.opt_value_from_str("--codeseg-name")?,
     emit_dis:        pargs.opt_value_from_str("--emit-dis")?,
     emit_ir_initial: pargs.opt_value_from_str("--emit-ir-initial")?,
     emit_ir_opt:     pargs.opt_value_from_str("--emit-ir-opt")?,
@@ -178,14 +183,29 @@ pub fn run() -> i32 {
     return crate::app_analyze::run(&cfg, path);
   }
 
-  let spec = if let Some(name) = args.name.as_ref() {
-    spec::Spec::from_config_name(&cfg, name)
-  } else {
-    spec::Spec::from_start_and_end(args.start_addr, args.end_addr)
-  };
-
   let binary = Binary::from_fmt(&args.binary, Some(&cfg)).unwrap();
 
+  let specs =
+    if let Some(name) = &args.name {
+      vec![spec::Spec::from_config_name(&cfg, name)]
+    } else if let Some(name) = &args.codeseg_name {
+      spec::specs_from_codeseg_name(&cfg, name)
+    } else {
+      vec![spec::Spec::from_start_and_end(args.start_addr, args.end_addr)]
+    };
+
+  for spec in specs {
+    let ret = decompile_spec(&args, &cfg, &binary, spec);
+    if ret != 0 {
+      eprintln!("Error: Failed to decompile.");
+      return ret;
+    }
+  }
+
+  0
+}
+
+fn decompile_spec(args: &Args, cfg: &Config, binary: &Binary, spec: Spec<'_>) -> i32 {
   let region = binary.region_iter(spec.start, spec.end);
   let decoder = Decoder::new(region);
   let mut instr_list = vec![];
