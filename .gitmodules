@@ -1,0 +1,3 @@
+[submodule "hydra/src/dosbox-x"]
+	path = hydra/src/dosbox-x
+	url = git@github.com:xorvoid/dosbox-x.git

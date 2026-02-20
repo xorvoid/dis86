@@ -3,32 +3,26 @@
 # List all available recipies
 list:
   just --list
-
-# Edit the justfile
-edit:
-  emacs -nw justfile
   
 # Build the repository
-build:
-  cargo build
+build: build-dis86 build-hydra
+
+# Build the dis86 component only
+build-dis86:
+  #!/bin/bash
+  cd {{justfile_directory()}}
+  (cd dis86 && cargo build)
+  mkdir -p build/bin
+  cp dis86/target/debug/dis86 build/bin/
+  cp dis86/target/debug/mzfile build/bin/
+
+# Build the hydra component only
+build-hydra:
+  #!/bin/bash
+  cd {{justfile_directory()}}
+  (cd hydra && just build)
 
 # Test the repository
 test *opts:
-  cargo test {{opts}}
-
-# Show control-flow-graph using graphviz
-vis name:
-     just run {{name}} --emit-graph /tmp/ctrlflow.dot && dot -Tpng /tmp/ctrlflow.dot > /tmp/control_flow_graph.png && open /tmp/control_flow_graph.png
-
-# A temporary command for dev build-test-cycle
-run name *opts: build
-     ./target/debug/dis86 --config ../gizmo/build/src/hydra/dis86_config.bsl --binary-exe ../gizmo/ISO/ssg.exe --name {{name}} {{opts}}
-
-# A temporary command for dev build-test-cycle
-run-old:
-     ./old/v2/build/src/app/dis86 decomp --config ../gizmo/build/src/hydra/dis86_config.bsl --binary-exe ../gizmo/ISO/ssg.exe --start-addr 0622:0922 --end-addr 0622:09e5
-
-rundiff a b: build
-     just run --emit-{{a}} /tmp/a
-     just run --emit-{{b}} /tmp/b
-     opendiff /tmp/a /tmp/b
+  (cd dis86 && cargo test {{opts}})
+  (cd hydra && just test)

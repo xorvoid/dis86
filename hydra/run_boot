@@ -1,0 +1,46 @@
+#!/bin/bash
+REPODIR=$(dirname $(realpath $0))
+trap 'kill $(jobs -p)' EXIT
+
+if [ "$#" -lt 2 ]; then
+   echo "usage: $0 <img> <libhydrauser> [<serial-input>]"
+   exit 1
+fi
+
+# Unpack args
+img=$(realpath $1)
+libhydrauser=$(realpath $2)
+serial_input=$(realpath $3)
+
+# Temp dir
+workdir=/tmp/hydra
+mkdir -p $workdir
+cd $workdir
+
+## Compute repo-local paths
+dosbox=$REPODIR/src/dosbox-x/src/dosbox-x
+conf=$REPODIR/conf/dosbox.conf
+
+## Pad the img so dosbox is happy
+size=$(du -sb $img | awk '{print $1}')
+minsize=163840
+if [ $size -lt $minsize ]; then
+    pad=$(expr $minsize - $size)
+    dd if=/dev/zero of=boot.pad count=$pad bs=1 2>/dev/null
+    cat $img boot.pad > boot.img
+else
+    cat $img > boot.img
+fi
+
+serial_writer() {
+    inp=$1
+    sleep 2
+    cat $inp > ptty_user
+}
+if [ "$serial_input" != "" ]; then
+    socat -d -d pty,link=ptty_emu,raw,echo=0 pty,link=ptty_user,raw,echo=0 &
+    serial_writer $serial_input &
+fi
+
+## Run it!
+$dosbox -conf "$conf" -c "boot boot.img" -hydra "$libhydrauser"

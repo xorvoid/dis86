@@ -1,0 +1,26 @@
+#!/bin/bash
+
+if [ "$#" != 2 ]; then
+   echo "usage: $0 <exe> <libhydrauser>"
+   exit 1
+fi
+
+# Unpack args
+exe=$(realpath $1)
+libhydrauser=$(realpath $2)
+mount_d=$(dirname $exe)
+exec_cmd=$(basename $exe)
+
+## Compute repo-local paths
+THISDIR=$(dirname $(realpath $0))
+dosbox=$THISDIR/src/dosbox-x/src/dosbox-x
+conf=$THISDIR/conf/dosbox.conf
+
+## Run from the exe mount dir d
+cd $mount_d
+
+## Run it!
+export SDL_AUDIODRIVER=pulse
+$dosbox -conf "$conf" -hydra "$libhydrauser" -c "mount d $mount_d"  -c "D:" -c "$exec_cmd" -c "exit"
+#gdb --ex run --args $dosbox -conf "$conf" -hydra "$libhydrauser" -c "mount d $mount_d"  -c "D:" -c "$exec_cmd" -c "exit"
+#$dosbox -conf "$conf" -c "mount d $mount_d"  -c "D:" -c "$exec_cmd" -c "exit"
