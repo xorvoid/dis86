@@ -21,7 +21,7 @@ impl Machine {
     Value::U16(v)
   }
 
-  pub fn operand_reg_write(&self, reg: &OperandReg, val: Value) {
+  pub fn operand_reg_write(&mut self, reg: &OperandReg, val: Value) {
     let reg = convert_reg(reg.0);
     match val {
       Value::U8(val) => {
@@ -58,7 +58,7 @@ impl Machine {
     }
   }
 
-  pub fn operand_mem_write(&self, mem: &OperandMem, val: Value) {
+  pub fn operand_mem_write(&mut self, mem: &OperandMem, val: Value) {
     let seg = self.reg(convert_reg(mem.sreg));
 
     let mut offset = 0;
@@ -77,22 +77,38 @@ impl Machine {
       Value::U8(val)  => self.mem.write_u8(addr, val),
       Value::U16(val) => self.mem.write_u16(addr, val),
       Value::U32(val) => self.mem.write_u32(addr, val),
+      Value::Addr(_) => panic!("Inavlid value type: {:?}", val)
     }
   }
 
   pub fn operand_read(&self, instr: &Instr, oper: usize) -> Value {
-    match &instr.operands[oper] {
+    let operand = &instr.operands[oper];
+    match operand {
       Operand::Imm(imm) => self.operand_imm_read(imm),
       Operand::Reg(reg) => self.operand_reg_read(reg),
       Operand::Mem(mem) => self.operand_mem_read(mem),
+      Operand::Rel(rel) => Value::Addr(instr.rel_addr(rel)),
       _ => panic!("unsupported operand: {:?}", operand),
     }
   }
 
-  pub fn operand_write(&self, instr: &Instr, oper: usize, val: Value) {
-    match &instr.operands[oper] {
-      Operand::Reg(reg) => self.operand_reg_write(reg),
-      Operand::Mem(mem) => self.operand_mem_write(mem),
+  pub fn operand_read_u8(&self, instr: &Instr, oper: usize) -> u8 {
+    self.operand_read(instr, oper).unwrap_u8()
+  }
+
+  pub fn operand_read_u16(&self, instr: &Instr, oper: usize) -> u16 {
+    self.operand_read(instr, oper).unwrap_u16()
+  }
+
+  pub fn operand_read_addr(&self, instr: &Instr, oper: usize) -> SegOff {
+    self.operand_read(instr, oper).unwrap_addr()
+  }
+
+  pub fn operand_write(&mut self, instr: &Instr, oper: usize, val: Value) {
+    let operand = &instr.operands[oper];
+    match operand {
+      Operand::Reg(reg) => self.operand_reg_write(reg, val),
+      Operand::Mem(mem) => self.operand_mem_write(mem, val),
       _ => panic!("unsupported operand: {:?}", operand),
     }
   }
@@ -116,18 +132,11 @@ impl Machine {
     if instr.rep.is_some() { panic!("REP prefix is not yet implemented"); }
 
     match instr.opcode {
-      Opcode::OP_MOV => self.operand_write(&instr, 0, self.operand_read(&instr, 1)),
-      Opcode::OP_PUSH => self.stack_push(self.operand_read(&instr, 0).unwrap_u16()),
-      Opcode::OP_INT => {
-        let Operand::Imm(imm) = &instr.operands[0] else { panic!("expected immediate") };
-        self.interrupt(imm.val);
-      }
+      Opcode::OP_MOV  => self.operand_write(&instr, 0, self.operand_read(&instr, 1)),
+      Opcode::OP_PUSH => self.stack_push(self.operand_read_u16(&instr, 0)),
+      Opcode::OP_INT  => self.interrupt(self.operand_read_u8(&instr, 0)),
       Opcode::OP_CALL => {
-        // Compute relative address
-        let instr::Operand::Rel(rel) = &instr.operands[0] else {
-          panic!("Expected near call to have relative operand");
-        };
-        let tgt = instr.rel_addr(rel);
+        let tgt = self.operand_read_addr(&instr, 0);
         self.stack_push(self.reg(IP));
         self.reg_set(IP, tgt.off.0);
       }

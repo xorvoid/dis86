@@ -1,11 +1,13 @@
 pub use super::mem::*;
 pub use super::cpu::*;
+pub use crate::segoff:: SegOff;
 
 #[derive(Debug)]
 pub enum Value {
   U8(u8),
   U16(u16),
   U32(u32),
+  Addr(SegOff),
 }
 
 impl Value {
@@ -24,6 +26,12 @@ impl Value {
   #[allow(dead_code)]
   pub fn unwrap_u32(&self) -> u32 {
     let Value::U32(val) = self else { panic!("expected Value::U32") };
+    *val
+  }
+
+  #[allow(dead_code)]
+  pub fn unwrap_addr(&self) -> SegOff {
+    let Value::Addr(val) = self else { panic!("expected Value::Addr") };
     *val
   }
 }
