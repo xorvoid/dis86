@@ -6,6 +6,10 @@ mod loader;
 mod interrupt;
 mod step;
 
+mod dos;
+#[allow(dead_code)]
+mod dos_ivt;
+
 mod mzhdr;
 mod psp;
 mod emu;

@@ -42,8 +42,13 @@ pub struct SegOff {
 }
 
 impl SegOff {
-  pub fn new_normal(seg: u16, off: u16) -> SegOff {
+  pub fn new(seg: u16, off: u16) -> SegOff {
     SegOff { seg: Seg::Normal(seg), off: Off(off) }
+  }
+
+  // OLD
+  pub fn new_normal(seg: u16, off: u16) -> SegOff {
+    Self::new(seg, off)
   }
 
   pub fn new_overlay(seg: u16, off: u16) -> SegOff {

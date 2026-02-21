@@ -133,13 +133,15 @@ impl Machine {
 
     match instr.opcode {
       Opcode::OP_MOV  => self.operand_write(&instr, 0, self.operand_read(&instr, 1)),
-      Opcode::OP_PUSH => self.stack_push(self.operand_read_u16(&instr, 0)),
+      Opcode::OP_PUSH => self.stack_push(self.operand_read(&instr, 0)),
+      Opcode::OP_POP  => { let val = self.stack_pop(); self.operand_write(&instr, 0, val) }
       Opcode::OP_INT  => self.interrupt(self.operand_read_u8(&instr, 0)),
       Opcode::OP_CALL => {
         let tgt = self.operand_read_addr(&instr, 0);
-        self.stack_push(self.reg(IP));
+        self.stack_push(self.reg_read(IP));
         self.reg_set(IP, tgt.off.0);
       }
+      Opcode::OP_RET => { let off = self.stack_pop(); self.reg_write(IP, off); }
       _ => {
         panic!("Unimplmented opcode: {}", instr.opcode.name());
       }

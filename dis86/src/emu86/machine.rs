@@ -1,5 +1,6 @@
 pub use super::mem::*;
 pub use super::cpu::*;
+pub use super::dos::Dos;
 pub use crate::segoff:: SegOff;
 
 #[derive(Debug)]
@@ -41,6 +42,7 @@ pub struct Machine {
   pub halted: bool,
   pub mem: Memory,
   pub cpu: Cpu,
+  pub dos: Dos,
 }
 
 impl Machine {
@@ -49,27 +51,69 @@ impl Machine {
   }
 
   // OLD
-  pub fn reg(&self, r: Register) -> u16 { self.reg_read(r) }
-
-  // OLD
-  pub fn reg_set(&mut self, r: Register, val: u16) { self.reg_write(r, val) }
-
-  pub fn reg_read(&self, r: Register) -> u16 {
-    if r.size == 2 {
-      self.cpu.regs[r.idx as usize]
-    } else {
-      assert!(r.size == 1);
-      let val = self.cpu.regs[r.idx as usize];
-      if r.off == 0 { val as u8 as u16 } else { val >> 8 }
+  pub fn reg(&self, r: Register) -> u16 {
+    match self.reg_read(r) {
+      Value::U8(val) => val as u16,
+      Value::U16(val) => val,
+      _ => panic!("unimpl"),
     }
   }
 
-  pub fn reg_write(&mut self, r: Register, val: u16) {
+  // OLD
+  pub fn reg_set(&mut self, r: Register, val: u16) {
+    let v = match r.size {
+      1 => Value::U8(val as u8),
+      2 => Value::U16(val),
+      _ => panic!("unimpl"),
+    };
+    self.reg_write(r, v)
+  }
+
+  pub fn reg_read_u8(&self, r: Register) -> u8 {
+    self.reg_read(r).unwrap_u8()
+  }
+
+  pub fn reg_read_u16(&self, r: Register) -> u16 {
+    self.reg_read(r).unwrap_u16()
+  }
+
+  pub fn reg_read_addr(&self, seg: Register, off: Register) -> SegOff {
+    let seg = self.reg_read_u16(seg);
+    let off = self.reg_read_u16(off);
+    SegOff::new(seg, off)
+  }
+
+  pub fn reg_read(&self, r: Register) -> Value {
     if r.size == 2 {
-      self.cpu.regs[r.idx as usize] = val;
+      Value::U16(self.cpu.regs[r.idx as usize])
+    } else {
+      assert!(r.size == 1);
+      let val = self.cpu.regs[r.idx as usize];
+      let res = if r.off == 0 { val as u8 } else { (val >> 8) as u8 };
+      Value::U8(res)
+    }
+  }
+
+  pub fn reg_write_u8(&mut self, r: Register, val: u8) {
+    self.reg_write(r, Value::U8(val))
+  }
+
+  pub fn reg_write_u16(&mut self, r: Register, val: u16) {
+    self.reg_write(r, Value::U16(val))
+  }
+
+  pub fn reg_write_addr(&mut self, seg: Register, off: Register, addr: SegOff) {
+    self.reg_write_u16(seg, addr.seg.unwrap_normal());
+    self.reg_write_u16(off, addr.off.0);
+  }
+
+  pub fn reg_write(&mut self, r: Register, val: Value) {
+    if r.size == 2 {
+      self.cpu.regs[r.idx as usize] = val.unwrap_u16();
     } else {
       // partial register write combine
       assert!(r.size == 1);
+      let val = val.unwrap_u8();
       let cur = self.cpu.regs[r.idx as usize];
       let new = if r.off == 0 {
         (cur & 0xff00) | (val as u8 as u16)
@@ -80,24 +124,21 @@ impl Machine {
     }
   }
 
-  pub fn stack_push(&mut self, val: u16) {
-    let ss = self.reg_read(SS);
-    let sp = self.reg_read(SP) - 2;
-    self.reg_write(SP, sp);
+  pub fn stack_push(&mut self, val: Value) {
+    let mut addr = self.reg_read_addr(SS, SP);
+    addr.off.0 -= 2;
 
-    let addr = SegOff::new_normal(ss, sp);
-    self.mem.write_u16(addr, val);
+    self.reg_write_u16(SP, addr.off.0);
+
+    self.mem.write_u16(addr, val.unwrap_u16());
   }
 
-  pub fn stack_pop(&mut self) -> u16 {
-    let ss = self.reg_read(SS);
-    let sp = self.reg_read(SP);
-
-    let addr = SegOff::new_normal(ss, sp);
+  pub fn stack_pop(&mut self) -> Value {
+    let mut addr = self.reg_read_addr(SS, SP);
     let val = self.mem.read_u16(addr);
 
-    self.reg_write(SP, sp+2);
+    self.reg_write_u16(SP, addr.off.0 + 2);
 
-    val
+    Value::U16(val)
   }
 }
