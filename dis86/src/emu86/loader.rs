@@ -1,6 +1,4 @@
 use super::machine::*;
-use super::mem::*;
-use super::cpu::*;
 use crate::binfmt::mz;
 
 impl Machine {
