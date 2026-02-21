@@ -1,90 +1,98 @@
 use super::machine::*;
 use crate::asm::decode::Decoder;
-use crate::asm::instr::{self, Instr, Opcode, Operand};
+use crate::asm::instr::{self, Instr, Opcode, Operand, OperandReg, OperandMem, OperandImm, OperandRel, OperandFar};
 use crate::asm::intel_syntax::instr_str;
 
 const DEBUG: bool = true;
 
 impl Machine {
-  pub fn read(&self, instr: &Instr, oper: usize) -> Value {
-    let operand = &instr.operands[oper];
-    match operand {
-      Operand::Imm(imm) => {
-        match imm.sz {
-          instr::Size::Size8  => Value::U8(imm.val as u8),
-          instr::Size::Size16 => Value::U16(imm.val),
-          _ => panic!("unsupported size"),
-        }
-      }
-      Operand::Reg(r) => {
-        let reg = convert_reg(r.0);
-        let v = self.reg(reg);
-        assert!(reg.size == 2);
-        Value::U16(v)
-      }
-      Operand::Mem(mem) => {
-        let seg = self.reg(convert_reg(mem.sreg));
+  pub fn operand_imm_read(&self, imm: &OperandImm) -> Value {
+    match imm.sz {
+      instr::Size::Size8  => Value::U8(imm.val as u8),
+      instr::Size::Size16 => Value::U16(imm.val),
+      _ => panic!("unsupported size"),
+    }
+  }
 
-        let mut offset = 0;
-        if let Some(reg) = mem.reg1 {
-          offset += self.reg(convert_reg(reg));
-        }
-        if let Some(reg) = mem.reg2 {
-          offset += self.reg(convert_reg(reg));
-        }
-        if let Some(off) = mem.off {
-          offset += off;
-        }
+  pub fn operand_reg_read(&self, reg: &OperandReg) -> Value {
+    let reg = convert_reg(reg.0);
+    let v = self.reg(reg);
+    assert!(reg.size == 2);
+    Value::U16(v)
+  }
 
-        let addr = SegOff::new_normal(seg, offset);
-        match mem.sz {
-          instr::Size::Size8  => Value::U8(self.mem.read_u8(addr)),
-          instr::Size::Size16 => Value::U16(self.mem.read_u16(addr)),
-          instr::Size::Size32 => Value::U32(self.mem.read_u32(addr)),
-        }
+  pub fn operand_reg_write(&self, reg: &OperandReg, val: Value) {
+    let reg = convert_reg(reg.0);
+    match val {
+      Value::U8(val) => {
+        assert_eq!(reg.size, 1);
+        self.reg_set(reg, val as u16);
       }
+      Value::U16(val) => {
+        assert_eq!(reg.size, 2);
+        self.reg_set(reg, val);
+      }
+      _ => panic!("unsupported size"),
+    }
+  }
+
+  pub fn operand_mem_read(&self, mem: &OperandMem) -> Value {
+    let seg = self.reg(convert_reg(mem.sreg));
+
+    let mut offset = 0;
+    if let Some(reg) = mem.reg1 {
+      offset += self.reg(convert_reg(reg));
+    }
+    if let Some(reg) = mem.reg2 {
+      offset += self.reg(convert_reg(reg));
+    }
+    if let Some(off) = mem.off {
+      offset += off;
+    }
+
+    let addr = SegOff::new_normal(seg, offset);
+    match mem.sz {
+      instr::Size::Size8  => Value::U8(self.mem.read_u8(addr)),
+      instr::Size::Size16 => Value::U16(self.mem.read_u16(addr)),
+      instr::Size::Size32 => Value::U32(self.mem.read_u32(addr)),
+    }
+  }
+
+  pub fn operand_mem_write(&self, mem: &OperandMem, val: Value) {
+    let seg = self.reg(convert_reg(mem.sreg));
+
+    let mut offset = 0;
+    if let Some(reg) = mem.reg1 {
+      offset += self.reg(convert_reg(reg));
+    }
+    if let Some(reg) = mem.reg2 {
+      offset += self.reg(convert_reg(reg));
+    }
+    if let Some(off) = mem.off {
+      offset += off;
+    }
+
+    let addr = SegOff::new_normal(seg, offset);
+    match val {
+      Value::U8(val)  => self.mem.write_u8(addr, val),
+      Value::U16(val) => self.mem.write_u16(addr, val),
+      Value::U32(val) => self.mem.write_u32(addr, val),
+    }
+  }
+
+  pub fn operand_read(&self, instr: &Instr, oper: usize) -> Value {
+    match &instr.operands[oper] {
+      Operand::Imm(imm) => self.operand_imm_read(imm),
+      Operand::Reg(reg) => self.operand_reg_read(reg),
+      Operand::Mem(mem) => self.operand_mem_read(mem),
       _ => panic!("unsupported operand: {:?}", operand),
     }
   }
 
-  pub fn write(&mut self, instr: &Instr, oper: usize, val: Value) {
-    let operand = &instr.operands[oper];
-    match operand {
-      Operand::Reg(r) => {
-        let reg = convert_reg(r.0);
-        match val {
-          Value::U8(val) => {
-            assert_eq!(reg.size, 1);
-            self.reg_set(reg, val as u16);
-          }
-          Value::U16(val) => {
-            assert_eq!(reg.size, 2);
-            self.reg_set(reg, val);
-          }
-          _ => panic!("unsupported size"),
-        }
-      }
-      Operand::Mem(mem) => {
-        let seg = self.reg(convert_reg(mem.sreg));
-
-        let mut offset = 0;
-        if let Some(reg) = mem.reg1 {
-          offset += self.reg(convert_reg(reg));
-        }
-        if let Some(reg) = mem.reg2 {
-          offset += self.reg(convert_reg(reg));
-        }
-        if let Some(off) = mem.off {
-          offset += off;
-        }
-
-        let addr = SegOff::new_normal(seg, offset);
-        match val {
-          Value::U8(val)  => self.mem.write_u8(addr, val),
-          Value::U16(val) => self.mem.write_u16(addr, val),
-          Value::U32(val) => self.mem.write_u32(addr, val),
-        }
-      }
+  pub fn operand_write(&self, instr: &Instr, oper: usize, val: Value) {
+    match &instr.operands[oper] {
+      Operand::Reg(reg) => self.operand_reg_write(reg),
+      Operand::Mem(mem) => self.operand_mem_write(mem),
       _ => panic!("unsupported operand: {:?}", operand),
     }
   }
@@ -108,8 +116,8 @@ impl Machine {
     if instr.rep.is_some() { panic!("REP prefix is not yet implemented"); }
 
     match instr.opcode {
-      Opcode::OP_MOV => self.write(&instr, 0, self.read(&instr, 1)),
-      Opcode::OP_PUSH => self.stack_push(self.read(&instr, 0).unwrap_u16()),
+      Opcode::OP_MOV => self.operand_write(&instr, 0, self.operand_read(&instr, 1)),
+      Opcode::OP_PUSH => self.stack_push(self.operand_read(&instr, 0).unwrap_u16()),
       Opcode::OP_INT => {
         let Operand::Imm(imm) = &instr.operands[0] else { panic!("expected immediate") };
         self.interrupt(imm.val);
