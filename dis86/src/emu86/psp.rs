@@ -33,18 +33,18 @@ pub struct ProgramSegmentPrefix {
 }
 sa::const_assert!(std::mem::size_of::<ProgramSegmentPrefix>() == 256);
 
-impl ProgramSegmentPrefix {
-  pub fn zeroed() -> Self {
-    unsafe { std::mem::zeroed() }
-  }
+// impl ProgramSegmentPrefix {
+//   pub fn zeroed() -> Self {
+//     unsafe { std::mem::zeroed() }
+//   }
 
-  pub fn from_slice(slice: &[u8]) -> &ProgramSegmentPrefix {
-    assert!(slice.len() == std::mem::size_of::<ProgramSegmentPrefix>());
-    unsafe { &*(slice.as_ptr() as *const _) }
-  }
+//   pub fn from_slice(slice: &[u8]) -> &ProgramSegmentPrefix {
+//     assert!(slice.len() == std::mem::size_of::<ProgramSegmentPrefix>());
+//     unsafe { &*(slice.as_ptr() as *const _) }
+//   }
 
-  pub fn from_slice_mut(slice: &mut [u8]) -> &mut ProgramSegmentPrefix {
-    assert!(slice.len() == std::mem::size_of::<ProgramSegmentPrefix>());
-    unsafe { &mut *(slice.as_mut_ptr() as *mut _) }
-  }
-}
+//   pub fn from_slice_mut(slice: &mut [u8]) -> &mut ProgramSegmentPrefix {
+//     assert!(slice.len() == std::mem::size_of::<ProgramSegmentPrefix>());
+//     unsafe { &mut *(slice.as_mut_ptr() as *mut _) }
+//   }
+// }

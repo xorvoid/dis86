@@ -144,14 +144,6 @@ fn decode_instr(mem: &Memory, addr: SegOff) -> Result<Instr, String> {
   Ok(instr)
 }
 
-fn hexdump(data: &[u8]) {
-  for (i, chunk) in data.chunks(16).enumerate() {
-    let addr = i * 16;
-    let hex: Vec<String> = chunk.iter().map(|b| format!("{:02x}", b)).collect();
-    println!("{:08x}  {}", addr, hex.join(" "));
-  }
-}
-
 // FIXME: Shouldn't have to remap this at all.. would love to use it directly or with a trivial offsetting
 fn convert_reg(r: instr::Reg) -> Register {
   match r {
@@ -177,6 +169,5 @@ fn convert_reg(r: instr::Reg) -> Register {
     instr::Reg::CL    => CL,
     instr::Reg::DH    => DH,
     instr::Reg::DL    => DL,
-    _ => panic!("unimpl register"),
   }
 }

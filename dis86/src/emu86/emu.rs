@@ -4,6 +4,7 @@ use super::machine::Machine;
 struct Emulator {
   #[allow(dead_code)]
   exe_path: String,
+  #[allow(dead_code)]
   exe: mz::Exe,
   machine: Machine,
 }
@@ -19,13 +20,11 @@ impl Emulator {
 
     machine.load_exe(&exe)?;
 
-    let mut this = Emulator {
+    Ok(Emulator {
       exe_path: exe_path.to_string(),
       exe,
       machine,
-    };
-
-    Ok(this)
+    })
   }
 
   fn run(&mut self) -> Result<(), String> {

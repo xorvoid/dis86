@@ -1,8 +1,8 @@
 use crate::binfmt::mz;
 
+#[allow(dead_code)]
 pub fn print_hdr(exe: &mz::Exe) {
   // Load everything to stack because rust thinks it's unaligned and complains otherwise...
-  let magic    = exe.hdr.magic;
   let cblp     = exe.hdr.cblp;
   let cp       = exe.hdr.cp;
   let crlc     = exe.hdr.crlc;
