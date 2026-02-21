@@ -4,6 +4,8 @@ use crate::asm::decode::Decoder;
 use crate::asm::instr::{self, Instr, Opcode, Operand};
 use crate::asm::intel_syntax::instr_str;
 
+const DEBUG: bool = true;
+
 #[derive(Debug)]
 enum Value {
   U8(u8),
@@ -24,17 +26,34 @@ impl Machine {
   }
 
   pub fn reg(&self, r: Register) -> u16 {
-    assert!(r.size == 2);
-    self.cpu.regs[r.idx as usize]
+    if r.size == 2 {
+      self.cpu.regs[r.idx as usize]
+    } else {
+      assert!(r.size == 1);
+      let val = self.cpu.regs[r.idx as usize];
+      if r.off == 0 { val as u8 as u16 } else { val >> 8 }
+    }
   }
 
   pub fn reg_set(&mut self, r: Register, val: u16) {
-    assert!(r.size == 2);
-    self.cpu.regs[r.idx as usize] = val;
+    if r.size == 2 {
+      self.cpu.regs[r.idx as usize] = val;
+    } else {
+      // partial register write combine
+      assert!(r.size == 1);
+      let cur = self.cpu.regs[r.idx as usize];
+      let new = if r.off == 0 {
+        (cur & 0xff00) | (val as u8 as u16)
+      } else {
+        (cur & 0x00ff) | (val as u8 as u16) << 8
+      };
+      self.cpu.regs[r.idx as usize] = new;
+    }
   }
 
-  pub fn read(instr: &Instr, oper: usize) -> Value {
-    match &instr.operands[oper] {
+  pub fn read(&self, instr: &Instr, oper: usize) -> Value {
+    let operand = &instr.operands[oper];
+    match operand {
       Operand::Imm(imm) => {
         match imm.sz {
           instr::Size::Size8  => Value::U8(imm.val as u8),
@@ -42,12 +61,19 @@ impl Machine {
           _ => panic!("unsupported size"),
         }
       }
-      _ => panic!("unsupported operand"),
+      Operand::Reg(r) => {
+        let reg = convert_reg(r.0);
+        let v = self.reg(reg);
+        assert!(reg.size == 2);
+        Value::U16(v)
+      }
+      _ => panic!("unsupported operand: {:?}", operand),
     }
   }
 
   pub fn write(&mut self, instr: &Instr, oper: usize, val: Value) {
-    match &instr.operands[oper] {
+    let operand = &instr.operands[oper];
+    match operand {
       Operand::Reg(r) => {
         let reg = convert_reg(r.0);
         match val {
@@ -62,36 +88,59 @@ impl Machine {
           _ => panic!("unsupported size"),
         }
       }
-      _ => panic!("unsupported operand"),
+      Operand::Mem(mem) => {
+        let seg = self.reg(convert_reg(mem.sreg));
+
+        let mut offset = 0;
+        if let Some(reg) = mem.reg1 {
+          offset += self.reg(convert_reg(reg));
+        }
+        if let Some(reg) = mem.reg2 {
+          offset += self.reg(convert_reg(reg));
+        }
+        if let Some(off) = mem.off {
+          offset += off;
+        }
+
+        let addr = SegOff::new_normal(seg, offset);
+        match val {
+          Value::U8(val)  => self.mem.write_u8(addr, val),
+          Value::U16(val) => self.mem.write_u16(addr, val),
+          Value::U32(val) => self.mem.write_u32(addr, val),
+        }
+      }
+      _ => panic!("unsupported operand: {:?}", operand),
     }
   }
 
   pub fn step(&mut self) -> Result<(), String> {
-    let addr = SegOff::new_normal(self.reg(CS), self.reg(IP));
-    println!("addr: {}", addr);
+    // Get instr addr
 
-    // let slice = self.mem.slice_starting_at(addr);
-    // //println!("mem: {:?}", &slice[..16]);
-    // hexdump(&slice[..16]);
+    // Fetch and Decode
+    let instr_addr = SegOff::new_normal(self.reg(CS), self.reg(IP));
+    let instr = decode_instr(&self.mem, instr_addr)?;
 
-    let instr = decode_instr(&self.mem, addr)?;
-    println!("{}   {}", addr, instr_str(&instr));
-    println!("{:?}", instr);
+    // Update IP
+    self.reg_set(IP, instr.end_addr().off.0);
+
+    // Report
+    if DEBUG {
+      println!("{}   {}", instr_addr, instr_str(&instr));
+      //println!("{:?}", instr);
+    }
 
     if instr.rep.is_some() { panic!("REP prefix is not yet implemented"); }
 
     match instr.opcode {
-      Opcode::OP_MOV => {
-        assert!(instr.operands.len() == 2);
-        self.write(&instr, 0, Self::read(&instr, 1));
-      }
+      Opcode::OP_MOV => self.write(&instr, 0, self.read(&instr, 1)),
+
       _ => {
         panic!("Unimplmented opcode: {}", instr.opcode.name());
       }
     }
 
-    println!("Halting!");
-    self.halted = true;
+    //println!("Halting!");
+    //self.halted = true;
 
     Ok(())
   }
@@ -117,20 +166,28 @@ fn hexdump(data: &[u8]) {
 // FIXME: Shouldn't have to remap this at all.. would love to use it directly or with a trivial offsetting
 fn convert_reg(r: instr::Reg) -> Register {
   match r {
-    instr::Reg::AX => AX,
-    instr::Reg::BX => BX,
-    instr::Reg::CX => CX,
-    instr::Reg::DX => DX,
-    instr::Reg::SI => SI,
-    instr::Reg::DI => DI,
-    instr::Reg::BP => BP,
-    instr::Reg::SP => SP,
-    instr::Reg::IP => IP,
-    instr::Reg::CS => CS,
-    instr::Reg::DS => DS,
-    instr::Reg::ES => ES,
-    instr::Reg::SS => SS,
+    instr::Reg::AX    => AX,
+    instr::Reg::BX    => BX,
+    instr::Reg::CX    => CX,
+    instr::Reg::DX    => DX,
+    instr::Reg::SI    => SI,
+    instr::Reg::DI    => DI,
+    instr::Reg::BP    => BP,
+    instr::Reg::SP    => SP,
+    instr::Reg::IP    => IP,
+    instr::Reg::CS    => CS,
+    instr::Reg::DS    => DS,
+    instr::Reg::ES    => ES,
+    instr::Reg::SS    => SS,
     instr::Reg::FLAGS => FLAGS,
+    instr::Reg::AH    => AH,
+    instr::Reg::AL    => AL,
+    instr::Reg::BH    => BH,
+    instr::Reg::BL    => BL,
+    instr::Reg::CH    => CH,
+    instr::Reg::CL    => CL,
+    instr::Reg::DH    => DH,
+    instr::Reg::DL    => DL,
     _ => panic!("unimpl register"),
   }
 }
