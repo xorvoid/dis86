@@ -2,20 +2,20 @@
 #[repr(C, packed)]
 #[derive(Debug, Clone)]
 pub struct Header {
-  pub magic:    [u8; 2], /* "MZ" */
-  pub cblp:     u16,
-  pub cp:       u16,
-  pub crlc:     u16,
-  pub cparhdr:  u16,
-  pub minalloc: u16,
-  pub maxalloc: u16,
-  pub ss:       i16,
-  pub sp:       u16,
-  pub csum:     u16,
-  pub ip:       u16,
-  pub cs:       i16,
-  pub lfarlc:   u16,
-  pub ovno:     u16,
+  pub magic:    [u8; 2], // "MZ"
+  pub cblp:     u16,     // Bytes on last page of file
+  pub cp:       u16,     // Pages in file
+  pub crlc:     u16,     // Number of relocation entries
+  pub cparhdr:  u16,     // Size of header in paragraphs
+  pub minalloc: u16,     // Minimum extra paragraphs needed
+  pub maxalloc: u16,     // Maximum extra paragraphs needed
+  pub ss:       i16,     // Initial SS (relative to load segment)
+  pub sp:       u16,     // Initial SP value
+  pub csum:     u16,     // Checksum
+  pub ip:       u16,     // Initial IP value
+  pub cs:       i16,     // Initial CS (relative to load segment)
+  pub lfarlc:   u16,     // File offset of relocation table
+  pub ovno:     u16,     // Overlay number (0 = main program)
 }
 
 #[repr(C, packed)]

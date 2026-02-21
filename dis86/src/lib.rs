@@ -19,6 +19,9 @@ pub mod asm;
 pub mod analyze;
 pub mod decompile;
 
+// Emulator
+pub mod emu86;
+
 // Main application glue
 pub mod app;
 pub mod app_analyze;

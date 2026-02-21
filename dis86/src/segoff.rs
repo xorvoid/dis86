@@ -25,6 +25,10 @@ impl Seg {
     let Seg::Overlay(seg) = self else { panic!("Expected Seg::Overlay") };
     seg
   }
+
+  pub fn abs_normal(&self) -> usize {
+    (self.unwrap_normal() as usize) * 16
+  }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
