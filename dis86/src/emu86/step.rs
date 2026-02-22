@@ -134,6 +134,11 @@ impl Machine {
     self.operand_write(instr, 0, result);
   }
 
+  pub fn op_jump_cond(&mut self, instr: &Instr, cond: bool) {
+    let tgt = self.operand_read_addr(&instr, 0);
+    if cond { self.reg_write_addr(CS, IP, tgt); }
+  }
+
   pub fn step(&mut self) -> Result<(), String> {
     // Get instr addr
 
@@ -158,6 +163,7 @@ impl Machine {
 
     if instr.rep.is_some() { panic!("REP prefix is not yet implemented"); }
 
+    let f = self.flag_read_all();
     match instr.opcode {
       Opcode::OP_MOV  => self.operand_write(&instr, 0, self.operand_read(&instr, 1)),
       Opcode::OP_PUSH => self.stack_push(self.operand_read(&instr, 0)),
@@ -177,24 +183,39 @@ impl Machine {
       }
       Opcode::OP_CLD => self.flag_write(FLAG_DF, false),
       Opcode::OP_STD => self.flag_write(FLAG_DF, true),
+
+      ////////////////////////////////////////////////////////////////////////////////
+      // Jumps
+
       Opcode::OP_JCXZ => {
         let tgt = self.operand_read_addr(&instr, 1);
         if self.reg_read_u16(CX) == 0 { self.reg_write_addr(CS, IP, tgt); }
       }
-      Opcode::OP_JNE => {
-        let tgt = self.operand_read_addr(&instr, 0);
-        if !self.flag_read(FLAG_ZF) { self.reg_write_addr(CS, IP, tgt); }
-      }
-      Opcode::OP_JE => {
-        let tgt = self.operand_read_addr(&instr, 0);
-        if self.flag_read(FLAG_ZF) { self.reg_write_addr(CS, IP, tgt); }
-      }
+
+      Opcode::OP_JE   => self.op_jump_cond(&instr, f.get(FLAG_ZF)),
+      Opcode::OP_JNE  => self.op_jump_cond(&instr, !f.get(FLAG_ZF)),
+      Opcode::OP_JB   => self.op_jump_cond(&instr, f.get(FLAG_CF)),
+      Opcode::OP_JAE  => self.op_jump_cond(&instr, !f.get(FLAG_CF)),
+      Opcode::OP_JA   => self.op_jump_cond(&instr, !f.get(FLAG_CF) && !f.get(FLAG_ZF)),
+      Opcode::OP_JBE  => self.op_jump_cond(&instr, f.get(FLAG_CF) || f.get(FLAG_ZF)),
+      Opcode::OP_JL   => self.op_jump_cond(&instr, f.get(FLAG_SF) != f.get(FLAG_OF)),
+      Opcode::OP_JGE  => self.op_jump_cond(&instr, f.get(FLAG_SF) == f.get(FLAG_OF)),
+      Opcode::OP_JG   => self.op_jump_cond(&instr, !f.get(FLAG_ZF) && f.get(FLAG_SF) == f.get(FLAG_OF)),
+      Opcode::OP_JLE  => self.op_jump_cond(&instr, f.get(FLAG_SF) || f.get(FLAG_SF) != f.get(FLAG_OF)),
+      Opcode::OP_JS   => self.op_jump_cond(&instr, f.get(FLAG_SF)),
+      Opcode::OP_JNS  => self.op_jump_cond(&instr, !f.get(FLAG_SF)),
+      Opcode::OP_JO   => self.op_jump_cond(&instr, f.get(FLAG_OF)),
+      Opcode::OP_JNO  => self.op_jump_cond(&instr, !f.get(FLAG_OF)),
+      Opcode::OP_JP   => self.op_jump_cond(&instr, f.get(FLAG_PF)),
+      Opcode::OP_JNP  => self.op_jump_cond(&instr, !f.get(FLAG_PF)),
+
       Opcode::OP_CMP => {
         let lhs = self.operand_read(&instr, 0);
         let rhs = self.operand_read(&instr, 1);
         let (_result, flags) = alu::binary(alu::BinaryOp::Sub, lhs, rhs, self.flag_read_all());
         self.flag_write_all(flags);
       }
+
       Opcode::OP_INC => self.op_unary(&instr, alu::UnaryOp::Inc),
       Opcode::OP_NEG => self.op_unary(&instr, alu::UnaryOp::Neg),
       Opcode::OP_OR  => self.op_binary(&instr, alu::BinaryOp::Or),
