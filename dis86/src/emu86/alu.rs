@@ -21,7 +21,7 @@ pub enum UnaryOp {
 
 pub enum ShiftOp {
   Shl,
-  // Shr,
+  Shr,
   // Sar,
 }
 
@@ -80,6 +80,20 @@ fn update_flags_shl(f: &mut Flags, a: u16, n: u8, r32: u32, sign_mask: u16, valu
   f.set(FLAG_ZF, flag_generic_zf(r, value_mask));
   f.set(FLAG_SF, flag_generic_sf(r, sign_mask));
   f.set(FLAG_OF, n == 1 && (old_sign ^ new_sign));  // sign bit changed?
+  f.set(FLAG_PF, flag_generic_pf(r));
+  f.set(FLAG_AF, false);
+}
+
+fn update_flags_shr(f: &mut Flags, a: u16, n: u8, r: u16, sign_mask: u16, value_mask: u16) {
+  if n == 0 { return; } // No update to flags if no shift happens
+
+  let cf_bit = 1 << (n-1);
+  let cf = (a & cf_bit) != 0;
+
+  f.set(FLAG_CF, cf);
+  f.set(FLAG_ZF, flag_generic_zf(r, value_mask));
+  f.set(FLAG_SF, flag_generic_sf(r, sign_mask));
+  f.set(FLAG_OF, n == 1 && (a & sign_mask) != 0);
   f.set(FLAG_PF, flag_generic_pf(r));
   f.set(FLAG_AF, false);
 }
@@ -170,9 +184,22 @@ pub fn shift(op: ShiftOp, a: Value, n: u8, mut f: Flags) -> (Value, Flags) {
   let result;
   match op {
     ShiftOp::Shl => {
-      let r32 = (a as u32).wrapping_shl(n as u32);
+      let r32 = if n < 32 {
+        (a as u32).wrapping_shl(n as u32)
+      } else {
+        0
+      };
       result = r32 as u16;
       update_flags_shl(&mut f, a, n, r32, sign_mask, value_mask);
+    }
+    ShiftOp::Shr => {
+      let r32 = if n < 16 {
+        (a as u32).wrapping_shr(n as u32)
+      } else {
+        0
+      };
+      result = r32 as u16;
+      update_flags_shr(&mut f, a, n, result, sign_mask, value_mask);
     }
   };
 

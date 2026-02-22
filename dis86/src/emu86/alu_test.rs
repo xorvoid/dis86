@@ -90,6 +90,28 @@ macro_rules! check_shl16 {
   }};
 }
 
+macro_rules! check_shr8 {
+  ($lhs:expr, $count:expr, cf=$cf:expr, zf=$zf:expr, sf=$sf:expr, of=$of:expr, pf=$pf:expr) => {{
+    let (_result, f) = alu::shift(alu::ShiftOp::Shr, Value::U8($lhs), $count, Flags(0));
+    assert_eq!(f.get(FLAG_CF), $cf != 0, "CF mismatch");
+    assert_eq!(f.get(FLAG_ZF), $zf != 0, "ZF mismatch");
+    assert_eq!(f.get(FLAG_SF), $sf != 0, "SF mismatch");
+    assert_eq!(f.get(FLAG_OF), $of != 0, "OF mismatch");
+    assert_eq!(f.get(FLAG_PF), $pf != 0, "PF mismatch");
+  }};
+}
+
+macro_rules! check_shr16 {
+  ($lhs:expr, $count:expr, cf=$cf:expr, zf=$zf:expr, sf=$sf:expr, of=$of:expr, pf=$pf:expr) => {{
+    let (_result, f) = alu::shift(alu::ShiftOp::Shr, Value::U16($lhs), $count, Flags(0));
+    assert_eq!(f.get(FLAG_CF), $cf != 0, "CF mismatch");
+    assert_eq!(f.get(FLAG_ZF), $zf != 0, "ZF mismatch");
+    assert_eq!(f.get(FLAG_SF), $sf != 0, "SF mismatch");
+    assert_eq!(f.get(FLAG_OF), $of != 0, "OF mismatch");
+    assert_eq!(f.get(FLAG_PF), $pf != 0, "PF mismatch");
+  }};
+}
+
 // --- sub8 ---
 
 #[test]
@@ -509,4 +531,37 @@ fn shl16_count_16_cf_from_bit0() {
 fn shl16_count_17_cf_zero() {
   // count > 16: result=0, CF=0
   check_shl16!(0xFFFF, 17, cf=0, zf=1, sf=0, of=0, pf=1);
+}
+
+// --- SHR ---
+
+#[test]
+fn shr8_lsb_into_cf() {
+  // 0x01 >> 1 = 0x00: CF=1 (old LSB), ZF=1, OF=0 (original MSB was 0)
+  check_shr8!(0x01, 1, cf=1, zf=1, sf=0, of=0, pf=1);
+}
+
+#[test]
+fn shr8_of_set_when_original_negative() {
+  // 0x80 >> 1 = 0x40: CF=0, OF=1 (original MSB=1, sign changed)
+  // 0x40 = 0100_0000: 1 one = odd parity
+  check_shr8!(0x80, 1, cf=0, zf=0, sf=0, of=1, pf=0);
+}
+
+#[test]
+fn shr8_of_clear_when_original_positive() {
+  // 0x02 >> 1 = 0x01: CF=0, OF=0 (original MSB=0)
+  check_shr8!(0x02, 1, cf=0, zf=0, sf=0, of=0, pf=0);
+}
+
+#[test]
+fn shr8_cf_from_bit1_count2() {
+  // 0x02 >> 2 = 0x00: CF=1 (old bit 1), ZF=1
+  check_shr8!(0x02, 2, cf=1, zf=1, sf=0, of=0, pf=1);
+}
+
+#[test]
+fn shr8_sign_never_set() {
+  // SHR always zero-fills, SF is always 0 for count >= 1
+  check_shr8!(0xFF, 1, cf=1, zf=0, sf=0, of=1, pf=0);
 }
