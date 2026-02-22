@@ -5,7 +5,7 @@ pub use crate::segoff::{Seg, SegOff};
 pub const MEM_SIZE: usize = 0x10fff0;
 
 // Always use a fixed PSP segment
-pub const PSP_SEGMENT: Seg = Seg::Normal(0x800);
+pub const PSP_SEGMENT: Seg = Seg::Normal(0x813);
 
 pub struct Memory(pub Vec<u8>);
 
