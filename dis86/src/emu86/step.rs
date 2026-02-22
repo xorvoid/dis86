@@ -189,8 +189,6 @@ impl Machine {
       }
       Opcode::OP_CALLF => {
         let tgt = self.operand_read_addr(&instr, 0);
-        println!("callf target: {}", tgt);
-        panic!("STOP");
         self.stack_push(self.reg_read(CS));
         self.stack_push(self.reg_read(IP));
         self.reg_write_addr(CS, IP, tgt);
@@ -252,6 +250,13 @@ impl Machine {
         self.flag_write_all(flags);
       }
 
+      Opcode::OP_TEST => {
+        let lhs = self.operand_read(&instr, 0);
+        let rhs = self.operand_read(&instr, 1);
+        let (_result, flags) = alu::binary(alu::BinaryOp::And, lhs, rhs, self.flag_read_all());
+        self.flag_write_all(flags);
+      }
+
       Opcode::OP_INC => self.op_unary(&instr, alu::UnaryOp::Inc),
       Opcode::OP_NEG => self.op_unary(&instr, alu::UnaryOp::Neg),
       Opcode::OP_AND => self.op_binary(&instr, alu::BinaryOp::And),
@@ -263,6 +268,13 @@ impl Machine {
       Opcode::OP_AND => self.op_binary(&instr, alu::BinaryOp::And),
       Opcode::OP_SHL => self.op_shift(&instr, alu::ShiftOp::Shl),
       Opcode::OP_SHR => self.op_shift(&instr, alu::ShiftOp::Shr),
+
+      Opcode::OP_XCHG => {
+        let lhs = self.operand_read(&instr, 0);
+        let rhs = self.operand_read(&instr, 1);
+        self.operand_write(&instr, 0, rhs);
+        self.operand_write(&instr, 1, lhs);
+      }
 
       _ => {
         panic!("Unimplemnted opcode: {}", instr.opcode.name());
