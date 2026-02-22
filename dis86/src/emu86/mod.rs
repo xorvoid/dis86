@@ -1,3 +1,5 @@
+mod value;
+
 mod mem;
 mod cpu;
 mod cpu_flags;

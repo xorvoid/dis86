@@ -3,7 +3,7 @@ use crate::asm::decode::Decoder;
 use crate::asm::instr::{self, Instr, Opcode, Operand, OperandReg, OperandMem, OperandImm, OperandRel, OperandFar};
 use crate::asm::intel_syntax::instr_str;
 
-const DEBUG: bool = false;
+const DEBUG: bool = true;
 
 impl Machine {
   pub fn operand_imm_read(&self, imm: &OperandImm) -> Value {
@@ -153,6 +153,35 @@ impl Machine {
       }
       Opcode::OP_CLD => self.flag_write(FLAG_DF, false),
       Opcode::OP_STD => self.flag_write(FLAG_DF, true),
+      Opcode::OP_JCXZ => {
+        let tgt = self.operand_read_addr(&instr, 1);
+        if self.reg_read_u16(CX) == 0 { self.reg_write_addr(CS, IP, tgt); }
+      }
+      Opcode::OP_JNE => {
+        let tgt = self.operand_read_addr(&instr, 0);
+        if !self.flag_read(FLAG_ZF) { self.reg_write_addr(CS, IP, tgt); }
+      }
+      Opcode::OP_JE => {
+        let tgt = self.operand_read_addr(&instr, 0);
+        if self.flag_read(FLAG_ZF) { self.reg_write_addr(CS, IP, tgt); }
+      }
+      Opcode::OP_CMP => {
+        let lhs = self.operand_read(&instr, 0);
+        let rhs = self.operand_read(&instr, 1);
+        self.flag_update_cmp(lhs, rhs);
+      }
+      Opcode::OP_INC => {
+        let val = self.operand_read(&instr, 0);
+        self.flag_update_inc(val);
+        self.operand_write(&instr, 0, val.arith_inc());
+      }
+      Opcode::OP_OR => {
+        let lhs = self.operand_read(&instr, 0);
+        let rhs = self.operand_read(&instr, 1);
+        let result = lhs.bitwise_or(rhs);
+        self.flag_update_bitwise(result);
+        self.operand_write(&instr, 0, result);
+      }
       _ => {
         panic!("Unimplmented opcode: {}", instr.opcode.name());
       }
@@ -164,9 +193,6 @@ impl Machine {
     Ok(())
   }
 }
-
-fn sign_u8(v: u8)   -> u8 { (v >> 7)&1 }
-fn sign_u16(v: u16) -> u8 { ((v >> 15)&1) as u8 }
 
 // FIXME: THIS IS KLUDGY AS HELL... THE INSTR DECODE API IS BAD AND CAUSES ISSUES EVERYWHERE
 fn decode_instr(mem: &Memory, addr: SegOff) -> Result<Instr, String> {

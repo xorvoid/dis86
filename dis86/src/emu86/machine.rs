@@ -1,3 +1,4 @@
+pub use super::value::*;
 pub use super::mem::*;
 pub use super::cpu::*;
 pub use super::cpu_flags::*;
@@ -10,40 +11,6 @@ pub struct Machine {
   pub mem: Memory,
   pub cpu: Cpu,
   pub dos: Dos,
-}
-
-#[derive(Debug)]
-pub enum Value {
-  U8(u8),
-  U16(u16),
-  U32(u32),
-  Addr(SegOff),
-}
-
-impl Value {
-  #[allow(dead_code)]
-  pub fn unwrap_u8(&self) -> u8 {
-    let Value::U8(val) = self else { panic!("expected Value::U8") };
-    *val
-  }
-
-  #[allow(dead_code)]
-  pub fn unwrap_u16(&self) -> u16 {
-    let Value::U16(val) = self else { panic!("expected Value::U16") };
-    *val
-  }
-
-  #[allow(dead_code)]
-  pub fn unwrap_u32(&self) -> u32 {
-    let Value::U32(val) = self else { panic!("expected Value::U32") };
-    *val
-  }
-
-  #[allow(dead_code)]
-  pub fn unwrap_addr(&self) -> SegOff {
-    let Value::Addr(val) = self else { panic!("expected Value::Addr") };
-    *val
-  }
 }
 
 impl Machine {
