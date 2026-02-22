@@ -6,7 +6,7 @@ use super::machine::*;
 //   update flags
 
 pub enum BinaryOp {
-  // Add,
+  Add,
   Sub,
   And,
   Or,
@@ -15,27 +15,26 @@ pub enum BinaryOp {
 
 pub enum UnaryOp {
   Neg,
-  //Inc,
+  Inc,
   //Not,
 }
 
-// enum ShiftOp {
-//   Shl,
-//   Shr,
-//   Sar,
-// }
+pub enum ShiftOp {
+  Shl,
+  // Shr,
+  // Sar,
+}
 
-fn flag_generic_af(a: u16, b: u16)          -> bool { (a & 0x0F) < (b & 0x0F) }
-fn flag_generic_sf(r: u16, sign_mask: u16) -> bool { (r & sign_mask) != 0 }
-fn flag_generic_zf(r: u16)                 -> bool { r == 0 }
-fn flag_generic_pf(r: u16)                 -> bool { (r as u8).count_ones() % 2 == 0 } // PF uses low byte only
+fn flag_generic_sf(r: u16, sign_mask: u16)  -> bool { (r & sign_mask) != 0 }
+fn flag_generic_zf(r: u16, value_mask: u16) -> bool { (r & value_mask) == 0 }
+fn flag_generic_pf(r: u16)                  -> bool { (r as u8).count_ones() % 2 == 0 } // PF uses low byte only
 
-fn update_flags_sub(f: &mut Flags, a: u16, b: u16, r: u16, sign_mask: u16) {
+fn update_flags_sub(f: &mut Flags, a: u16, b: u16, r: u16, sign_mask: u16, value_mask: u16) {
   f.set(FLAG_CF, a < b);
-  f.set(FLAG_ZF, flag_generic_zf(r));
+  f.set(FLAG_ZF, flag_generic_zf(r, value_mask));
   f.set(FLAG_SF, flag_generic_sf(r, sign_mask));
   f.set(FLAG_PF, flag_generic_pf(r));
-  f.set(FLAG_AF, flag_generic_af(a, b));
+  f.set(FLAG_AF, (a & 0x0F) < (b & 0x0F));
 
   // Overflow cases
   // -------------------------------------------------
@@ -44,42 +43,77 @@ fn update_flags_sub(f: &mut Flags, a: u16, b: u16, r: u16, sign_mask: u16) {
   f.set(FLAG_OF, ((a ^ b) & (a ^ r) & sign_mask) != 0);
 }
 
-fn update_flags_bitwise(f: &mut Flags, r: u16, sign_mask: u16) {
+fn update_flags_bitwise(f: &mut Flags, r: u16, sign_mask: u16, value_mask: u16) {
   f.set(FLAG_CF, false);
-  f.set(FLAG_ZF, flag_generic_zf(r));
+  f.set(FLAG_ZF, flag_generic_zf(r, value_mask));
   f.set(FLAG_SF, flag_generic_sf(r, sign_mask));
   f.set(FLAG_OF, false);
   f.set(FLAG_PF, flag_generic_pf(r));
 }
 
+fn update_flags_add(f: &mut Flags, a: u16, b: u16, r32: u32, sign_mask: u16, value_mask: u16, update_cf: bool) {
+  let r = r32 as u16;
+  let cf = ((r32 >> 1) & (sign_mask as u32)) != 0;
+
+  if update_cf { f.set(FLAG_CF, cf) };
+  f.set(FLAG_ZF, flag_generic_zf(r, value_mask));
+  f.set(FLAG_SF, flag_generic_sf(r, sign_mask));
+  f.set(FLAG_PF, flag_generic_pf(r));
+  f.set(FLAG_AF, (a & 0x0F) + (b & 0x0F) > 0x0F);
+
+  // Overflow cases
+  // -------------------------------------------------
+  //   positive + positive = negative?  -> OF=1 (should have been positive)
+  //   negative + negative = positive?  -> OF=1 (should have been negative)
+  f.set(FLAG_OF, ((a ^ r) & (b ^ r) & sign_mask) != 0);
+}
+
+fn update_flags_shl(f: &mut Flags, a: u16, n: u8, r32: u32, sign_mask: u16, value_mask: u16) {
+  if n == 0 { return; } // No update to flags if no shift happens
+
+  let r = r32 as u16;
+
+  let old_sign = ((r32 >> 1) & (sign_mask as u32)) != 0;
+  let new_sign = (r & sign_mask) != 0;
+
+  f.set(FLAG_CF, old_sign);
+  f.set(FLAG_ZF, flag_generic_zf(r, value_mask));
+  f.set(FLAG_SF, flag_generic_sf(r, sign_mask));
+  f.set(FLAG_OF, n == 1 && (old_sign ^ new_sign));  // sign bit changed?
+  f.set(FLAG_PF, flag_generic_pf(r));
+  f.set(FLAG_AF, false);
+}
+
 pub fn binary(op: BinaryOp, a: Value, b: Value, mut f: Flags) -> (Value, Flags) {
   // Unpack
-  let (size, sign_mask, a, b) = match (a, b) {
-    (Value::U8(a),  Value::U8(b))  => (1, 0x80,   a as u16, b as u16),
-    (Value::U16(a), Value::U16(b)) => (2, 0x8000, a, b),
+  let (size, sign_mask, value_mask, a, b) = match (a, b) {
+    (Value::U8(a),  Value::U8(b))  => (1, 0x80,   0xff,   a as u16, b as u16),
+    (Value::U16(a), Value::U16(b)) => (2, 0x8000, 0xffff, a, b),
     _ => panic!("Mismatched sizes"),
   };
 
   let result;
   match op {
-    // BinaryOp::Add => {
-    //   result = a.wrapping_add(b);
-    // }
+    BinaryOp::Add => {
+      let r32 = (a as u32) + (b as u32);
+      result = r32 as u16;
+      update_flags_add(&mut f, a, b, r32, sign_mask, value_mask, true);
+    }
     BinaryOp::Sub => {
       result = a.wrapping_sub(b);
-      update_flags_sub(&mut f, a, b, result, sign_mask);
+      update_flags_sub(&mut f, a, b, result, sign_mask, value_mask);
     }
     BinaryOp::And => {
       result = a & b;
-      update_flags_bitwise(&mut f, result, sign_mask);
+      update_flags_bitwise(&mut f, result, sign_mask, value_mask);
     }
     BinaryOp::Or => {
       result = a | b;
-      update_flags_bitwise(&mut f, result, sign_mask);
+      update_flags_bitwise(&mut f, result, sign_mask, value_mask);
     }
     BinaryOp::Xor => {
       result = a ^ b;
-      update_flags_bitwise(&mut f, result, sign_mask);
+      update_flags_bitwise(&mut f, result, sign_mask, value_mask);
     }
   };
 
@@ -95,9 +129,9 @@ pub fn binary(op: BinaryOp, a: Value, b: Value, mut f: Flags) -> (Value, Flags) 
 
 pub fn unary(op: UnaryOp, a: Value, mut f: Flags) -> (Value, Flags) {
   // Unpack
-  let (size, sign_mask, a) = match a {
-    Value::U8(a)  => (1, 0x80,   a as u16),
-    Value::U16(a) => (2, 0x8000, a),
+  let (size, sign_mask, value_mask, a) = match a {
+    Value::U8(a)  => (1, 0x80,   0xff,   a as u16),
+    Value::U16(a) => (2, 0x8000, 0xffff, a),
     _ => panic!("Mismatched sizes"),
   };
 
@@ -105,7 +139,12 @@ pub fn unary(op: UnaryOp, a: Value, mut f: Flags) -> (Value, Flags) {
   match op {
     UnaryOp::Neg => {
       result = -(a as i16) as u16;
-      update_flags_sub(&mut f, 0, a, result, sign_mask);
+      update_flags_sub(&mut f, 0, a, result, sign_mask, value_mask);
+    }
+    UnaryOp::Inc => {
+      let r32 = (a as u32) + (1 as u32);
+      result = r32 as u16;
+      update_flags_add(&mut f, a, 1, r32, sign_mask, value_mask, false);
     }
   };
 
@@ -120,4 +159,30 @@ pub fn unary(op: UnaryOp, a: Value, mut f: Flags) -> (Value, Flags) {
   (result_value, f)
 }
 
-//fn alu_shift(op: BinaryOp, a: Value, n: u8, f: Flags) -> (Value, Flags);
+pub fn shift(op: ShiftOp, a: Value, n: u8, mut f: Flags) -> (Value, Flags) {
+  // Unpack
+  let (size, sign_mask, value_mask, a) = match a {
+    Value::U8(a)  => (1, 0x80,   0xff,   a as u16),
+    Value::U16(a) => (2, 0x8000, 0xffff, a),
+    _ => panic!("Mismatched sizes"),
+  };
+
+  let result;
+  match op {
+    ShiftOp::Shl => {
+      let r32 = (a as u32).wrapping_shl(n as u32);
+      result = r32 as u16;
+      update_flags_shl(&mut f, a, n, r32, sign_mask, value_mask);
+    }
+  };
+
+
+  // Re-pack
+  let result_value = match size {
+    1 => Value::U8(result as u8),
+    2 => Value::U16(result),
+    _ => unreachable!(),
+  };
+
+  (result_value, f)
+}

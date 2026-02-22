@@ -2,6 +2,7 @@ mod value;
 
 mod mem;
 mod cpu;
+#[allow(dead_code)]
 mod cpu_flags;
 mod cpu_scas;
 
@@ -21,3 +22,6 @@ mod psp;
 mod emu;
 
 pub use emu::run;
+
+// Tests
+#[cfg(test)] mod alu_test;

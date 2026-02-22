@@ -173,8 +173,9 @@ impl Machine {
       }
       Opcode::OP_INC => {
         let val = self.operand_read(&instr, 0);
-        self.flag_update_inc(val);
-        self.operand_write(&instr, 0, val.arith_inc());
+        let (result, flags) = alu::unary(alu::UnaryOp::Inc, val, self.flag_read_all());
+        self.flag_write_all(flags);
+        self.operand_write(&instr, 0, result);
       }
       Opcode::OP_NEG => {
         let val = self.operand_read(&instr, 0);
@@ -189,12 +190,33 @@ impl Machine {
         self.flag_write_all(flags);
         self.operand_write(&instr, 0, result);
       }
+      Opcode::OP_ADD => {
+        let lhs = self.operand_read(&instr, 0);
+        let rhs = self.operand_read(&instr, 1);
+        let (result, flags) = alu::binary(alu::BinaryOp::Add, lhs, rhs, self.flag_read_all());
+        self.flag_write_all(flags);
+        self.operand_write(&instr, 0, result);
+      }
+      Opcode::OP_SUB => {
+        let lhs = self.operand_read(&instr, 0);
+        let rhs = self.operand_read(&instr, 1);
+        let (result, flags) = alu::binary(alu::BinaryOp::Sub, lhs, rhs, self.flag_read_all());
+        self.flag_write_all(flags);
+        self.operand_write(&instr, 0, result);
+      }
+      Opcode::OP_AND => {
+        let lhs = self.operand_read(&instr, 0);
+        let rhs = self.operand_read(&instr, 1);
+        let (result, flags) = alu::binary(alu::BinaryOp::And, lhs, rhs, self.flag_read_all());
+        self.flag_write_all(flags);
+        self.operand_write(&instr, 0, result);
+      }
       Opcode::OP_SHL => {
         let lhs = self.operand_read(&instr, 0);
         let rhs = self.operand_read(&instr, 1);
         let count = rhs.unwrap_u8();
-        let result = lhs.shift_shl(lhs, count);
-        self.flag_update_shl(lhs, count);
+        let (result, flags) = alu::shift(alu::ShiftOp::Shl, lhs, count, self.flag_read_all());
+        self.flag_write_all(flags);
         self.operand_write(&instr, 0, result);
       }
       _ => {

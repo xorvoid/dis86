@@ -30,7 +30,7 @@ impl Machine {
   }
 
   pub fn stack_pop(&mut self) -> Value {
-    let mut addr = self.reg_read_addr(SS, SP);
+    let addr = self.reg_read_addr(SS, SP);
     let val = self.mem.read_u16(addr);
 
     self.reg_write_u16(SP, addr.off.0 + 2);
