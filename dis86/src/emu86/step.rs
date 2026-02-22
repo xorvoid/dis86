@@ -110,6 +110,30 @@ impl Machine {
     }
   }
 
+  pub fn op_unary(&mut self, instr: &Instr, op: alu::UnaryOp) {
+    let val = self.operand_read(instr, 0);
+    let (result, flags) = alu::unary(op, val, self.flag_read_all());
+    self.flag_write_all(flags);
+    self.operand_write(instr, 0, result);
+  }
+
+  pub fn op_binary(&mut self, instr: &Instr, op: alu::BinaryOp) {
+    let lhs = self.operand_read(instr, 0);
+    let rhs = self.operand_read(instr, 1);
+    let (result, flags) = alu::binary(op, lhs, rhs, self.flag_read_all());
+    self.flag_write_all(flags);
+    self.operand_write(instr, 0, result);
+  }
+
+  pub fn op_shift(&mut self, instr: &Instr, op: alu::ShiftOp) {
+    let lhs = self.operand_read(instr, 0);
+    let rhs = self.operand_read(instr, 1);
+    let count = rhs.unwrap_u8();
+    let (result, flags) = alu::shift(op, lhs, count, self.flag_read_all());
+    self.flag_write_all(flags);
+    self.operand_write(instr, 0, result);
+  }
+
   pub fn step(&mut self) -> Result<(), String> {
     // Get instr addr
 
@@ -171,54 +195,14 @@ impl Machine {
         let (_result, flags) = alu::binary(alu::BinaryOp::Sub, lhs, rhs, self.flag_read_all());
         self.flag_write_all(flags);
       }
-      Opcode::OP_INC => {
-        let val = self.operand_read(&instr, 0);
-        let (result, flags) = alu::unary(alu::UnaryOp::Inc, val, self.flag_read_all());
-        self.flag_write_all(flags);
-        self.operand_write(&instr, 0, result);
-      }
-      Opcode::OP_NEG => {
-        let val = self.operand_read(&instr, 0);
-        let (result, flags) = alu::unary(alu::UnaryOp::Neg, val, self.flag_read_all());
-        self.flag_write_all(flags);
-        self.operand_write(&instr, 0, result);
-      }
-      Opcode::OP_OR => {
-        let lhs = self.operand_read(&instr, 0);
-        let rhs = self.operand_read(&instr, 1);
-        let (result, flags) = alu::binary(alu::BinaryOp::Or, lhs, rhs, self.flag_read_all());
-        self.flag_write_all(flags);
-        self.operand_write(&instr, 0, result);
-      }
-      Opcode::OP_ADD => {
-        let lhs = self.operand_read(&instr, 0);
-        let rhs = self.operand_read(&instr, 1);
-        let (result, flags) = alu::binary(alu::BinaryOp::Add, lhs, rhs, self.flag_read_all());
-        self.flag_write_all(flags);
-        self.operand_write(&instr, 0, result);
-      }
-      Opcode::OP_SUB => {
-        let lhs = self.operand_read(&instr, 0);
-        let rhs = self.operand_read(&instr, 1);
-        let (result, flags) = alu::binary(alu::BinaryOp::Sub, lhs, rhs, self.flag_read_all());
-        self.flag_write_all(flags);
-        self.operand_write(&instr, 0, result);
-      }
-      Opcode::OP_AND => {
-        let lhs = self.operand_read(&instr, 0);
-        let rhs = self.operand_read(&instr, 1);
-        let (result, flags) = alu::binary(alu::BinaryOp::And, lhs, rhs, self.flag_read_all());
-        self.flag_write_all(flags);
-        self.operand_write(&instr, 0, result);
-      }
-      Opcode::OP_SHL => {
-        let lhs = self.operand_read(&instr, 0);
-        let rhs = self.operand_read(&instr, 1);
-        let count = rhs.unwrap_u8();
-        let (result, flags) = alu::shift(alu::ShiftOp::Shl, lhs, count, self.flag_read_all());
-        self.flag_write_all(flags);
-        self.operand_write(&instr, 0, result);
-      }
+      Opcode::OP_INC => self.op_unary(&instr, alu::UnaryOp::Inc),
+      Opcode::OP_NEG => self.op_unary(&instr, alu::UnaryOp::Neg),
+      Opcode::OP_OR  => self.op_binary(&instr, alu::BinaryOp::Or),
+      Opcode::OP_ADD => self.op_binary(&instr, alu::BinaryOp::Add),
+      Opcode::OP_SUB => self.op_binary(&instr, alu::BinaryOp::Sub),
+      Opcode::OP_AND => self.op_binary(&instr, alu::BinaryOp::And),
+      Opcode::OP_SHL => self.op_shift(&instr, alu::ShiftOp::Shl),
+
       _ => {
         panic!("Unimplmented opcode: {}", instr.opcode.name());
       }
