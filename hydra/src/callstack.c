@@ -1,6 +1,8 @@
 #include "internal.h"
 #include <dlfcn.h>
 
+#define ITRACE_ENABLE 0
+
 typedef struct call       call_t;
 typedef struct callstack  callstack_t;
 
@@ -295,8 +297,27 @@ static void update(hydra_machine_t *m, size_t interrupt_count)
   if (is_instr_ret(m))   c->call_event = CALL_EVENT_RET;
 }
 
+static void capture_itrace(hydra_machine_t *m)
+{
+  static addr_t last_addr = {};
+
+  u16 cs = m->registers->cs;
+  u16 ip = m->registers->ip;
+  addr_t addr = ADDR_MAKE(cs, ip);
+
+  if (cs < 0x823) return;
+  if (cs & 0x8000) return;
+  if (addr_equal(last_addr, addr)) return;
+
+  printf("ITRACE | %04x:%04x\n", cs - 0x823, ip);
+  last_addr = addr;
+}
+
 void hydra_callstack_notify(hydra_machine_t *m)
 {
+  // Capture instruction trace
+  if (ITRACE_ENABLE) capture_itrace(m);
+
   // Handle call event actions that are defered from previous instr
   // because we need post-execution information
   switch (c->call_event) {
