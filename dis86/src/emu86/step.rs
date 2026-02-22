@@ -181,8 +181,11 @@ impl Machine {
         self.operand_write(&instr, 0, Value::U16(addr.seg.unwrap_normal()));
         self.operand_write(&instr, 1, Value::U16(addr.off.0));
       }
+
       Opcode::OP_CLD => self.flag_write(FLAG_DF, false),
       Opcode::OP_STD => self.flag_write(FLAG_DF, true),
+      Opcode::OP_CLI => self.flag_write(FLAG_IF, false),
+      Opcode::OP_STI => self.flag_write(FLAG_IF, true),
 
       ////////////////////////////////////////////////////////////////////////////////
       // Jumps
@@ -218,7 +221,9 @@ impl Machine {
 
       Opcode::OP_INC => self.op_unary(&instr, alu::UnaryOp::Inc),
       Opcode::OP_NEG => self.op_unary(&instr, alu::UnaryOp::Neg),
+      Opcode::OP_AND => self.op_binary(&instr, alu::BinaryOp::And),
       Opcode::OP_OR  => self.op_binary(&instr, alu::BinaryOp::Or),
+      Opcode::OP_XOR => self.op_binary(&instr, alu::BinaryOp::Xor),
       Opcode::OP_ADD => self.op_binary(&instr, alu::BinaryOp::Add),
       Opcode::OP_SUB => self.op_binary(&instr, alu::BinaryOp::Sub),
       Opcode::OP_AND => self.op_binary(&instr, alu::BinaryOp::And),
