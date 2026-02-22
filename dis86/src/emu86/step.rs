@@ -158,6 +158,7 @@ impl Machine {
     // Special Ops (rep aware)
     match instr.opcode {
       Opcode::OP_SCAS => return self.opcode_scas(&instr),
+      Opcode::OP_STOS => return self.opcode_stos(&instr),
       _ => (),
     }
 

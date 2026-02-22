@@ -5,6 +5,7 @@ mod cpu;
 #[allow(dead_code)]
 mod cpu_flags;
 mod cpu_scas;
+mod cpu_stos;
 
 pub mod alu;
 
