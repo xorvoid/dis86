@@ -98,7 +98,12 @@ impl Machine {
   }
 
   pub fn operand_read_addr(&self, instr: &Instr, oper: usize) -> SegOff {
-    self.operand_read(instr, oper).unwrap_addr()
+    let value = self.operand_read(instr, oper);
+    match value {
+      Value::Addr(addr) => addr,
+      Value::U32(val) => SegOff::from_u32(val),  // allow 32-bit loaded values to be used as addresses
+      _ => panic!("invalid value: {:?}", value),
+    }
   }
 
   pub fn operand_write(&mut self, instr: &Instr, oper: usize, val: Value) {
@@ -175,6 +180,14 @@ impl Machine {
         self.stack_push(self.reg_read(IP));
         self.reg_set(IP, tgt.off.0);
       }
+      Opcode::OP_CALLF => {
+        let tgt = self.operand_read_addr(&instr, 0);
+        println!("callf target: {}", tgt);
+        panic!("STOP");
+        self.stack_push(self.reg_read(CS));
+        self.stack_push(self.reg_read(IP));
+        self.reg_write_addr(CS, IP, tgt);
+      }
       Opcode::OP_RET => { let off = self.stack_pop(); self.reg_write(IP, off); }
       Opcode::OP_LES => {
         let val = self.operand_read(&instr, 2);
@@ -190,6 +203,11 @@ impl Machine {
 
       ////////////////////////////////////////////////////////////////////////////////
       // Jumps
+
+      Opcode::OP_JMP => {
+        let tgt = self.operand_read_addr(&instr, 0);
+        self.reg_write_addr(CS, IP, tgt);
+      }
 
       Opcode::OP_JCXZ => {
         let tgt = self.operand_read_addr(&instr, 1);
@@ -232,7 +250,7 @@ impl Machine {
       Opcode::OP_SHR => self.op_shift(&instr, alu::ShiftOp::Shr),
 
       _ => {
-        panic!("Unimplmented opcode: {}", instr.opcode.name());
+        panic!("Unimplemnted opcode: {}", instr.opcode.name());
       }
     }
 

@@ -89,6 +89,11 @@ impl Machine {
     self.reg_write(r, Value::U16(val))
   }
 
+  pub fn reg_write_u32(&mut self, high: Register, low: Register, val: u32) {
+    self.reg_write_u16(high, (val>>16) as u16);
+    self.reg_write_u16(low,  val as u16);
+  }
+
   pub fn reg_write_addr(&mut self, seg: Register, off: Register, addr: SegOff) {
     self.reg_write_u16(seg, addr.seg.unwrap_normal());
     self.reg_write_u16(off, addr.off.0);
