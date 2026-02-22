@@ -55,6 +55,10 @@ impl SegOff {
     SegOff { seg: Seg::Overlay(seg), off: Off(off) }
   }
 
+  pub fn from_u32(val: u32) -> SegOff {
+    SegOff::new((val >> 16) as u16, val as u16)
+  }
+
   pub fn abs_normal(&self) -> usize {
     (self.seg.unwrap_normal() as usize) * 16 + (self.off.0 as usize)
   }

@@ -1,5 +1,7 @@
 mod mem;
 mod cpu;
+mod cpu_flags;
+mod cpu_scas;
 
 mod machine;
 mod loader;

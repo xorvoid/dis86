@@ -555,7 +555,7 @@ const INSTR_TBL: &[InstrFmt] = &[
   InstrFmt {  op: Opcode::OP_LODS,      op1: 0xac,     op2: -1,   oper: [Oper::OPER_AL,      Oper::OPER_SRC8,    Oper::OPER_NONE],      hidden: 0x0 },
   InstrFmt {  op: Opcode::OP_LODS,      op1: 0xad,     op2: -1,   oper: [Oper::OPER_AX,      Oper::OPER_SRC16,   Oper::OPER_NONE],      hidden: 0x0 },
   InstrFmt {  op: Opcode::OP_SCAS,      op1: 0xae,     op2: -1,   oper: [Oper::OPER_AL,      Oper::OPER_DST8,    Oper::OPER_NONE],      hidden: 0x0 },
-  InstrFmt {  op: Opcode::OP_SCAS,      op1: 0xaf,     op2: -1,   oper: [Oper::OPER_DST16,   Oper::OPER_AX,      Oper::OPER_NONE],      hidden: 0x0 },
+  InstrFmt {  op: Opcode::OP_SCAS,      op1: 0xaf,     op2: -1,   oper: [Oper::OPER_AX,      Oper::OPER_DST16,   Oper::OPER_NONE],      hidden: 0x0 },
   InstrFmt {  op: Opcode::OP_MOV,       op1: 0xb0,     op2: -1,   oper: [Oper::OPER_AL,      Oper::OPER_IMM8,    Oper::OPER_NONE],      hidden: 0x0 },
   InstrFmt {  op: Opcode::OP_MOV,       op1: 0xb1,     op2: -1,   oper: [Oper::OPER_CL,      Oper::OPER_IMM8,    Oper::OPER_NONE],      hidden: 0x0 },
   InstrFmt {  op: Opcode::OP_MOV,       op1: 0xb2,     op2: -1,   oper: [Oper::OPER_DL,      Oper::OPER_IMM8,    Oper::OPER_NONE],      hidden: 0x0 },

@@ -3,7 +3,7 @@ use crate::asm::decode::Decoder;
 use crate::asm::instr::{self, Instr, Opcode, Operand, OperandReg, OperandMem, OperandImm, OperandRel, OperandFar};
 use crate::asm::intel_syntax::instr_str;
 
-const DEBUG: bool = true;
+const DEBUG: bool = false;
 
 impl Machine {
   pub fn operand_imm_read(&self, imm: &OperandImm) -> Value {
@@ -15,10 +15,7 @@ impl Machine {
   }
 
   pub fn operand_reg_read(&self, reg: &OperandReg) -> Value {
-    let reg = convert_reg(reg.0);
-    let v = self.reg(reg);
-    assert!(reg.size == 2);
-    Value::U16(v)
+    self.reg_read(convert_reg(reg.0))
   }
 
   pub fn operand_reg_write(&mut self, reg: &OperandReg, val: Value) {
@@ -129,6 +126,12 @@ impl Machine {
       //println!("{:?}", instr);
     }
 
+    // Special Ops (rep aware)
+    match instr.opcode {
+      Opcode::OP_SCAS => return self.opcode_scas(&instr),
+      _ => (),
+    }
+
     if instr.rep.is_some() { panic!("REP prefix is not yet implemented"); }
 
     match instr.opcode {
@@ -142,6 +145,14 @@ impl Machine {
         self.reg_set(IP, tgt.off.0);
       }
       Opcode::OP_RET => { let off = self.stack_pop(); self.reg_write(IP, off); }
+      Opcode::OP_LES => {
+        let val = self.operand_read(&instr, 2);
+        let addr = SegOff::from_u32(val.unwrap_u32());
+        self.operand_write(&instr, 0, Value::U16(addr.seg.unwrap_normal()));
+        self.operand_write(&instr, 1, Value::U16(addr.off.0));
+      }
+      Opcode::OP_CLD => self.flag_write(FLAG_DF, false),
+      Opcode::OP_STD => self.flag_write(FLAG_DF, true),
       _ => {
         panic!("Unimplmented opcode: {}", instr.opcode.name());
       }
@@ -153,6 +164,9 @@ impl Machine {
     Ok(())
   }
 }
+
+fn sign_u8(v: u8)   -> u8 { (v >> 7)&1 }
+fn sign_u16(v: u16) -> u8 { ((v >> 15)&1) as u8 }
 
 // FIXME: THIS IS KLUDGY AS HELL... THE INSTR DECODE API IS BAD AND CAUSES ISSUES EVERYWHERE
 fn decode_instr(mem: &Memory, addr: SegOff) -> Result<Instr, String> {
