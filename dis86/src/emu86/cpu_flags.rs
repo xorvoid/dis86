@@ -32,15 +32,23 @@ impl Machine {
   //   positive - negative = negative?  -> OF=1 (should have been positive)
   //   negative - positive = positive?  -> OF=1 (should have been negative)
 
-  pub fn flag_update_cmp(&mut self, lhs: Value, rhs: Value) {
-    match (lhs, rhs) {
-      (Value::U8(lhs),  Value::U8(rhs))  => self.flag_update_cmp8(lhs, rhs),
-      (Value::U16(lhs), Value::U16(rhs)) => self.flag_update_cmp16(lhs, rhs),
+  pub fn flag_update_neg(&mut self, lhs: Value) {
+    match lhs {
+      Value::U8(lhs)  => self.flag_update_sub8(0, lhs),
+      Value::U16(lhs) => self.flag_update_sub16(0, lhs),
       _ => panic!("Mismatched sizes"),
     }
   }
 
-  pub fn flag_update_cmp8(&mut self, lhs: u8, rhs: u8) {
+  pub fn flag_update_sub(&mut self, lhs: Value, rhs: Value) {
+    match (lhs, rhs) {
+      (Value::U8(lhs),  Value::U8(rhs))  => self.flag_update_sub8(lhs, rhs),
+      (Value::U16(lhs), Value::U16(rhs)) => self.flag_update_sub16(lhs, rhs),
+      _ => panic!("Mismatched sizes"),
+    }
+  }
+
+  pub fn flag_update_sub8(&mut self, lhs: u8, rhs: u8) {
     let result = lhs.wrapping_sub(rhs);
     self.flag_write(FLAG_CF, lhs < rhs);
     self.flag_write(FLAG_ZF, result == 0);
@@ -50,7 +58,7 @@ impl Machine {
     self.flag_write(FLAG_AF, (lhs & 0x0F) < (rhs & 0x0F));
   }
 
-  pub fn flag_update_cmp16(&mut self, lhs: u16, rhs: u16) {
+  pub fn flag_update_sub16(&mut self, lhs: u16, rhs: u16) {
     let result = lhs.wrapping_sub(rhs);
     self.flag_write(FLAG_CF, lhs < rhs);
     self.flag_write(FLAG_ZF, result == 0);
@@ -128,6 +136,38 @@ impl Machine {
     self.flag_write(FLAG_AF, (lhs & 0x0F) + (rhs & 0x0F) > 0x0F);
   }
 
+  pub fn flag_update_shl(&mut self, lhs: Value, count: u8) {
+    match lhs {
+      Value::U8(lhs)  => self.flag_update_shl8(lhs, count),
+      Value::U16(lhs) => self.flag_update_shl16(lhs, count),
+      _ => panic!("Mismatched sizes"),
+    }
+  }
+
+  pub fn flag_update_shl8 (&mut self, lhs: u8, count: u8) {
+    if count == 0 { return; } // no-update on count == 0
+    let result = (lhs as u32).wrapping_shl(count as u32) as u8;
+    let cf     = count <= 8 && (lhs >> (8 - count)) & 1 != 0;
+    self.flag_write(FLAG_CF, cf);
+    self.flag_write(FLAG_ZF, result == 0);
+    self.flag_write(FLAG_SF, (result & 0x80) != 0);
+    self.flag_write(FLAG_OF, count == 1 && (cf ^ (result & 0x80 != 0)));
+    self.flag_write(FLAG_PF, result.count_ones() % 2 == 0);  // PF uses low byte only
+    self.flag_write(FLAG_AF, false);
+  }
+
+  pub fn flag_update_shl16(&mut self, lhs: u16, count: u8) {
+    if count == 0 { return; } // no-update on count == 0
+    let result = (lhs as u32).wrapping_shl(count as u32) as u16;
+    let cf     = count <= 16 && (lhs >> (16 - count)) & 1 != 0;
+    self.flag_write(FLAG_CF, cf);
+    self.flag_write(FLAG_ZF, result == 0);
+    self.flag_write(FLAG_SF, (result & 0x8000) != 0);
+    self.flag_write(FLAG_OF, count == 1 && (cf ^ (result & 0x8000 != 0)));
+    self.flag_write(FLAG_PF, (result as u32).count_ones() % 2 == 0);  // PF uses low byte only
+    self.flag_write(FLAG_AF, false);
+  }
+
   // TODO FLAG UPDATE FOR SHIFT/ROTATE
 }
 
@@ -135,10 +175,10 @@ impl Machine {
 mod tests {
   use super::*;
 
-  macro_rules! check_cmp8 {
+  macro_rules! check_sub8 {
     ($lhs:expr, $rhs:expr, cf=$cf:expr, zf=$zf:expr, sf=$sf:expr, of=$of:expr, pf=$pf:expr, af=$af:expr) => {
       let mut m = Machine::default();
-      m.flag_update_cmp8($lhs, $rhs);
+      m.flag_update_sub8($lhs, $rhs);
       assert_eq!(m.flag_read(FLAG_CF), $cf != 0, "CF mismatch");
       assert_eq!(m.flag_read(FLAG_ZF), $zf != 0, "ZF mismatch");
       assert_eq!(m.flag_read(FLAG_SF), $sf != 0, "SF mismatch");
@@ -148,10 +188,10 @@ mod tests {
     };
   }
 
-  macro_rules! check_cmp16 {
+  macro_rules! check_sub16 {
     ($lhs:expr, $rhs:expr, cf=$cf:expr, zf=$zf:expr, sf=$sf:expr, of=$of:expr, pf=$pf:expr, af=$af:expr) => {
       let mut m = Machine::default();
-      m.flag_update_cmp16($lhs, $rhs);
+      m.flag_update_sub16($lhs, $rhs);
       assert_eq!(m.flag_read(FLAG_CF), $cf != 0, "CF mismatch");
       assert_eq!(m.flag_read(FLAG_ZF), $zf != 0, "ZF mismatch");
       assert_eq!(m.flag_read(FLAG_SF), $sf != 0, "SF mismatch");
@@ -207,110 +247,134 @@ mod tests {
     }};
   }
 
-  // --- cmp8 ---
+  macro_rules! check_shl8 {
+    ($lhs:expr, $count:expr, cf=$cf:expr, zf=$zf:expr, sf=$sf:expr, of=$of:expr, pf=$pf:expr) => {{
+      let mut m = Machine::default();
+      m.flag_update_shl8($lhs, $count);
+      assert_eq!(m.flag_read(FLAG_CF), $cf != 0, "CF mismatch");
+      assert_eq!(m.flag_read(FLAG_ZF), $zf != 0, "ZF mismatch");
+      assert_eq!(m.flag_read(FLAG_SF), $sf != 0, "SF mismatch");
+      assert_eq!(m.flag_read(FLAG_OF), $of != 0, "OF mismatch");
+      assert_eq!(m.flag_read(FLAG_PF), $pf != 0, "PF mismatch");
+    }};
+  }
+
+  macro_rules! check_shl16 {
+    ($lhs:expr, $count:expr, cf=$cf:expr, zf=$zf:expr, sf=$sf:expr, of=$of:expr, pf=$pf:expr) => {{
+      let mut m = Machine::default();
+      m.flag_update_shl16($lhs, $count);
+      assert_eq!(m.flag_read(FLAG_CF), $cf != 0, "CF mismatch");
+      assert_eq!(m.flag_read(FLAG_ZF), $zf != 0, "ZF mismatch");
+      assert_eq!(m.flag_read(FLAG_SF), $sf != 0, "SF mismatch");
+      assert_eq!(m.flag_read(FLAG_OF), $of != 0, "OF mismatch");
+      assert_eq!(m.flag_read(FLAG_PF), $pf != 0, "PF mismatch");
+    }};
+  }
+
+  // --- sub8 ---
 
   #[test]
-  fn cmp8_equal() {
+  fn sub8_equal() {
     // 5 - 5 = 0: ZF set, nothing else
-    check_cmp8!(0x05, 0x05, cf=0, zf=1, sf=0, of=0, pf=1, af=0);
+    check_sub8!(0x05, 0x05, cf=0, zf=1, sf=0, of=0, pf=1, af=0);
   }
 
   #[test]
-  fn cmp8_dst_greater() {
+  fn sub8_dst_greater() {
     // 7 - 3 = 4: no flags
-    check_cmp8!(0x07, 0x03, cf=0, zf=0, sf=0, of=0, pf=0, af=0);
+    check_sub8!(0x07, 0x03, cf=0, zf=0, sf=0, of=0, pf=0, af=0);
   }
 
   #[test]
-  fn cmp8_dst_less_unsigned() {
+  fn sub8_dst_less_unsigned() {
     // 3 - 5 = 0xFE: CF set (borrow), SF set, 0xFE = 1111_1110 (odd parity)
-    check_cmp8!(0x03, 0x05, cf=1, zf=0, sf=1, of=0, pf=0, af=1);
+    check_sub8!(0x03, 0x05, cf=1, zf=0, sf=1, of=0, pf=0, af=1);
   }
 
   #[test]
-  fn cmp8_signed_overflow_positive() {
+  fn sub8_signed_overflow_positive() {
     // 0x7F (127) - 0xFF (-1) = 0x80 (-128): OF set (127-(-1)=128 overflows i8)
-    check_cmp8!(0x7F, 0xFF, cf=1, zf=0, sf=1, of=1, pf=0, af=0);
+    check_sub8!(0x7F, 0xFF, cf=1, zf=0, sf=1, of=1, pf=0, af=0);
   }
 
   #[test]
-  fn cmp8_signed_overflow_negative() {
+  fn sub8_signed_overflow_negative() {
     // 0x80 (-128) - 0x01 (1) = 0x7F (127): OF set (-128-1=-129 overflows i8)
-    check_cmp8!(0x80, 0x01, cf=0, zf=0, sf=0, of=1, pf=0, af=1);
+    check_sub8!(0x80, 0x01, cf=0, zf=0, sf=0, of=1, pf=0, af=1);
   }
 
   #[test]
-  fn cmp8_zero_result_max() {
+  fn sub8_zero_result_max() {
     // 0xFF - 0xFF = 0: ZF set, parity even
-    check_cmp8!(0xFF, 0xFF, cf=0, zf=1, sf=0, of=0, pf=1, af=0);
+    check_sub8!(0xFF, 0xFF, cf=0, zf=1, sf=0, of=0, pf=1, af=0);
   }
 
   #[test]
-  fn cmp8_auxiliary_carry() {
+  fn sub8_auxiliary_carry() {
     // 0x10 - 0x01 = 0x0F: AF set (low nibble 0 < 1, borrow from bit 4)
-    check_cmp8!(0x10, 0x01, cf=0, zf=0, sf=0, of=0, pf=1, af=1);
+    check_sub8!(0x10, 0x01, cf=0, zf=0, sf=0, of=0, pf=1, af=1);
   }
 
   #[test]
-  fn cmp8_parity_odd() {
+  fn sub8_parity_odd() {
     // 0x09 - 0x02 = 0x07 = 0000_0111: 3 ones = odd parity, PF=0
-    check_cmp8!(0x09, 0x02, cf=0, zf=0, sf=0, of=0, pf=0, af=0);
+    check_sub8!(0x09, 0x02, cf=0, zf=0, sf=0, of=0, pf=0, af=0);
   }
 
   #[test]
-  fn cmp8_zero_minus_one() {
+  fn sub8_zero_minus_one() {
     // 0x00 - 0x01 = 0xFF: CF set, SF set, 0xFF = 8 ones = even parity
-    check_cmp8!(0x00, 0x01, cf=1, zf=0, sf=1, of=0, pf=1, af=1);
+    check_sub8!(0x00, 0x01, cf=1, zf=0, sf=1, of=0, pf=1, af=1);
   }
 
-  // --- cmp16 ---
+  // --- sub16 ---
 
   #[test]
-  fn cmp16_equal() {
+  fn sub16_equal() {
     // 0x1234 - 0x1234 = 0: ZF set
-    check_cmp16!(0x1234, 0x1234, cf=0, zf=1, sf=0, of=0, pf=1, af=0);
+    check_sub16!(0x1234, 0x1234, cf=0, zf=1, sf=0, of=0, pf=1, af=0);
   }
 
   #[test]
-  fn cmp16_dst_greater() {
+  fn sub16_dst_greater() {
     // 0x0100 - 0x0001 = 0x00FF: SF clear, PF: 0xFF = 8 ones = even
-    check_cmp16!(0x0100, 0x0001, cf=0, zf=0, sf=0, of=0, pf=1, af=1);
+    check_sub16!(0x0100, 0x0001, cf=0, zf=0, sf=0, of=0, pf=1, af=1);
   }
 
   #[test]
-  fn cmp16_dst_less_unsigned() {
+  fn sub16_dst_less_unsigned() {
     // 0x0001 - 0x0002 = 0xFFFF: CF set, SF set, low byte 0xFF = even parity
-    check_cmp16!(0x0001, 0x0002, cf=1, zf=0, sf=1, of=0, pf=1, af=1);
+    check_sub16!(0x0001, 0x0002, cf=1, zf=0, sf=1, of=0, pf=1, af=1);
   }
 
   #[test]
-  fn cmp16_signed_overflow_positive() {
+  fn sub16_signed_overflow_positive() {
     // 0x7FFF (32767) - 0xFFFF (-1) = 0x8000: OF set, SF set, PF set (lower byte only used)
-    check_cmp16!(0x7FFF, 0xFFFF, cf=1, zf=0, sf=1, of=1, pf=1, af=0);
+    check_sub16!(0x7FFF, 0xFFFF, cf=1, zf=0, sf=1, of=1, pf=1, af=0);
   }
 
   #[test]
-  fn cmp16_signed_overflow_negative() {
+  fn sub16_signed_overflow_negative() {
     // 0x8000 (-32768) - 0x0001 (1) = 0x7FFF: OF set, SF clear
-    check_cmp16!(0x8000, 0x0001, cf=0, zf=0, sf=0, of=1, pf=1, af=1);
+    check_sub16!(0x8000, 0x0001, cf=0, zf=0, sf=0, of=1, pf=1, af=1);
   }
 
   #[test]
-  fn cmp16_zero_result_max() {
+  fn sub16_zero_result_max() {
     // 0xFFFF - 0xFFFF = 0: ZF set, parity even
-    check_cmp16!(0xFFFF, 0xFFFF, cf=0, zf=1, sf=0, of=0, pf=1, af=0);
+    check_sub16!(0xFFFF, 0xFFFF, cf=0, zf=1, sf=0, of=0, pf=1, af=0);
   }
 
   #[test]
-  fn cmp16_parity_uses_low_byte_only() {
+  fn sub16_parity_uses_low_byte_only() {
     // 0x0103 - 0x0001 = 0x0102: low byte 0x02 = 0000_0010 = 1 one = odd parity
-    check_cmp16!(0x0103, 0x0001, cf=0, zf=0, sf=0, of=0, pf=0, af=0);
+    check_sub16!(0x0103, 0x0001, cf=0, zf=0, sf=0, of=0, pf=0, af=0);
   }
 
   #[test]
-  fn cmp16_zero_minus_one() {
+  fn sub16_zero_minus_one() {
     // 0x0000 - 0x0001 = 0xFFFF: CF set, SF set, low byte 0xFF = even parity
-    check_cmp16!(0x0000, 0x0001, cf=1, zf=0, sf=1, of=0, pf=1, af=1);
+    check_sub16!(0x0000, 0x0001, cf=1, zf=0, sf=1, of=0, pf=1, af=1);
   }
 
   // --- bitwise8 ---
@@ -538,5 +602,93 @@ mod tests {
   fn add16_signed_overflow_both_negative() {
     // 0x8001 + 0x8001 = 0x0002: CF set, OF set (-32767+-32767 overflows)
     check_add16!(0x8001, 0x8001, cf=1, zf=0, sf=0, of=1, pf=0, af=0);
+  }
+
+  // --- shl8 ---
+
+  #[test]
+  fn shl8_no_flags() {
+    // 0x01 << 1 = 0x02: no flags
+    check_shl8!(0x01, 1, cf=0, zf=0, sf=0, of=0, pf=0);
+  }
+
+  #[test]
+  fn shl8_cf_from_msb() {
+    // 0x80 << 1 = 0x00: CF=1 (old MSB), ZF=1, OF=1 (sign changed 1->0)
+    check_shl8!(0x80, 1, cf=1, zf=1, sf=0, of=1, pf=1);
+  }
+
+  #[test]
+  fn shl8_of_sign_changes_to_one() {
+    // 0x40 << 1 = 0x80: CF=0, SF=1, OF=1 (sign changed 0->1)
+    check_shl8!(0x40, 1, cf=0, zf=0, sf=1, of=1, pf=0);
+  }
+
+  #[test]
+  fn shl8_no_of_sign_unchanged() {
+    // 0xFF << 1 = 0xFE: CF=1, SF=1, OF=0 (sign stayed 1)
+    // 0xFE = 1111_1110: 7 ones = odd parity
+    check_shl8!(0xFF, 1, cf=1, zf=0, sf=1, of=0, pf=0);
+  }
+
+  #[test]
+  fn shl8_count_4() {
+    // 0x01 << 4 = 0x10: CF=0, OF undefined (false), 0x10 = 1 one = odd parity
+    check_shl8!(0x01, 4, cf=0, zf=0, sf=0, of=0, pf=0);
+  }
+
+  #[test]
+  fn shl8_count_8_cf_from_bit0() {
+    // 0x01 << 8 = 0x00: CF=1 (old bit 0), ZF=1
+    check_shl8!(0x01, 8, cf=1, zf=1, sf=0, of=0, pf=1);
+  }
+
+  #[test]
+  fn shl8_count_9_cf_zero() {
+    // count > 8: result=0, CF=0
+    check_shl8!(0xFF, 9, cf=0, zf=1, sf=0, of=0, pf=1);
+  }
+
+  // --- shl8 ---
+  #[test]
+  fn shl16_no_flags() {
+    // 0x0001 << 1 = 0x0002: no flags
+    check_shl16!(0x0001, 1, cf=0, zf=0, sf=0, of=0, pf=0);
+  }
+
+  #[test]
+  fn shl16_cf_from_msb() {
+    // 0x8000 << 1 = 0x0000: CF=1 (old MSB), ZF=1, OF=1 (sign changed 1->0)
+    check_shl16!(0x8000, 1, cf=1, zf=1, sf=0, of=1, pf=1);
+  }
+
+  #[test]
+  fn shl16_of_sign_changes_to_one() {
+    // 0x4000 << 1 = 0x8000: CF=0, SF=1, OF=1 (sign changed 0->1)
+    check_shl16!(0x4000, 1, cf=0, zf=0, sf=1, of=1, pf=0);
+  }
+
+  #[test]
+  fn shl16_no_of_sign_unchanged() {
+    // 0xFFFF << 1 = 0xFFFE: CF=1, SF=1, OF=0 (sign stayed 1)
+    check_shl16!(0xFFFF, 1, cf=1, zf=0, sf=1, of=0, pf=0);
+  }
+
+  #[test]
+  fn shl16_count_4() {
+    // 0x0100 << 4 = 0x1000: CF=0, OF undefined (false)
+    check_shl16!(0x0100, 4, cf=0, zf=0, sf=0, of=0, pf=0);
+  }
+
+  #[test]
+  fn shl16_count_16_cf_from_bit0() {
+    // 0x01 << 16 = 0x00: CF=1 (old bit 0), ZF=1
+    check_shl16!(0x0001, 16, cf=1, zf=1, sf=0, of=0, pf=1);
+  }
+
+  #[test]
+  fn shl16_count_17_cf_zero() {
+    // count > 16: result=0, CF=0
+    check_shl16!(0xFFFF, 17, cf=0, zf=1, sf=0, of=0, pf=1);
   }
 }

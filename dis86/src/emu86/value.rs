@@ -54,6 +54,14 @@ impl Value {
     }
   }
 
+  pub fn arith_neg(self) -> Value {
+    match self {
+      Value::U8(lhs)  => Value::U8(-(lhs as i8) as u8),
+      Value::U16(lhs) => Value::U16(-(lhs as i16) as u16),
+      _ => panic!("Mismatched sizes"),
+    }
+  }
+
   pub fn arith_sub(self, rhs: Value) -> Value {
     match (self, rhs) {
       (Value::U8(lhs),  Value::U8(rhs))  => Value::U8(lhs.wrapping_sub(rhs)),
@@ -82,6 +90,14 @@ impl Value {
     match (self, rhs) {
       (Value::U8(lhs),  Value::U8(rhs))  => Value::U8(lhs ^ rhs),
       (Value::U16(lhs), Value::U16(rhs)) => Value::U16(lhs ^ rhs),
+      _ => panic!("Mismatched sizes"),
+    }
+  }
+
+  pub fn shift_shl(self, lhs: Value, count: u8) -> Value {
+    match lhs {
+      Value::U8(lhs)  => Value::U8((lhs as u32).wrapping_shl(count as u32) as u8),
+      Value::U16(lhs) => Value::U16((lhs as u32).wrapping_shl(count as u32) as u16),
       _ => panic!("Mismatched sizes"),
     }
   }
