@@ -7,6 +7,7 @@ use super::machine::*;
 
 pub enum BinaryOp {
   Add,
+  Adc,
   Sub,
   And,
   Or,
@@ -51,7 +52,8 @@ fn update_flags_bitwise(f: &mut Flags, r: u16, sign_mask: u16, value_mask: u16) 
   f.set(FLAG_PF, flag_generic_pf(r));
 }
 
-fn update_flags_add(f: &mut Flags, a: u16, b: u16, r32: u32, sign_mask: u16, value_mask: u16, update_cf: bool) {
+fn update_flags_add(f: &mut Flags, a: u16, b: u16, carry_in: u16, r32: u32, sign_mask: u16, value_mask: u16, update_cf: bool) {
+  assert!(carry_in <= 1);
   let r = r32 as u16;
   let cf = ((r32 >> 1) & (sign_mask as u32)) != 0;
 
@@ -59,12 +61,14 @@ fn update_flags_add(f: &mut Flags, a: u16, b: u16, r32: u32, sign_mask: u16, val
   f.set(FLAG_ZF, flag_generic_zf(r, value_mask));
   f.set(FLAG_SF, flag_generic_sf(r, sign_mask));
   f.set(FLAG_PF, flag_generic_pf(r));
-  f.set(FLAG_AF, (a & 0x0F) + (b & 0x0F) > 0x0F);
+  f.set(FLAG_AF, (a & 0x0F) + (b & 0x0F) + carry_in > 0x0F);
 
   // Overflow cases
   // -------------------------------------------------
-  //   positive + positive = negative?  -> OF=1 (should have been positive)
-  //   negative + negative = positive?  -> OF=1 (should have been negative)
+  //   positive + positive + cf = negative?  -> OF=1 (should have been positive)
+  //   negative + negative + cf = positive?  -> OF=1 (should have been negative)
+  //
+  // NOTICE: carry flag is 0 or 1, so it cannot the result sign (we can ignore it)
   f.set(FLAG_OF, ((a ^ r) & (b ^ r) & sign_mask) != 0);
 }
 
@@ -111,7 +115,13 @@ pub fn binary(op: BinaryOp, a: Value, b: Value, mut f: Flags) -> (Value, Flags) 
     BinaryOp::Add => {
       let r32 = (a as u32) + (b as u32);
       result = r32 as u16;
-      update_flags_add(&mut f, a, b, r32, sign_mask, value_mask, true);
+      update_flags_add(&mut f, a, b, 0, r32, sign_mask, value_mask, true);
+    }
+    BinaryOp::Adc => {
+      let carry_in = f.get(FLAG_CF) as u16;
+      let r32 = (a as u32) + (b as u32) + (carry_in as u32);
+      result = r32 as u16;
+      update_flags_add(&mut f, a, b, carry_in, r32, sign_mask, value_mask, true);
     }
     BinaryOp::Sub => {
       result = a.wrapping_sub(b);
@@ -158,7 +168,7 @@ pub fn unary(op: UnaryOp, a: Value, mut f: Flags) -> (Value, Flags) {
     UnaryOp::Inc => {
       let r32 = (a as u32) + (1 as u32);
       result = r32 as u16;
-      update_flags_add(&mut f, a, 1, r32, sign_mask, value_mask, false);
+      update_flags_add(&mut f, a, 1, 0, r32, sign_mask, value_mask, false);
     }
   };
 
