@@ -33,7 +33,7 @@ impl Machine {
     }
   }
 
-  pub fn operand_mem_read(&self, mem: &OperandMem) -> Value {
+  pub fn operand_mem_addr(&self, mem: &OperandMem) -> SegOff {
     let seg = self.reg(convert_reg(mem.sreg));
 
     let mut offset = 0;
@@ -47,7 +47,11 @@ impl Machine {
       offset += off;
     }
 
-    let addr = SegOff::new_normal(seg, offset);
+    SegOff::new_normal(seg, offset)
+  }
+
+  pub fn operand_mem_read(&self, mem: &OperandMem) -> Value {
+    let addr = self.operand_mem_addr(mem);
     match mem.sz {
       instr::Size::Size8  => Value::U8(self.mem.read_u8(addr)),
       instr::Size::Size16 => Value::U16(self.mem.read_u16(addr)),
@@ -194,6 +198,13 @@ impl Machine {
         let addr = SegOff::from_u32(val.unwrap_u32());
         self.operand_write(&instr, 0, Value::U16(addr.seg.unwrap_normal()));
         self.operand_write(&instr, 1, Value::U16(addr.off.0));
+      }
+      Opcode::OP_LEA => {
+        let off = match &instr.operands[1] {
+          Operand::Mem(mem) => self.operand_mem_addr(mem).off.0,
+          _ => panic!("expected memory operand"),
+        };
+        self.operand_write(&instr, 0, Value::U16(off));
       }
 
       Opcode::OP_CLD => self.flag_write(FLAG_DF, false),
