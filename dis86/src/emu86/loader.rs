@@ -5,6 +5,7 @@ impl Machine {
   pub fn load_exe(&mut self, exe: &mz::Exe) -> Result<(), String> {
     let load_seg = PSP_SEGMENT;
     let code_seg = Seg::Normal(load_seg.unwrap_normal() + 0x10);
+    let code_seg_u16 = code_seg.unwrap_normal();
 
     // Determine image region to copy
     let image_start  = exe.hdr.cparhdr as usize * 16;
@@ -21,14 +22,19 @@ impl Machine {
     let mem_end   = mem_start + image_length;
     self.mem.0[mem_start..mem_end].copy_from_slice(image);
 
-    // TODO PERFORM RELOCATIONS
+    // Perform relocations
+    for reloc in &exe.relocs {
+      let addr = SegOff::new(code_seg_u16 + reloc.segment, reloc.offset);
+      let val = self.mem.read_u16(addr);
+      self.mem.write_u16(addr, code_seg_u16 + val);
+    }
 
     // Set up CS:IP
-    self.reg_set(CS, code_seg.unwrap_normal() + exe.hdr.cs as u16);
+    self.reg_set(CS, code_seg_u16 + exe.hdr.cs as u16);
     self.reg_set(IP, exe.hdr.ip as u16);
 
     // Set up SS:SP
-    self.reg_set(SS, code_seg.unwrap_normal() + exe.hdr.ss as u16);
+    self.reg_set(SS, code_seg_u16 + exe.hdr.ss as u16);
     self.reg_set(SP, exe.hdr.sp as u16);
 
     // Set up DS and ES to point at the PSP
