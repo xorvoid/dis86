@@ -1,5 +1,6 @@
 use super::machine::*;
 
+
 #[derive(Debug, Clone, Copy)]
 pub struct Flag { pub mask: u16, pub shift: u16 }
 
@@ -13,16 +14,36 @@ pub const FLAG_IF: Flag = Flag { mask: 0x0200, shift: 9  };  // Interrupt Enable
 pub const FLAG_DF: Flag = Flag { mask: 0x0400, shift: 10 };  // Direction
 pub const FLAG_OF: Flag = Flag { mask: 0x0800, shift: 11 };  // Overflow
 
+#[derive(Debug, Clone, Copy)]
+pub struct Flags(u16);
+
+impl Flags {
+  pub fn get(self, f: Flag) -> bool {
+    (self.0 & f.mask) != 0
+  }
+  pub fn set(&mut self, f: Flag, set: bool) {
+    self.0 = (self.0 & !f.mask) | ((set as u16) << f.shift);
+  }
+}
+
 impl Machine {
+  pub fn flag_read_all(&self) -> Flags {
+    Flags(self.reg_read_u16(FLAGS))
+  }
+
+  pub fn flag_write_all(&mut self, f: Flags) {
+    self.reg_write_u16(FLAGS, f.0)
+  }
+
   pub fn flag_read(&self, f: Flag) -> bool {
-    let cur = self.reg_read_u16(FLAGS);
-    (cur & f.mask) != 0
+    let flags = self.flag_read_all();
+    flags.get(f)
   }
 
   pub fn flag_write(&mut self, f: Flag, set: bool) {
-    let cur = self.reg_read_u16(FLAGS);
-    let new = (cur & !f.mask) | ((set as u16) << f.shift);
-    self.reg_write_u16(FLAGS, new);
+    let mut flags = self.flag_read_all();
+    flags.set(f, set);
+    self.flag_write_all(flags);
   }
 
   // Overflow flag
@@ -32,65 +53,65 @@ impl Machine {
   //   positive - negative = negative?  -> OF=1 (should have been positive)
   //   negative - positive = positive?  -> OF=1 (should have been negative)
 
-  pub fn flag_update_neg(&mut self, lhs: Value) {
-    match lhs {
-      Value::U8(lhs)  => self.flag_update_sub8(0, lhs),
-      Value::U16(lhs) => self.flag_update_sub16(0, lhs),
-      _ => panic!("Mismatched sizes"),
-    }
-  }
+  // pub fn flag_update_neg(&mut self, lhs: Value) {
+  //   match lhs {
+  //     Value::U8(lhs)  => self._flag_update_sub8(0, lhs),
+  //     Value::U16(lhs) => self._flag_update_sub16(0, lhs),
+  //     _ => panic!("Mismatched sizes"),
+  //   }
+  // }
 
-  pub fn flag_update_sub(&mut self, lhs: Value, rhs: Value) {
-    match (lhs, rhs) {
-      (Value::U8(lhs),  Value::U8(rhs))  => self.flag_update_sub8(lhs, rhs),
-      (Value::U16(lhs), Value::U16(rhs)) => self.flag_update_sub16(lhs, rhs),
-      _ => panic!("Mismatched sizes"),
-    }
-  }
+  // fn flag_update_sub(&mut self, lhs: Value, rhs: Value) {
+  //   match (lhs, rhs) {
+  //     (Value::U8(lhs),  Value::U8(rhs))  => self.flag_update_sub8(lhs, rhs),
+  //     (Value::U16(lhs), Value::U16(rhs)) => self.flag_update_sub16(lhs, rhs),
+  //     _ => panic!("Mismatched sizes"),
+  //   }
+  // }
 
-  pub fn flag_update_sub8(&mut self, lhs: u8, rhs: u8) {
-    let result = lhs.wrapping_sub(rhs);
-    self.flag_write(FLAG_CF, lhs < rhs);
-    self.flag_write(FLAG_ZF, result == 0);
-    self.flag_write(FLAG_SF, (result & 0x80) != 0);
-    self.flag_write(FLAG_OF, ((lhs ^ rhs) & (lhs ^ result) & 0x80) != 0);
-    self.flag_write(FLAG_PF, result.count_ones() % 2 == 0);
-    self.flag_write(FLAG_AF, (lhs & 0x0F) < (rhs & 0x0F));
-  }
+  // fn _flag_update_sub8(&mut self, lhs: u8, rhs: u8) {
+  //   let result = lhs.wrapping_sub(rhs);
+  //   self.flag_write(FLAG_CF, lhs < rhs);
+  //   self.flag_write(FLAG_ZF, result == 0);
+  //   self.flag_write(FLAG_SF, (result & 0x80) != 0);
+  //   self.flag_write(FLAG_OF, ((lhs ^ rhs) & (lhs ^ result) & 0x80) != 0);
+  //   self.flag_write(FLAG_PF, result.count_ones() % 2 == 0);
+  //   self.flag_write(FLAG_AF, (lhs & 0x0F) < (rhs & 0x0F));
+  // }
 
-  pub fn flag_update_sub16(&mut self, lhs: u16, rhs: u16) {
-    let result = lhs.wrapping_sub(rhs);
-    self.flag_write(FLAG_CF, lhs < rhs);
-    self.flag_write(FLAG_ZF, result == 0);
-    self.flag_write(FLAG_SF, (result & 0x8000) != 0);
-    self.flag_write(FLAG_OF, ((lhs ^ rhs) & (lhs ^ result) & 0x8000) != 0);
-    self.flag_write(FLAG_PF, (result as u8).count_ones() % 2 == 0); // PF uses low byte only
-    self.flag_write(FLAG_AF, (lhs & 0x0F) < (rhs & 0x0F));
-  }
+  // fn _flag_update_sub16(&mut self, lhs: u16, rhs: u16) {
+  //   let result = lhs.wrapping_sub(rhs);
+  //   self.flag_write(FLAG_CF, lhs < rhs);
+  //   self.flag_write(FLAG_ZF, result == 0);
+  //   self.flag_write(FLAG_SF, (result & 0x8000) != 0);
+  //   self.flag_write(FLAG_OF, ((lhs ^ rhs) & (lhs ^ result) & 0x8000) != 0);
+  //   self.flag_write(FLAG_PF, (result as u8).count_ones() % 2 == 0); // PF uses low byte only
+  //   self.flag_write(FLAG_AF, (lhs & 0x0F) < (rhs & 0x0F));
+  // }
 
-  pub fn flag_update_bitwise(&mut self, result: Value) {
-    match result {
-      Value::U8(result)  => self.flag_update_bitwise8(result),
-      Value::U16(result) => self.flag_update_bitwise16(result),
-      _ => panic!("Mismatched sizes"),
-    }
-  }
+  // pub fn flag_update_bitwise(&mut self, result: Value) {
+  //   match result {
+  //     Value::U8(result)  => self.flag_update_bitwise8(result),
+  //     Value::U16(result) => self.flag_update_bitwise16(result),
+  //     _ => panic!("Mismatched sizes"),
+  //   }
+  // }
 
-  pub fn flag_update_bitwise8(&mut self, result: u8) {
-    self.flag_write(FLAG_CF, false);
-    self.flag_write(FLAG_ZF, result == 0);
-    self.flag_write(FLAG_SF, (result & 0x80) != 0);
-    self.flag_write(FLAG_OF, false);
-    self.flag_write(FLAG_PF, result.count_ones() % 2 == 0);
-  }
+  // pub fn flag_update_bitwise8(&mut self, result: u8) {
+  //   self.flag_write(FLAG_CF, false);
+  //   self.flag_write(FLAG_ZF, result == 0);
+  //   self.flag_write(FLAG_SF, (result & 0x80) != 0);
+  //   self.flag_write(FLAG_OF, false);
+  //   self.flag_write(FLAG_PF, result.count_ones() % 2 == 0);
+  // }
 
-  pub fn flag_update_bitwise16(&mut self, result: u16) {
-    self.flag_write(FLAG_CF, false);
-    self.flag_write(FLAG_ZF, result == 0);
-    self.flag_write(FLAG_SF, (result & 0x8000) != 0);
-    self.flag_write(FLAG_OF, false);
-    self.flag_write(FLAG_PF, (result as u8).count_ones() % 2 == 0); // PF uses low byte only
-  }
+  // pub fn flag_update_bitwise16(&mut self, result: u16) {
+  //   self.flag_write(FLAG_CF, false);
+  //   self.flag_write(FLAG_ZF, result == 0);
+  //   self.flag_write(FLAG_SF, (result & 0x8000) != 0);
+  //   self.flag_write(FLAG_OF, false);
+  //   self.flag_write(FLAG_PF, (result as u8).count_ones() % 2 == 0); // PF uses low byte only
+  // }
 
   pub fn flag_update_add(&mut self, lhs: Value, rhs: Value) {
     match (lhs, rhs) {
@@ -174,50 +195,47 @@ impl Machine {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use super::super::alu;
 
   macro_rules! check_sub8 {
     ($lhs:expr, $rhs:expr, cf=$cf:expr, zf=$zf:expr, sf=$sf:expr, of=$of:expr, pf=$pf:expr, af=$af:expr) => {
-      let mut m = Machine::default();
-      m.flag_update_sub8($lhs, $rhs);
-      assert_eq!(m.flag_read(FLAG_CF), $cf != 0, "CF mismatch");
-      assert_eq!(m.flag_read(FLAG_ZF), $zf != 0, "ZF mismatch");
-      assert_eq!(m.flag_read(FLAG_SF), $sf != 0, "SF mismatch");
-      assert_eq!(m.flag_read(FLAG_OF), $of != 0, "OF mismatch");
-      assert_eq!(m.flag_read(FLAG_PF), $pf != 0, "PF mismatch");
-      assert_eq!(m.flag_read(FLAG_AF), $af != 0, "AF mismatch");
+      let (_result, f) = alu::binary(alu::BinaryOp::Sub, Value::U8($lhs), Value::U8($rhs), Flags(0));
+      assert_eq!(f.get(FLAG_CF), $cf != 0, "CF mismatch");
+      assert_eq!(f.get(FLAG_ZF), $zf != 0, "ZF mismatch");
+      assert_eq!(f.get(FLAG_SF), $sf != 0, "SF mismatch");
+      assert_eq!(f.get(FLAG_OF), $of != 0, "OF mismatch");
+      assert_eq!(f.get(FLAG_PF), $pf != 0, "PF mismatch");
+      assert_eq!(f.get(FLAG_AF), $af != 0, "AF mismatch");
     };
   }
 
   macro_rules! check_sub16 {
     ($lhs:expr, $rhs:expr, cf=$cf:expr, zf=$zf:expr, sf=$sf:expr, of=$of:expr, pf=$pf:expr, af=$af:expr) => {
-      let mut m = Machine::default();
-      m.flag_update_sub16($lhs, $rhs);
-      assert_eq!(m.flag_read(FLAG_CF), $cf != 0, "CF mismatch");
-      assert_eq!(m.flag_read(FLAG_ZF), $zf != 0, "ZF mismatch");
-      assert_eq!(m.flag_read(FLAG_SF), $sf != 0, "SF mismatch");
-      assert_eq!(m.flag_read(FLAG_OF), $of != 0, "OF mismatch");
-      assert_eq!(m.flag_read(FLAG_PF), $pf != 0, "PF mismatch");
-      assert_eq!(m.flag_read(FLAG_AF), $af != 0, "AF mismatch");
+      let (_result, f) = alu::binary(alu::BinaryOp::Sub, Value::U16($lhs), Value::U16($rhs), Flags(0));
+      assert_eq!(f.get(FLAG_CF), $cf != 0, "CF mismatch");
+      assert_eq!(f.get(FLAG_ZF), $zf != 0, "ZF mismatch");
+      assert_eq!(f.get(FLAG_SF), $sf != 0, "SF mismatch");
+      assert_eq!(f.get(FLAG_OF), $of != 0, "OF mismatch");
+      assert_eq!(f.get(FLAG_PF), $pf != 0, "PF mismatch");
+      assert_eq!(f.get(FLAG_AF), $af != 0, "AF mismatch");
     };
   }
 
   macro_rules! check_bitwise8 {
     ($lhs:expr, $rhs:expr, zf=$zf:expr, sf=$sf:expr, pf=$pf:expr) => {
-      let mut m = Machine::default();
-      m.flag_update_bitwise8($lhs & $rhs);
-      assert_eq!(m.flag_read(FLAG_ZF), $zf != 0, "ZF mismatch");
-      assert_eq!(m.flag_read(FLAG_SF), $sf != 0, "SF mismatch");
-      assert_eq!(m.flag_read(FLAG_PF), $pf != 0, "PF mismatch");
+      let (result, f) = alu::binary(alu::BinaryOp::And, Value::U8($lhs), Value::U8($rhs), Flags(0));
+      assert_eq!(f.get(FLAG_ZF), $zf != 0, "ZF mismatch");
+      assert_eq!(f.get(FLAG_SF), $sf != 0, "SF mismatch");
+      assert_eq!(f.get(FLAG_PF), $pf != 0, "PF mismatch");
     };
   }
 
-  macro_rules! check_bitwise16{
+  macro_rules! check_bitwise16 {
     ($lhs:expr, $rhs:expr, zf=$zf:expr, sf=$sf:expr, pf=$pf:expr) => {
-      let mut m = Machine::default();
-      m.flag_update_bitwise16($lhs & $rhs);
-      assert_eq!(m.flag_read(FLAG_ZF), $zf != 0, "ZF mismatch");
-      assert_eq!(m.flag_read(FLAG_SF), $sf != 0, "SF mismatch");
-      assert_eq!(m.flag_read(FLAG_PF), $pf != 0, "PF mismatch");
+      let (result, f) = alu::binary(alu::BinaryOp::And, Value::U16($lhs), Value::U16($rhs), Flags(0));
+      assert_eq!(f.get(FLAG_ZF), $zf != 0, "ZF mismatch");
+      assert_eq!(f.get(FLAG_SF), $sf != 0, "SF mismatch");
+      assert_eq!(f.get(FLAG_PF), $pf != 0, "PF mismatch");
     };
   }
 

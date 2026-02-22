@@ -168,7 +168,8 @@ impl Machine {
       Opcode::OP_CMP => {
         let lhs = self.operand_read(&instr, 0);
         let rhs = self.operand_read(&instr, 1);
-        self.flag_update_sub(lhs, rhs);
+        let (_result, flags) = alu::binary(alu::BinaryOp::Sub, lhs, rhs, self.flag_read_all());
+        self.flag_write_all(flags);
       }
       Opcode::OP_INC => {
         let val = self.operand_read(&instr, 0);
@@ -177,14 +178,15 @@ impl Machine {
       }
       Opcode::OP_NEG => {
         let val = self.operand_read(&instr, 0);
-        self.flag_update_neg(val);
-        self.operand_write(&instr, 0, val.arith_neg());
+        let (result, flags) = alu::unary(alu::UnaryOp::Neg, val, self.flag_read_all());
+        self.flag_write_all(flags);
+        self.operand_write(&instr, 0, result);
       }
       Opcode::OP_OR => {
         let lhs = self.operand_read(&instr, 0);
         let rhs = self.operand_read(&instr, 1);
-        let result = lhs.bitwise_or(rhs);
-        self.flag_update_bitwise(result);
+        let (result, flags) = alu::binary(alu::BinaryOp::Or, lhs, rhs, self.flag_read_all());
+        self.flag_write_all(flags);
         self.operand_write(&instr, 0, result);
       }
       Opcode::OP_SHL => {

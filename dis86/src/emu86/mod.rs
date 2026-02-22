@@ -5,6 +5,8 @@ mod cpu;
 mod cpu_flags;
 mod cpu_scas;
 
+pub mod alu;
+
 mod machine;
 mod loader;
 mod interrupt;

@@ -25,7 +25,9 @@ impl Machine {
     while count != 0 {
       let lhs = self.operand_read(&instr, 0);
       let rhs = self.operand_read(&instr, 1);
-      self.flag_update_sub(lhs, rhs);
+
+      let (_result, flags) = alu::binary(alu::BinaryOp::Sub, lhs, rhs, self.flag_read_all());
+      self.flag_write_all(flags);
 
       let di = self.reg_read_u16(DI);
       self.reg_write_u16(DI, di.wrapping_add(inc));
