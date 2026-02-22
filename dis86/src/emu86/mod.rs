@@ -16,9 +16,9 @@ mod step;
 mod dos;
 #[allow(dead_code)]
 mod dos_ivt;
+mod dos_structs;
 
 mod mzhdr;
-mod psp;
 mod emu;
 
 pub use emu::run;
