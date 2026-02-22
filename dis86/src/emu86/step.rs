@@ -152,7 +152,9 @@ impl Machine {
     // Get instr addr
 
     // Fetch and Decode
-    let instr_addr = SegOff::new_normal(self.reg(CS), self.reg(IP));
+    let cs = self.reg_read_u16(CS);
+    let ip = self.reg_read_u16(IP);
+    let instr_addr = SegOff::new_normal(cs, ip);
     let instr = decode_instr(&self.mem, instr_addr)?;
 
     // Update IP
@@ -160,7 +162,8 @@ impl Machine {
 
     // Report
     if DEBUG {
-      println!("{}   {}", instr_addr, instr_str(&instr));
+      let instr_addr_adj = SegOff::new(cs - (PSP_SEGMENT.unwrap_normal() + 0x10), ip);
+      println!("{}   {}", instr_addr_adj, instr_str(&instr));
       //println!("{:?}", instr);
     }
 
