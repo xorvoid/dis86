@@ -194,6 +194,7 @@ impl Machine {
         self.reg_write(IP, off);
       }
 
+      Opcode::OP_LDS |
       Opcode::OP_LES => {
         let val = self.operand_read(&instr, 2);
         let addr = SegOff::from_u32(val.unwrap_u32());
@@ -216,7 +217,8 @@ impl Machine {
       ////////////////////////////////////////////////////////////////////////////////
       // Jumps
 
-      Opcode::OP_JMP => {
+      Opcode::OP_JMP |
+      Opcode::OP_JMPF => {
         let tgt = self.operand_read_addr(&instr, 0);
         self.reg_write_addr(CS, IP, tgt);
       }
@@ -292,6 +294,21 @@ impl Machine {
         self.operand_write(&instr, 0, rhs);
         self.operand_write(&instr, 1, lhs);
       }
+
+      Opcode::OP_CBW => {
+        let lower = self.operand_read(&instr, 1).unwrap_u8();
+        let upper = ((lower as i8) >> 7) as u8; // fill the word with the sign-bit
+        let value = (upper as u16) << 8 | (lower as u16);
+        self.operand_write(&instr, 0, Value::U16(value));
+      }
+
+      Opcode::OP_CWD => {
+        let lower = self.operand_read(&instr, 1).unwrap_u16();
+        let upper = ((lower as i16) >> 15) as u16; // fill the word with the sign-bit
+        self.operand_write(&instr, 0, Value::U16(upper));
+      }
+
+      Opcode::OP_NOP => {}
 
       _ => {
         panic!("Unimplemnted opcode: {}", instr.opcode.name());
