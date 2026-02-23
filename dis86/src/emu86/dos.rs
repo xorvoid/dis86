@@ -22,7 +22,9 @@ impl Machine {
       0x25 => self.dos_set_interrupt_vector(),
       0x30 => self.dos_get_version(),
       0x35 => self.dos_get_interrupt_vector(),
+      0x40 => self.dos_write_to_file(),
       0x4a => self.dos_mem_resize(),
+      0x4c => self.dos_exit_program(),
       _ => panic!("unimplemented DOS function: {}", func),
     }
   }
@@ -48,6 +50,25 @@ impl Machine {
     self.reg_write_addr(ES, BX, addr);
   }
 
+  // func: 0x40
+  fn dos_write_to_file(&mut self) {
+    let bx = self.reg_read_u16(BX);  // Handle
+    let cx = self.reg_read_u16(CX);  // Num Bytes To Write
+    let ds_dx = self.reg_read_addr(DS, DX); // Buffer Address
+
+    if bx != 2 {
+      panic!("expected stderr");
+    }
+
+    for i in 0..(cx as usize) {
+      let addr = ds_dx.add_offset(i as u16);
+      let byte = self.mem.read_u8(addr);
+      let ch = char::from_u32(byte as u32).unwrap();
+      eprint!("{}", ch);
+    }
+    eprintln!("");
+  }
+
   // func: 0x4a
   fn dos_mem_resize(&mut self) {
     let segment_block = self.reg_read_u16(ES);
@@ -64,5 +85,11 @@ impl Machine {
 
     // Success
     self.flag_write(FLAG_CF, false);
+  }
+
+  // func: 0x4c
+  fn dos_exit_program(&mut self) {
+    let al = self.reg_read_u8(AL);
+    panic!("Exited with {}", al);
   }
 }
