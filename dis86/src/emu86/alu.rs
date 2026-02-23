@@ -12,6 +12,7 @@ pub enum BinaryOp {
   And,
   Or,
   Xor,
+  Mul,
 }
 
 pub enum UnaryOp {
@@ -138,6 +139,23 @@ pub fn binary(op: BinaryOp, a: Value, b: Value, mut f: Flags) -> (Value, Flags) 
     BinaryOp::Xor => {
       result = a ^ b;
       update_flags_bitwise(&mut f, result, sign_mask, value_mask);
+    }
+    BinaryOp::Mul => {
+      let r32 = (a as u32) * (b as u32);
+
+      // Special re-pack because they return larger types
+      let val = match size {
+        1 => Value::U16(r32 as u16),
+        2 => Value::U32(r32),
+        _ => unreachable!(),
+      };
+
+      let ovf = (r32 & (value_mask as u32)) != r32;
+
+      f.set(FLAG_CF, ovf);
+      f.set(FLAG_OF, ovf);
+
+      return (val, f);
     }
   };
 

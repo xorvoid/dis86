@@ -36,15 +36,15 @@ impl Machine {
   pub fn operand_mem_addr(&self, mem: &OperandMem) -> SegOff {
     let seg = self.reg(convert_reg(mem.sreg));
 
-    let mut offset = 0;
+    let mut offset: u16 = 0;
     if let Some(reg) = mem.reg1 {
-      offset += self.reg(convert_reg(reg));
+      offset = offset.wrapping_add(self.reg(convert_reg(reg)));
     }
     if let Some(reg) = mem.reg2 {
-      offset += self.reg(convert_reg(reg));
+      offset = offset.wrapping_add(self.reg(convert_reg(reg)));
     }
     if let Some(off) = mem.off {
-      offset += off;
+      offset = offset.wrapping_add(off);
     }
 
     SegOff::new_normal(seg, offset)
@@ -60,20 +60,7 @@ impl Machine {
   }
 
   pub fn operand_mem_write(&mut self, mem: &OperandMem, val: Value) {
-    let seg = self.reg(convert_reg(mem.sreg));
-
-    let mut offset = 0;
-    if let Some(reg) = mem.reg1 {
-      offset += self.reg(convert_reg(reg));
-    }
-    if let Some(reg) = mem.reg2 {
-      offset += self.reg(convert_reg(reg));
-    }
-    if let Some(off) = mem.off {
-      offset += off;
-    }
-
-    let addr = SegOff::new_normal(seg, offset);
+    let addr = self.operand_mem_addr(mem);
     match val {
       Value::U8(val)  => self.mem.write_u8(addr, val),
       Value::U16(val) => self.mem.write_u16(addr, val),
@@ -89,6 +76,7 @@ impl Machine {
       Operand::Reg(reg) => self.operand_reg_read(reg),
       Operand::Mem(mem) => self.operand_mem_read(mem),
       Operand::Rel(rel) => Value::Addr(instr.rel_addr(rel)),
+      Operand::Far(far) => Value::Addr(SegOff::new(far.seg, far.off)),
       _ => panic!("unsupported operand: {:?}", operand),
     }
   }
@@ -193,7 +181,19 @@ impl Machine {
         self.stack_push(self.reg_read(IP));
         self.reg_write_addr(CS, IP, tgt);
       }
-      Opcode::OP_RET => { let off = self.stack_pop(); self.reg_write(IP, off); }
+
+      Opcode::OP_RET => {
+        let off = self.stack_pop();
+        self.reg_write(IP, off);
+      }
+
+      Opcode::OP_RETF => {
+        let off = self.stack_pop();
+        let seg = self.stack_pop();
+        self.reg_write(CS, seg);
+        self.reg_write(IP, off);
+      }
+
       Opcode::OP_LES => {
         let val = self.operand_read(&instr, 2);
         let addr = SegOff::from_u32(val.unwrap_u32());
@@ -268,6 +268,23 @@ impl Machine {
       Opcode::OP_AND => self.op_binary(&instr, alu::BinaryOp::And),
       Opcode::OP_SHL => self.op_shift(&instr, alu::ShiftOp::Shl),
       Opcode::OP_SHR => self.op_shift(&instr, alu::ShiftOp::Shr),
+
+      Opcode::OP_MUL => {
+        let lhs = self.operand_read(&instr, 1);
+        let rhs = self.operand_read(&instr, 2);
+
+        // Special-cased 16-bit
+        // FIXME: Add 8-bit
+        assert!(lhs.is_u16());
+        assert!(rhs.is_u16());
+
+        let (result, flags) = alu::binary(alu::BinaryOp::Mul, lhs, rhs, self.flag_read_all());
+        self.flag_write_all(flags);
+
+        let result = result.unwrap_u32();
+        self.operand_write(&instr, 0, Value::U16((result>>16) as u16));
+        self.operand_write(&instr, 1, Value::U16(result as u16));
+      }
 
       Opcode::OP_XCHG => {
         let lhs = self.operand_read(&instr, 0);
