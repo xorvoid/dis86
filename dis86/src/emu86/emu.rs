@@ -1,16 +1,16 @@
 use crate::binfmt::mz;
 use super::machine::Machine;
 
-struct Emulator {
+pub struct Emulator {
   #[allow(dead_code)]
   exe_path: String,
   #[allow(dead_code)]
   exe: mz::Exe,
-  machine: Machine,
+  pub machine: Machine,
 }
 
 impl Emulator {
-  fn new(exe_path: &str) -> Result<Emulator, String> {
+  pub fn new(exe_path: &str) -> Result<Emulator, String> {
     let Ok(data) = std::fs::read(exe_path) else {
       panic!("Failed to read file: {}", exe_path);
     };

@@ -18,6 +18,7 @@ version = "0.1.0"
 dependencies = [
  "cc",
  "itertools",
+ "libc",
  "pico-args",
  "static_assertions",
 ]
@@ -42,6 +43,12 @@ checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
 dependencies = [
  "either",
 ]
+
+[[package]]
+name = "libc"
+version = "0.2.182"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6800badb6cb2082ffd7b6a67e6125bb39f18782f793520caee8cb8846be06112"
 
 [[package]]
 name = "pico-args"

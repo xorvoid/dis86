@@ -4,6 +4,8 @@
 char *HYDRA_CMDLINE_CONF;
 hydra_mode_t HYDRA_MODE[1];
 
+static void (*hydra_user_notify)(hydra_machine_t *m) = NULL;
+
 HYDRA_MACHINE_INIT_FUNC(hydra_machine_init)
 {
   HYDRA_CMDLINE_CONF = strdup(conf);
@@ -25,13 +27,15 @@ HYDRA_MACHINE_INIT_FUNC(hydra_machine_init)
   if (HYDRA_CONF->code_load_offset == (u16)-1) FAIL("User init failed to set init->code_load_offset");
   if (HYDRA_CONF->data_section_seg == (u16)-1) FAIL("User init failed to set init->data_section_seg");
 
+  // Set up user_notify (okay if not found)
+  *(void**)&hydra_user_notify = dlsym(RTLD_DEFAULT, "hydra_user_notify");
+
   // Set up the datasection baseptr
   u16 seg = HYDRA_CONF->code_load_offset + HYDRA_CONF->data_section_seg;
   u8 *ptr = hw->mem_hostaddr(hw->ctx, 16 * seg);
   hydra_datasection_baseptr_set(ptr);
 
   // Set up modes
-
   if (starts_with(HYDRA_CMDLINE_CONF, "capture|")) {
     char *rest = HYDRA_CMDLINE_CONF+strlen("capture|");
     char *sep = strchr(rest, '|');
@@ -59,5 +63,6 @@ HYDRA_MACHINE_EXEC_FUNC(hydra_machine_exec)
 
 HYDRA_MACHINE_NOTIFY_FUNC(hydra_machine_notify)
 {
+  if (hydra_user_notify) hydra_user_notify(m);
   hydra_callstack_notify(m);
 }

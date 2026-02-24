@@ -1,5 +1,5 @@
 
-SRC = [
+HYDRA_SRC = files([
   'conf.c',
   'api_impl.c',
   'hooks.c',
@@ -11,8 +11,10 @@ SRC = [
   'overlay.c',
   'addr.c',
   'dump.c',
-]
+])
 
 libhydra = shared_library(
-  'hydra', SRC,
+  'hydra', HYDRA_SRC,
 )
+
+subdir('remote')

@@ -20,9 +20,10 @@ mod dos_ivt;
 mod dos_structs;
 
 mod mzhdr;
-mod emu;
+pub mod emu;
 
 pub use emu::run;
+pub mod validator;
 
 // Tests
 #[cfg(test)] mod alu_test;
