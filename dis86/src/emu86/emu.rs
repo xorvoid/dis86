@@ -15,15 +15,13 @@ impl Emulator {
     let Ok(data) = std::fs::read(exe_path) else {
       panic!("Failed to read file: {}", exe_path);
     };
-
     let exe = mz::Exe::decode(&data).unwrap();
-    let mut machine = Machine::default();
 
     // As the filesystem rootdir, use the root dir of the exe
     let root_dir = Path::new(exe_path).parent().unwrap().to_str().unwrap();
-    machine.dos_init(root_dir);
 
-    // Load the program into memory and set up machine state for execution
+    // Init the machine and load up the program
+    let mut machine = Machine::new(root_dir);
     machine.load_exe(&exe)?;
 
     Ok(Emulator {

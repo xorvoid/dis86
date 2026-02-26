@@ -1,63 +1,41 @@
 use super::machine::*;
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom};
+use super::dos_filesystem::*;
 
 // NOTE: JUST TO MATCH DOSBOX
 pub const MEM_TOP: u16 = 0x9fff;
 pub const ENV_SEG: u16 = 0x07ca;
 
-// File Handles
-pub const FILE_HANDLE_STDIN:  u16 = 0;
-pub const FILE_HANDLE_STDOUT: u16 = 1;
-pub const FILE_HANDLE_STDERR: u16 = 2;
-pub const FILE_HANDLE_STDAUX: u16 = 3;
-pub const FILE_HANDLE_STDPRN: u16 = 4;
 
 pub struct Dos {
   // interrupts
   pub interrupt_vectors: [SegOff; 256],
 
   // file i/op
-  pub root_dir: Option<String>,  // Host director
-  pub next_handle_num: u16,
-  pub file_handles: Vec<DosHandle>,
+  pub filesystem: Filesystem,
 
   // memory
   pub mem_resize_call_count: usize,
 }
 
-impl Default for Dos {
-  fn default() -> Dos {
-    Dos {
+// Init
+impl Dos {
+  pub fn new(root_dir: &str, mem: &mut Memory) -> Dos {
+    let mut dos = Dos {
       interrupt_vectors: [SegOff::new(0, 0); 256],
-      root_dir: None,
-      next_handle_num: 5,
-      file_handles: vec![],
+      filesystem: Filesystem::new(root_dir),
       mem_resize_call_count: 0,
-    }
-  }
-}
-
-pub struct DosHandle {
-  filename: String,
-  handle_num: u16,
-  file: File,
-  closed: bool,
-}
-
-impl Machine {
-  pub fn dos_init(&mut self, root_dir: &str) {
-    self.dos.root_dir = Some(root_dir.to_string());
+    };
 
     // NOTE: JUST TO MATCH DOSBOX
-    self.dos.interrupt_vectors[0] = SegOff::new(0xf000, 0xca60); // Divide by zero
-    self.dos.interrupt_vectors[4] = SegOff::new(0x0070, 0x00f4); // Overflow (INTO Instruction)
-    self.dos.interrupt_vectors[5] = SegOff::new(0xf000, 0xff54); // BOUND range exceeded
-    self.dos.interrupt_vectors[6] = SegOff::new(0xf000, 0xca60); // Invalid opcode
+    dos.interrupt_vectors[0x00] = SegOff::new(0xf000, 0xca60); // Divide by zero
+    dos.interrupt_vectors[0x04] = SegOff::new(0x0070, 0x00f4); // Overflow (INTO Instruction)
+    dos.interrupt_vectors[0x05] = SegOff::new(0xf000, 0xff54); // BOUND range exceeded
+    dos.interrupt_vectors[0x06] = SegOff::new(0xf000, 0xca60); // Invalid opcode
+    dos.interrupt_vectors[0x3f] = SegOff::new(0xf000, 0xca60); // Overlay load interrupt
 
     // NOTE: JUST TO MATCH DOSBOX
     let env_addr = SegOff::new(ENV_SEG, 0);
-    self.mem.slice_mut_starting_at(env_addr)[..10*16].copy_from_slice(&[
+    mem.slice_mut_starting_at(env_addr)[..10*16].copy_from_slice(&[
       0x43, 0x4f, 0x4d, 0x53, 0x50, 0x45, 0x43, 0x3d, 0x5a, 0x3a, 0x5c, 0x43, 0x4f, 0x4d, 0x4d, 0x41,
       0x4e, 0x44, 0x2e, 0x43, 0x4f, 0x4d, 0x00, 0x50, 0x41, 0x54, 0x48, 0x3d, 0x5a, 0x3a, 0x5c, 0x3b,
       0x5a, 0x3a, 0x5c, 0x53, 0x59, 0x53, 0x54, 0x45, 0x4d, 0x3b, 0x5a, 0x3a, 0x5c, 0x42, 0x49, 0x4e,
@@ -71,8 +49,12 @@ impl Machine {
       0x01, 0x00, 0x44, 0x3a, 0x5c, 0x53, 0x53, 0x47, 0x2e, 0x45, 0x58, 0x45, 0x00, 0x4f, 0x55, 0x4e,
       0x54, 0x2e, 0x43, 0x4f, 0x4d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     ]);
-  }
 
+    dos
+  }
+}
+
+impl Machine {
   pub fn dos_interrupt_0x21(&mut self) {
     let func = self.reg_read_u8(AH);
     match func {
@@ -114,147 +96,6 @@ impl Machine {
     let idx = self.reg_read_u8(AL);
     let addr = self.dos.interrupt_vectors[idx as usize];
     self.reg_write_addr(ES, BX, addr);
-  }
-
-  // func: 0x3d
-  fn dos_open_file(&mut self) {
-    let filename_addr = self.reg_read_addr(DS, DX);
-    let filename = self.mem.asciiz(filename_addr);
-
-    let host_path = {
-      let Some(filename) = filename.strip_prefix("D:\\") else {
-        panic!("Expected all file opens to be in 'D:\'");
-      };
-      format!("{}/{}", self.dos.root_dir.as_ref().unwrap(), filename.to_lowercase())
-    };
-
-    let file = File::open(host_path).unwrap();
-
-    let handle_num = self.dos.next_handle_num;
-    self.dos.next_handle_num += 1;
-
-    self.dos.file_handles.push(DosHandle {
-      filename: filename.to_string(),
-      handle_num,
-      file,
-      closed: false,
-    });
-
-    self.reg_write_u16(AX, handle_num);
-    self.flag_write(FLAG_CF, false);
-  }
-
-  fn dos_close_file(&mut self) {
-    let file_handle = self.reg_read_u16(BX);
-
-    // TODO: Can I pull this into a function???
-    let handle = {
-      if file_handle < 4 {
-        panic!("Standard handles are unimpl");
-      }
-      let idx = (file_handle - 5) as usize;
-      if idx >= self.dos.file_handles.len() {
-        panic!("Invalid file handle");
-      }
-      &mut self.dos.file_handles[idx]
-    };
-
-    if handle.closed {
-      panic!("File has been closed");
-    }
-
-    // TODO: DOS PROBABLY REUSED FILE HANDLES... IMPL!
-    handle.closed = true;
-
-    self.flag_write(FLAG_CF, false);
-  }
-
-  // func: 0x3f
-  fn dos_read_file(&mut self) {
-    let file_handle = self.reg_read_u16(BX);
-
-    let num_bytes = self.reg_read_u16(CX);
-    let buffer_addr = self.reg_read_addr(DS, DX);
-
-    // TODO: Can I pull this into a function???
-    let handle = {
-      if file_handle < 4 {
-        panic!("Standard handles are unimpl");
-      }
-      let idx = (file_handle - 5) as usize;
-      if idx >= self.dos.file_handles.len() {
-        panic!("Invalid file handle");
-      }
-      &mut self.dos.file_handles[idx]
-    };
-
-    if handle.closed {
-      panic!("File has been closed");
-    }
-
-    let buffer = self.mem.slice_mut_starting_at(buffer_addr);
-    if buffer.len() < num_bytes as usize{
-      panic!("Buffer length overruns memory!");
-    }
-
-    // FIXME: DOS API ALLOWS PARTIAL LENGTH READS
-    handle.file.read_exact(&mut buffer[..num_bytes as usize]).unwrap();
-
-    self.reg_write_u16(AX, num_bytes);
-  }
-
-  // func: 0x40
-  fn dos_write_file(&mut self) {
-    let bx = self.reg_read_u16(BX);  // Handle
-    let cx = self.reg_read_u16(CX);  // Num Bytes To Write
-    let ds_dx = self.reg_read_addr(DS, DX); // Buffer Address
-
-    if bx != 2 {
-      panic!("expected stderr");
-    }
-
-    for i in 0..(cx as usize) {
-      let addr = ds_dx.add_offset(i as u16);
-      let byte = self.mem.read_u8(addr);
-      let ch = char::from_u32(byte as u32).unwrap();
-      eprint!("{}", ch);
-    }
-    eprintln!("");
-  }
-
-  // func: 0x42
-  fn dos_seek_file(&mut self) {
-    let file_handle = self.reg_read_u16(BX);  // Handle
-    let offset = self.reg_read_u32(CX, DX) as i32;  // Signed offset
-    let method = self.reg_read_u8(AL); // Method
-
-    // TODO: Can I pull this into a function???
-    let handle = {
-      if file_handle < 4 {
-        panic!("Standard handles are unimpl");
-      }
-      let idx = (file_handle - 5) as usize;
-      if idx >= self.dos.file_handles.len() {
-        panic!("Invalid file handle");
-      }
-      &mut self.dos.file_handles[idx]
-    };
-
-    let pos = match method {
-      0 => {
-        assert!(offset >= 0);
-        SeekFrom::Start(offset as u64)
-      }
-      1 => SeekFrom::End(offset as i64),
-      2 => SeekFrom::Current(offset as i64),
-      _ => panic!("invalid seek method: {}", method),
-    };
-
-    let new_pos = handle.file.seek(pos).unwrap();
-    assert!(new_pos as u32 as u64 == new_pos);
-
-    self.reg_write_u32(DX, AX, new_pos as u32);
-    self.flag_write(FLAG_CF, false);
   }
 
   // func: 0x4a

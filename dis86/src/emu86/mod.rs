@@ -18,6 +18,7 @@ mod dos;
 #[allow(dead_code)]
 mod dos_ivt;
 mod dos_structs;
+mod dos_filesystem;
 
 mod mzhdr;
 pub mod emu;

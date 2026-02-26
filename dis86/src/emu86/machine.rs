@@ -7,7 +7,6 @@ pub use super::alu;
 pub use super::dos::Dos;
 pub use crate::segoff:: SegOff;
 
-#[derive(Default)]
 pub struct Machine {
   pub halted: bool,
   pub mem: Memory,
@@ -17,6 +16,19 @@ pub struct Machine {
 }
 
 impl Machine {
+  pub fn new(root_dir: &str) -> Machine {
+    let mut mem = Memory::default();
+    let cpu = Cpu::default();
+
+    let dos = Dos::new(root_dir, &mut mem);
+
+    Machine {
+      halted: false,
+      mem, cpu, dos,
+      exec_count: 0,
+    }
+  }
+
   pub fn halted(&self) -> bool {
     self.halted
   }
