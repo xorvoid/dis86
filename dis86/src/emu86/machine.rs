@@ -13,6 +13,7 @@ pub struct Machine {
   pub mem: Memory,
   pub cpu: Cpu,
   pub dos: Dos,
+  pub exec_count: u64,
 }
 
 impl Machine {

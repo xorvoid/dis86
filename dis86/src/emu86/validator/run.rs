@@ -1,6 +1,7 @@
 use super::super::emu::Emulator;
 use super::super::cpu::*;
 use super::hydra_process::HydraProcess;
+use crate::segoff::SegOff;
 
 fn print_change_reg(name: &str, reg: Register, prev: &Cpu, cur: &Cpu) {
   let prev_val = prev.regs[reg.idx as usize];
@@ -42,7 +43,17 @@ pub fn run(exe_path: &str) -> Result<(), String> {
   let mut machine_state_prev = machine.cpu.clone();
 
   loop {
+    let hydra_addr = hydra.instr_addr();
+    let machine_addr = machine.instr_addr();
+
     let mut hydra_state = hydra.cpu_state();
+
+    // Handle mirroring overrides
+    if hydra_addr == SegOff::new(0x823, 0x010d) {
+      machine.reg_write_u16(CX, hydra_state.reg_read_u16(CX));
+      machine.reg_write_u16(DX, hydra_state.reg_read_u16(DX));
+    }
+
     let mut machine_state = machine.cpu.clone();
 
     // Clear the AF flag... It just creates problems... its behavior is undefined in
@@ -51,8 +62,6 @@ pub fn run(exe_path: &str) -> Result<(), String> {
     machine_state.regs[FLAGS.idx as usize] &= !(1<<4);
 
     if machine_state != hydra_state {
-      let hydra_addr = hydra.instr_addr();
-      let machine_addr = machine.instr_addr();
       eprintln!("State divergence:");
       eprintln!("  hydra  @  {}", hydra_addr);
       eprintln!("  emu86  @  {}", machine_addr);

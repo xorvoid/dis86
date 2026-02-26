@@ -150,7 +150,7 @@ impl Machine {
     // Report
     if DEBUG {
       let instr_addr_adj = SegOff::new(cs - (PSP_SEGMENT.unwrap_normal() + 0x10), ip);
-      println!("{}   {}", instr_addr_adj, instr_str(&instr));
+      println!("{:6} | {}   {}", self.exec_count, instr_addr_adj, instr_str(&instr));
       //println!("{:?}", instr);
     }
 
@@ -183,11 +183,21 @@ impl Machine {
 
       Opcode::OP_RET => {
         let off = self.stack_pop();
+        if instr.operands.len() == 1 {
+          // handle stack args removal
+          let adj = self.operand_read(&instr, 0).unwrap_u16();
+          self.reg_write_u16(SP, self.reg_read_u16(SP) + adj);
+        }
         self.reg_write(IP, off);
       }
 
       Opcode::OP_RETF => {
         let off = self.stack_pop();
+        if instr.operands.len() == 1 {
+          // handle stack args removal
+          let adj = self.operand_read(&instr, 0).unwrap_u16();
+          self.reg_write_u16(SP, self.reg_read_u16(SP) + adj);
+        }
         let seg = self.stack_pop();
         self.reg_write(CS, seg);
         self.reg_write(IP, off);
@@ -316,6 +326,7 @@ impl Machine {
     //println!("Halting!");
     //self.halted = true;
 
+    self.exec_count += 1;
     Ok(())
   }
 }

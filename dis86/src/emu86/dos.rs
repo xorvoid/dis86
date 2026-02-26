@@ -106,14 +106,16 @@ impl Machine {
     let segment_block = self.reg_read_u16(ES);
     let _new_size_par = self.reg_read_u16(BX);
 
-    if self.dos.mem_resize_call_count > 0 {
-      panic!("Memory resize is limited to one call on the load seg");
-    }
-    if segment_block != PSP_SEGMENT.unwrap_normal() {
-      panic!("Memory resize is limited to one call on the load seg");
-    }
+    // FIXME: DON"T JUST ACCEPT ALL RESIZES
 
-    self.dos.mem_resize_call_count += 1;
+    // if self.dos.mem_resize_call_count > 0 {
+    //   panic!("Memory resize is limited to one call on the load seg");
+    // }
+    // if segment_block != PSP_SEGMENT.unwrap_normal() {
+    //   panic!("Memory resize is limited to one call on the load seg");
+    // }
+
+    // self.dos.mem_resize_call_count += 1;
 
     // NOTE: JUST TO MATCH DOSBOX
     // It seems to return the segment in AX on success
