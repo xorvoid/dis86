@@ -46,6 +46,12 @@ impl Cpu {
     self.reg_read(r).unwrap_u16()
   }
 
+  pub fn reg_read_u32(&self, r_high: Register, r_low: Register) -> u32 {
+    let high = self.reg_read_u16(r_high);
+    let low  = self.reg_read_u16(r_low);
+    (high as u32) << 16 | (low as u32)
+  }
+
   pub fn reg_read_addr(&self, seg: Register, off: Register) -> SegOff {
     let seg = self.reg_read_u16(seg);
     let off = self.reg_read_u16(off);
@@ -125,6 +131,10 @@ impl Machine {
 
   pub fn reg_read_u16(&self, r: Register) -> u16 {
     self.cpu.reg_read_u16(r)
+  }
+
+  pub fn reg_read_u32(&self, r_high: Register, r_low: Register) -> u32 {
+    self.cpu.reg_read_u32(r_high, r_low)
   }
 
   pub fn reg_read_addr(&self, seg: Register, off: Register) -> SegOff {

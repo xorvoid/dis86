@@ -1,6 +1,6 @@
 use super::machine::*;
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 
 // NOTE: JUST TO MATCH DOSBOX
 pub const MEM_TOP: u16 = 0x9fff;
@@ -42,6 +42,7 @@ pub struct DosHandle {
   filename: String,
   handle_num: u16,
   file: File,
+  closed: bool,
 }
 
 impl Machine {
@@ -79,8 +80,10 @@ impl Machine {
       0x30 => self.dos_get_version(),
       0x35 => self.dos_get_interrupt_vector(),
       0x3d => self.dos_open_file(),
+      0x3e => self.dos_close_file(),
       0x3f => self.dos_read_file(),
-      0x40 => self.dos_write_to_file(),
+      0x40 => self.dos_write_file(),
+      0x42 => self.dos_seek_file(),
       0x4a => self.dos_mem_resize(),
       0x4c => self.dos_exit_program(),
       _ => panic!("unimplemented DOS function: {}", func),
@@ -134,9 +137,35 @@ impl Machine {
       filename: filename.to_string(),
       handle_num,
       file,
+      closed: false,
     });
 
     self.reg_write_u16(AX, handle_num);
+    self.flag_write(FLAG_CF, false);
+  }
+
+  fn dos_close_file(&mut self) {
+    let file_handle = self.reg_read_u16(BX);
+
+    // TODO: Can I pull this into a function???
+    let handle = {
+      if file_handle < 4 {
+        panic!("Standard handles are unimpl");
+      }
+      let idx = (file_handle - 5) as usize;
+      if idx >= self.dos.file_handles.len() {
+        panic!("Invalid file handle");
+      }
+      &mut self.dos.file_handles[idx]
+    };
+
+    if handle.closed {
+      panic!("File has been closed");
+    }
+
+    // TODO: DOS PROBABLY REUSED FILE HANDLES... IMPL!
+    handle.closed = true;
+
     self.flag_write(FLAG_CF, false);
   }
 
@@ -159,6 +188,10 @@ impl Machine {
       &mut self.dos.file_handles[idx]
     };
 
+    if handle.closed {
+      panic!("File has been closed");
+    }
+
     let buffer = self.mem.slice_mut_starting_at(buffer_addr);
     if buffer.len() < num_bytes as usize{
       panic!("Buffer length overruns memory!");
@@ -171,7 +204,7 @@ impl Machine {
   }
 
   // func: 0x40
-  fn dos_write_to_file(&mut self) {
+  fn dos_write_file(&mut self) {
     let bx = self.reg_read_u16(BX);  // Handle
     let cx = self.reg_read_u16(CX);  // Num Bytes To Write
     let ds_dx = self.reg_read_addr(DS, DX); // Buffer Address
@@ -187,6 +220,41 @@ impl Machine {
       eprint!("{}", ch);
     }
     eprintln!("");
+  }
+
+  // func: 0x42
+  fn dos_seek_file(&mut self) {
+    let file_handle = self.reg_read_u16(BX);  // Handle
+    let offset = self.reg_read_u32(CX, DX) as i32;  // Signed offset
+    let method = self.reg_read_u8(AL); // Method
+
+    // TODO: Can I pull this into a function???
+    let handle = {
+      if file_handle < 4 {
+        panic!("Standard handles are unimpl");
+      }
+      let idx = (file_handle - 5) as usize;
+      if idx >= self.dos.file_handles.len() {
+        panic!("Invalid file handle");
+      }
+      &mut self.dos.file_handles[idx]
+    };
+
+    let pos = match method {
+      0 => {
+        assert!(offset >= 0);
+        SeekFrom::Start(offset as u64)
+      }
+      1 => SeekFrom::End(offset as i64),
+      2 => SeekFrom::Current(offset as i64),
+      _ => panic!("invalid seek method: {}", method),
+    };
+
+    let new_pos = handle.file.seek(pos).unwrap();
+    assert!(new_pos as u32 as u64 == new_pos);
+
+    self.reg_write_u32(DX, AX, new_pos as u32);
+    self.flag_write(FLAG_CF, false);
   }
 
   // func: 0x4a
