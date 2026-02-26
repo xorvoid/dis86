@@ -135,7 +135,7 @@ impl Cpu {
     writeln!(out, "  SS     0x{:04x}", self.regs[SS.idx as usize])?;
 
     let flags = Flags(self.regs[FLAGS.idx as usize]);
-    writeln!(out, "  FLAGS  0x{:04x} ({})", flags.0, flags);
+    writeln!(out, "  FLAGS  0x{:04x} ({})", flags.0, flags)?;
 
     Ok(())
   }

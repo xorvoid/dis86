@@ -1,6 +1,6 @@
 use super::machine::*;
 use crate::asm::decode::Decoder;
-use crate::asm::instr::{self, Instr, Opcode, Operand, OperandReg, OperandMem, OperandImm, OperandRel, OperandFar};
+use crate::asm::instr::{self, Instr, Opcode, Operand, OperandReg, OperandMem, OperandImm};
 use crate::asm::intel_syntax::instr_str;
 
 const DEBUG: bool = true;
@@ -77,7 +77,6 @@ impl Machine {
       Operand::Mem(mem) => self.operand_mem_read(mem),
       Operand::Rel(rel) => Value::Addr(instr.rel_addr(rel)),
       Operand::Far(far) => Value::Addr(SegOff::new(far.seg, far.off)),
-      _ => panic!("unsupported operand: {:?}", operand),
     }
   }
 

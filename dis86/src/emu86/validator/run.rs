@@ -1,8 +1,6 @@
 use super::super::emu::Emulator;
 use super::super::cpu::*;
 use super::hydra_process::HydraProcess;
-use crate::segoff::SegOff;
-use std::io::Write;
 
 fn print_change_reg(name: &str, reg: Register, prev: &Cpu, cur: &Cpu) {
   let prev_val = prev.regs[reg.idx as usize];
@@ -76,7 +74,7 @@ pub fn run(exe_path: &str) -> Result<(), String> {
     hydra_state_prev = hydra_state;
     machine_state_prev = machine_state;
 
-    machine.step();
+    machine.step()?;
     hydra.step();
   }
 }

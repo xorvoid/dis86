@@ -8,14 +8,17 @@ pub struct ShmMem {
 }
 
 impl ShmMem {
+  #[allow(dead_code)]
   pub fn slice(&self) -> &[u8] {
     unsafe { std::slice::from_raw_parts(self.raw as *const u8, self.len) }
   }
 
+  #[allow(dead_code)]
   pub fn slice_mut(&mut self) -> &mut [u8] {
     unsafe { std::slice::from_raw_parts_mut(self.raw, self.len) }
   }
 
+  #[allow(dead_code)]
   pub fn slice_starting_at(&self, addr: SegOff) -> &[u8] {
     &self.slice()[addr.abs_normal()..]
   }

@@ -1,5 +1,4 @@
 use super::machine::*;
-use super::dos_ivt::*;
 
 // NOTE: JUST TO MATCH DOSBOX
 pub const MEM_TOP: u16 = 0x9fff;
@@ -12,10 +11,8 @@ pub struct Dos {
 
 impl Default for Dos {
   fn default() -> Dos {
-    let mut interrupt_vectors = [SegOff::new(0, 0); 256];
-
     Dos {
-      interrupt_vectors,
+      interrupt_vectors: [SegOff::new(0, 0); 256],
       mem_resize_call_count: 0,
     }
   }
@@ -107,7 +104,7 @@ impl Machine {
   // func: 0x4a
   fn dos_mem_resize(&mut self) {
     let segment_block = self.reg_read_u16(ES);
-    let new_size_par = self.reg_read_u16(BX);
+    let _new_size_par = self.reg_read_u16(BX);
 
     if self.dos.mem_resize_call_count > 0 {
       panic!("Memory resize is limited to one call on the load seg");

@@ -15,6 +15,7 @@ fn mem_barrier() {
 pub struct HydraProcess {
   hydra: Child,
   data: ShmData,
+  #[allow(dead_code)]
   pub mem: ShmMem,
 }
 

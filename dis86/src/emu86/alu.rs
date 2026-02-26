@@ -73,7 +73,7 @@ fn update_flags_add(f: &mut Flags, a: u16, b: u16, carry_in: u16, r32: u32, sign
   f.set(FLAG_OF, ((a ^ r) & (b ^ r) & sign_mask) != 0);
 }
 
-fn update_flags_shl(f: &mut Flags, a: u16, n: u8, r32: u32, sign_mask: u16, value_mask: u16) {
+fn update_flags_shl(f: &mut Flags, _a: u16, n: u8, r32: u32, sign_mask: u16, value_mask: u16) {
   if n == 0 { return; } // No update to flags if no shift happens
 
   let r = r32 as u16;
