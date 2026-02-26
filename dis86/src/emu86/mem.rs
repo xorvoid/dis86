@@ -20,6 +20,12 @@ impl Memory {
     Memory(raw)
   }
 
+  pub fn asciiz(&self, addr: SegOff) -> &str {
+    let slice = self.slice_starting_at(addr);
+    let cstr = unsafe { std::ffi::CStr::from_ptr(slice.as_ptr()) };
+    cstr.to_str().unwrap()
+  }
+
   pub fn read_u8(&self, addr: SegOff) -> u8  {
     self.0[addr.abs_normal()]
   }

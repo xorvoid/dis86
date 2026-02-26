@@ -45,8 +45,7 @@ pub mod SegInfoType {
 
 #[repr(C, packed)]
 #[derive(Debug, Clone)]
-pub struct SegInfo
-{
+pub struct SegInfo {
 	pub seg: u16,
 	pub maxoff: u16,
 	pub typ: u16, // SegInfoType::*

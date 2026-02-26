@@ -8,9 +8,6 @@ impl Machine {
     let code_seg = Seg::Normal(load_seg.unwrap_normal() + 0x10);
     let code_seg_u16 = code_seg.unwrap_normal();
 
-    // Init DOS
-    self.dos_init();
-
     // Configure the PSP
     let psp = self.mem.program_segment_prefix_mut();
     // NOTE: JUST TO MATCH DOSBOX

@@ -1,5 +1,6 @@
 use crate::binfmt::mz;
 use super::machine::Machine;
+use std::path::Path;
 
 pub struct Emulator {
   #[allow(dead_code)]
@@ -18,6 +19,11 @@ impl Emulator {
     let exe = mz::Exe::decode(&data).unwrap();
     let mut machine = Machine::default();
 
+    // As the filesystem rootdir, use the root dir of the exe
+    let root_dir = Path::new(exe_path).parent().unwrap().to_str().unwrap();
+    machine.dos_init(root_dir);
+
+    // Load the program into memory and set up machine state for execution
     machine.load_exe(&exe)?;
 
     Ok(Emulator {

@@ -1,11 +1,28 @@
 use super::machine::*;
+use std::fs::File;
+use std::io::Read;
 
 // NOTE: JUST TO MATCH DOSBOX
 pub const MEM_TOP: u16 = 0x9fff;
 pub const ENV_SEG: u16 = 0x07ca;
 
+// File Handles
+pub const FILE_HANDLE_STDIN:  u16 = 0;
+pub const FILE_HANDLE_STDOUT: u16 = 1;
+pub const FILE_HANDLE_STDERR: u16 = 2;
+pub const FILE_HANDLE_STDAUX: u16 = 3;
+pub const FILE_HANDLE_STDPRN: u16 = 4;
+
 pub struct Dos {
+  // interrupts
   pub interrupt_vectors: [SegOff; 256],
+
+  // file i/op
+  pub root_dir: Option<String>,  // Host director
+  pub next_handle_num: u16,
+  pub file_handles: Vec<DosHandle>,
+
+  // memory
   pub mem_resize_call_count: usize,
 }
 
@@ -13,13 +30,24 @@ impl Default for Dos {
   fn default() -> Dos {
     Dos {
       interrupt_vectors: [SegOff::new(0, 0); 256],
+      root_dir: None,
+      next_handle_num: 5,
+      file_handles: vec![],
       mem_resize_call_count: 0,
     }
   }
 }
 
+pub struct DosHandle {
+  filename: String,
+  handle_num: u16,
+  file: File,
+}
+
 impl Machine {
-  pub fn dos_init(&mut self) {
+  pub fn dos_init(&mut self, root_dir: &str) {
+    self.dos.root_dir = Some(root_dir.to_string());
+
     // NOTE: JUST TO MATCH DOSBOX
     self.dos.interrupt_vectors[0] = SegOff::new(0xf000, 0xca60); // Divide by zero
     self.dos.interrupt_vectors[4] = SegOff::new(0x0070, 0x00f4); // Overflow (INTO Instruction)
@@ -50,6 +78,8 @@ impl Machine {
       0x25 => self.dos_set_interrupt_vector(),
       0x30 => self.dos_get_version(),
       0x35 => self.dos_get_interrupt_vector(),
+      0x3d => self.dos_open_file(),
+      0x3f => self.dos_read_file(),
       0x40 => self.dos_write_to_file(),
       0x4a => self.dos_mem_resize(),
       0x4c => self.dos_exit_program(),
@@ -81,6 +111,63 @@ impl Machine {
     let idx = self.reg_read_u8(AL);
     let addr = self.dos.interrupt_vectors[idx as usize];
     self.reg_write_addr(ES, BX, addr);
+  }
+
+  // func: 0x3d
+  fn dos_open_file(&mut self) {
+    let filename_addr = self.reg_read_addr(DS, DX);
+    let filename = self.mem.asciiz(filename_addr);
+
+    let host_path = {
+      let Some(filename) = filename.strip_prefix("D:\\") else {
+        panic!("Expected all file opens to be in 'D:\'");
+      };
+      format!("{}/{}", self.dos.root_dir.as_ref().unwrap(), filename.to_lowercase())
+    };
+
+    let file = File::open(host_path).unwrap();
+
+    let handle_num = self.dos.next_handle_num;
+    self.dos.next_handle_num += 1;
+
+    self.dos.file_handles.push(DosHandle {
+      filename: filename.to_string(),
+      handle_num,
+      file,
+    });
+
+    self.reg_write_u16(AX, handle_num);
+    self.flag_write(FLAG_CF, false);
+  }
+
+  // func: 0x3f
+  fn dos_read_file(&mut self) {
+    let file_handle = self.reg_read_u16(BX);
+
+    let num_bytes = self.reg_read_u16(CX);
+    let buffer_addr = self.reg_read_addr(DS, DX);
+
+    // TODO: Can I pull this into a function???
+    let handle = {
+      if file_handle < 4 {
+        panic!("Standard handles are unimpl");
+      }
+      let idx = (file_handle - 5) as usize;
+      if idx >= self.dos.file_handles.len() {
+        panic!("Invalid file handle");
+      }
+      &mut self.dos.file_handles[idx]
+    };
+
+    let buffer = self.mem.slice_mut_starting_at(buffer_addr);
+    if buffer.len() < num_bytes as usize{
+      panic!("Buffer length overruns memory!");
+    }
+
+    // FIXME: DOS API ALLOWS PARTIAL LENGTH READS
+    handle.file.read_exact(&mut buffer[..num_bytes as usize]).unwrap();
+
+    self.reg_write_u16(AX, num_bytes);
   }
 
   // func: 0x40
