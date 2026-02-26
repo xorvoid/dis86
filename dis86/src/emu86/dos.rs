@@ -71,6 +71,7 @@ impl Machine {
 
     // NOTE: JUST TO MATCH DOSBOX
     self.reg_write_u16(BX, 0xff00);
+    self.reg_write_u16(CX, 0);
 
     // NOTE: Missing other fields
   }

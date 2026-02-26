@@ -60,3 +60,14 @@ impl Value {
     *val
   }
 }
+
+impl Value {
+  pub fn size(&self) -> usize {
+    match self {
+      Value::U8(_)  => 1,
+      Value::U16(_) => 2,
+      Value::U32(_) => 4,
+      Value::Addr(_) => 4,
+    }
+  }
+}

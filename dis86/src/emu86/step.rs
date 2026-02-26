@@ -223,6 +223,20 @@ impl Machine {
       Opcode::OP_CLI => self.flag_write(FLAG_IF, false),
       Opcode::OP_STI => self.flag_write(FLAG_IF, true),
 
+      Opcode::OP_LODS => {
+        let value = self.operand_read(&instr, 1);
+        self.operand_write(&instr, 0, value);
+
+        let idx = self.reg_read_u16(SI);
+        let sz = value.size() as u16;
+        let new_idx = if !self.flag_read(FLAG_DF) {
+          idx.wrapping_add(sz)
+        } else {
+          idx.wrapping_sub(sz)
+        };
+        self.reg_write_u16(SI, new_idx);
+      },
+
       ////////////////////////////////////////////////////////////////////////////////
       // Jumps
 
