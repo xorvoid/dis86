@@ -154,6 +154,7 @@ pub fn binary(op: BinaryOp, a: Value, b: Value, mut f: Flags) -> (Value, Flags) 
 
       f.set(FLAG_CF, ovf);
       f.set(FLAG_OF, ovf);
+      f.set(FLAG_ZF, r32 == 0);
 
       return (val, f);
     }
