@@ -43,6 +43,23 @@ void update_shmdata(hydra_machine_t *m)
   shm->flags = m->registers->flags;
 }
 
+void post_init_state(hydra_machine_t *m)
+{
+  // Set registers to determined values. Currently, they'll have the DOSBOX setup values.
+  // But this breaks comparison, so we need to bring them into alignment.
+  m->registers->ax = 0;
+  m->registers->bx = 0;
+  m->registers->cx = 0;
+  m->registers->dx = 0;
+  m->registers->si = 0;
+  m->registers->di = 0;
+  m->registers->bp = 0;
+  m->registers->flags = 1<<9; // IF
+
+  // Perform update in dosbox state
+  m->hardware->update_registers(m->hardware->ctx, m->registers);
+}
+
 void remote_notify(hydra_machine_t *m)
 {
   u16 cs = m->registers->cs;
@@ -64,6 +81,7 @@ void remote_notify(hydra_machine_t *m)
       case STATE_INIT: {
         if (!(cs == 0x823 && ip == 0)) return;
         printf("init\n");
+        post_init_state(m);
         update_shmdata(m);
         BARRIER();
         shm->init = 1;

@@ -31,7 +31,8 @@ impl Emulator {
     while !self.machine.halted() {
       self.machine.step()?;
     }
-    self.machine.cpu.dump_state();
+    println!("CPU State:");
+    println!("{}", self.machine.cpu);
     Ok(())
   }
 }

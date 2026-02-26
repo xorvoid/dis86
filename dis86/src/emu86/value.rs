@@ -16,22 +16,22 @@ impl From<SegOff> for Value { fn from(val: SegOff) -> Value { Value::Addr(val) }
 impl Value {
   #[allow(dead_code)]
   pub fn is_u8(&self) -> bool {
-    if let Value::U8(val) = self { true } else { false }
+    if let Value::U8(_) = self { true } else { false }
   }
 
   #[allow(dead_code)]
   pub fn is_u16(&self) -> bool {
-    if let Value::U16(val) = self { true } else { false }
+    if let Value::U16(_) = self { true } else { false }
   }
 
   #[allow(dead_code)]
   pub fn is_u32(&self) -> bool {
-    if let Value::U32(val) = self { true } else { false }
+    if let Value::U32(_) = self { true } else { false }
   }
 
   #[allow(dead_code)]
   pub fn is_addr(&self) -> bool {
-    if let Value::Addr(val) = self { true } else { false }
+    if let Value::Addr(_) = self { true } else { false }
   }
 }
 

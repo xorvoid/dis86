@@ -20,6 +20,10 @@ impl Machine {
     self.halted
   }
 
+  pub fn instr_addr(&mut self) -> SegOff {
+    SegOff::new(self.reg_read_u16(CS), self.reg_read_u16(IP))
+  }
+
   pub fn stack_push(&mut self, val: Value) {
     let mut addr = self.reg_read_addr(SS, SP);
     addr.off.0 -= 2;

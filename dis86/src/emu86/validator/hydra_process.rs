@@ -1,5 +1,8 @@
 use std::process::{Command, Child, Stdio};
+use super::super::cpu::*;
+use super::super::cpu_flags::FLAG_MASK;
 use super::shmdata::ShmData;
+use super::shmmem::ShmMem;
 use crate::segoff::SegOff;
 use crate::{shmdata_read, shmdata_write};
 use std::path::Path;
@@ -12,6 +15,7 @@ fn mem_barrier() {
 pub struct HydraProcess {
   hydra: Child,
   data: ShmData,
+  pub mem: ShmMem,
 }
 
 impl HydraProcess {
@@ -36,17 +40,21 @@ impl HydraProcess {
 
     std::thread::sleep(std::time::Duration::from_millis(1000));
 
-    let mut data = ShmData::attach("/dev/shm/hydra_remote").unwrap();
+    let data = ShmData::attach("/dev/shm/hydra_remote").unwrap();
+    let mem = ShmMem::attach("/dev/shm/dosbox_mem").unwrap();
 
     Ok(HydraProcess {
       hydra,
       data,
-
+      mem,
     })
   }
 
-  #[inline(never)]
-  fn ensure_init(&mut self) {
+  pub fn begin(&mut self) {
+    self.ensure_init();
+  }
+
+  pub fn ensure_init(&mut self) {
     loop {
       mem_barrier();
       let init = shmdata_read!(self.data, init);
@@ -54,12 +62,37 @@ impl HydraProcess {
     }
   }
 
-  pub fn step(&mut self) {
-    self.ensure_init();
-
+  pub fn instr_addr(&self) -> SegOff {
+    mem_barrier();
     let cs = shmdata_read!(self.data, cs);
     let ip = shmdata_read!(self.data, ip);
-    let addr = SegOff::new(cs, ip);
+    SegOff::new(cs, ip)
+  }
+
+  pub fn cpu_state(&self) -> Cpu {
+    let mut cpu = Cpu::default();
+    cpu.regs[AX.idx as usize]    = shmdata_read!(self.data, ax);
+    cpu.regs[BX.idx as usize]    = shmdata_read!(self.data, bx);
+    cpu.regs[CX.idx as usize]    = shmdata_read!(self.data, cx);
+    cpu.regs[DX.idx as usize]    = shmdata_read!(self.data, dx);
+    cpu.regs[SI.idx as usize]    = shmdata_read!(self.data, si);
+    cpu.regs[DI.idx as usize]    = shmdata_read!(self.data, di);
+    cpu.regs[BP.idx as usize]    = shmdata_read!(self.data, bp);
+    cpu.regs[SP.idx as usize]    = shmdata_read!(self.data, sp);
+    cpu.regs[IP.idx as usize]    = shmdata_read!(self.data, ip);
+    cpu.regs[CS.idx as usize]    = shmdata_read!(self.data, cs);
+    cpu.regs[DS.idx as usize]    = shmdata_read!(self.data, ds);
+    cpu.regs[ES.idx as usize]    = shmdata_read!(self.data, es);
+    cpu.regs[SS.idx as usize]    = shmdata_read!(self.data, ss);
+
+    let flags = shmdata_read!(self.data, flags);
+    cpu.regs[FLAGS.idx as usize] = flags & FLAG_MASK;
+
+    cpu
+  }
+
+  pub fn step(&mut self) {
+    self.ensure_init();
 
     let ack = shmdata_read!(self.data, ack);
     let next_ack = ack + 1;

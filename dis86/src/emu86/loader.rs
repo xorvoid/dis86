@@ -1,4 +1,5 @@
 use super::machine::*;
+use super::dos;
 use crate::binfmt::mz;
 
 impl Machine {
@@ -6,6 +7,16 @@ impl Machine {
     let load_seg = PSP_SEGMENT;
     let code_seg = Seg::Normal(load_seg.unwrap_normal() + 0x10);
     let code_seg_u16 = code_seg.unwrap_normal();
+
+    // Init DOS
+    self.dos_init();
+
+    // Configure the PSP
+    let psp = self.mem.program_segment_prefix_mut();
+    // NOTE: JUST TO MATCH DOSBOX
+    psp.mem_top = dos::MEM_TOP;
+    psp.env_seg = dos::ENV_SEG;
+    // ... missing fields ...
 
     // Determine image region to copy
     let image_start  = exe.hdr.cparhdr as usize * 16;
@@ -40,6 +51,9 @@ impl Machine {
     // Set up DS and ES to point at the PSP
     self.reg_set(DS, PSP_SEGMENT.unwrap_normal());
     self.reg_set(ES, PSP_SEGMENT.unwrap_normal());
+
+    // IF flag should be set
+    self.reg_set(FLAGS, 1<<9); // IF
 
     Ok(())
   }

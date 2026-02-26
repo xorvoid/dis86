@@ -1,4 +1,4 @@
-//use crate::emu86::psp::ProgramSegmentPrefix;
+use crate::emu86::dos_structs::ProgramSegmentPrefix;
 pub use crate::segoff::{Seg, SegOff};
 
 // Large enough to allow address ffff:ffff
@@ -52,11 +52,15 @@ impl Memory {
     &self.0[addr.abs_normal()..]
   }
 
-  // pub fn program_segment_prefix_mut(&mut self) -> &mut ProgramSegmentPrefix {
-  //   let off = PSP_SEGMENT.abs_normal();
-  //   let slice = &mut self.0[off..off+256];
-  //   ProgramSegmentPrefix::from_slice_mut(slice)
-  // }
+  pub fn slice_mut_starting_at(&mut self, addr: SegOff) -> &mut [u8] {
+    &mut self.0[addr.abs_normal()..]
+  }
+
+  pub fn program_segment_prefix_mut(&mut self) -> &mut ProgramSegmentPrefix {
+    let off = PSP_SEGMENT.abs_normal();
+    let slice = &mut self.0[off..off+std::mem::size_of::<ProgramSegmentPrefix>()];
+    unsafe { &mut *(slice.as_mut_ptr() as *mut ProgramSegmentPrefix) }
+  }
 
   // pub fn program_segment_prefix(&self) -> &ProgramSegmentPrefix {
   //   let off = PSP_SEGMENT.abs_normal();

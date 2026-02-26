@@ -26,6 +26,7 @@ pub const CH:    Register = Register { idx:  2, off: 1, size: 1 };
 pub const DL:    Register = Register { idx:  3, off: 0, size: 1 };
 pub const DH:    Register = Register { idx:  3, off: 1, size: 1 };
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Cpu {
   pub regs: [u16; 14],
 }
@@ -117,23 +118,31 @@ impl Machine {
   }
 }
 
-
 impl Cpu {
-  pub fn dump_state(&self) {
-    println!("CPU State:");
-    println!("  AX     0x{:04x}", self.regs[AX.idx as usize]);
-    println!("  BX     0x{:04x}", self.regs[BX.idx as usize]);
-    println!("  CX     0x{:04x}", self.regs[CX.idx as usize]);
-    println!("  DX     0x{:04x}", self.regs[DX.idx as usize]);
-    println!("  SI     0x{:04x}", self.regs[SI.idx as usize]);
-    println!("  DI     0x{:04x}", self.regs[DI.idx as usize]);
-    println!("  BP     0x{:04x}", self.regs[BP.idx as usize]);
-    println!("  SP     0x{:04x}", self.regs[SP.idx as usize]);
-    println!("  IP     0x{:04x}", self.regs[IP.idx as usize]);
-    println!("  CS     0x{:04x}", self.regs[CS.idx as usize]);
-    println!("  DS     0x{:04x}", self.regs[DS.idx as usize]);
-    println!("  ES     0x{:04x}", self.regs[ES.idx as usize]);
-    println!("  SS     0x{:04x}", self.regs[SS.idx as usize]);
-    println!("  FLAGS  0x{:04x}", self.regs[FLAGS.idx as usize]);
+  pub fn dump_state(&self, out: &mut dyn std::fmt::Write) -> std::fmt::Result {
+    writeln!(out, "  AX     0x{:04x}", self.regs[AX.idx as usize])?;
+    writeln!(out, "  BX     0x{:04x}", self.regs[BX.idx as usize])?;
+    writeln!(out, "  CX     0x{:04x}", self.regs[CX.idx as usize])?;
+    writeln!(out, "  DX     0x{:04x}", self.regs[DX.idx as usize])?;
+    writeln!(out, "  SI     0x{:04x}", self.regs[SI.idx as usize])?;
+    writeln!(out, "  DI     0x{:04x}", self.regs[DI.idx as usize])?;
+    writeln!(out, "  BP     0x{:04x}", self.regs[BP.idx as usize])?;
+    writeln!(out, "  SP     0x{:04x}", self.regs[SP.idx as usize])?;
+    writeln!(out, "  IP     0x{:04x}", self.regs[IP.idx as usize])?;
+    writeln!(out, "  CS     0x{:04x}", self.regs[CS.idx as usize])?;
+    writeln!(out, "  DS     0x{:04x}", self.regs[DS.idx as usize])?;
+    writeln!(out, "  ES     0x{:04x}", self.regs[ES.idx as usize])?;
+    writeln!(out, "  SS     0x{:04x}", self.regs[SS.idx as usize])?;
+
+    let flags = Flags(self.regs[FLAGS.idx as usize]);
+    writeln!(out, "  FLAGS  0x{:04x} ({})", flags.0, flags);
+
+    Ok(())
+  }
+}
+
+impl std::fmt::Display for Cpu {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    self.dump_state(f)
   }
 }
