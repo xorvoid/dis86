@@ -178,9 +178,13 @@ impl Machine {
       Opcode::OP_POP  => { let val = self.stack_pop(); self.operand_write(&instr, 0, val) }
       Opcode::OP_INT  => self.interrupt(self.operand_read_u8(&instr, 0)),
       Opcode::OP_CALL => {
-        let tgt = self.operand_read_addr(&instr, 0);
+        let off = match self.operand_read(&instr, 0) {
+          Value::Addr(addr) => addr.off.0,
+          Value::U16(off) => off,
+          _ => panic!("unexpected value type"),
+        };
         self.stack_push(self.reg_read(IP));
-        self.reg_set(IP, tgt.off.0);
+        self.reg_set(IP, off);
       }
       Opcode::OP_CALLF => {
         let tgt = self.operand_read_addr(&instr, 0);
