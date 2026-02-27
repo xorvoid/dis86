@@ -16,7 +16,7 @@ pub struct Machine {
 }
 
 impl Machine {
-  pub fn new(root_dir: &str) -> Machine {
+  pub fn new(root_dir: Option<&str>) -> Machine {
     let mut mem = Memory::default();
     let cpu = Cpu::default();
 

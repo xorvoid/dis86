@@ -79,7 +79,7 @@ mod test {
   }
 
   fn run_impl(test: Test, code: &[u8]) -> Result {
-    let mut m = Machine::default();
+    let mut m = Machine::new(None);
 
     let code_addr = SegOff::new(0x0000, 0x0000);
     mem_write_slice(&mut m, code_addr, code);

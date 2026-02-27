@@ -21,7 +21,7 @@ impl Emulator {
     let root_dir = Path::new(exe_path).parent().unwrap().to_str().unwrap();
 
     // Init the machine and load up the program
-    let mut machine = Machine::new(root_dir);
+    let mut machine = Machine::new(Some(root_dir));
     machine.load_exe(&exe)?;
 
     Ok(Emulator {

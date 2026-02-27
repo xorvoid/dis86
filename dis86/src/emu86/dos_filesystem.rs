@@ -19,7 +19,7 @@ struct Handle(u16);
 
 // FIesystem data
 pub struct Filesystem {
-  pub root_dir: String,                 // Host director
+  pub root_dir: Option<String>,         // Host director
   pub handles: Vec<Option<HandleData>>, // None means "closed"
 }
 
@@ -33,12 +33,12 @@ pub struct HandleData {
 
 // Filesystem helper functions (mostly around the file handle table)
 impl Filesystem {
-  pub fn new(root_dir: &str) -> Filesystem {
+  pub fn new(root_dir: Option<&str>) -> Filesystem {
     let mut handles = vec![];
     handles.resize_with(FILE_HANDLES_MAX, || None);
 
     let mut fs = Filesystem {
-      root_dir: root_dir.to_string(),
+      root_dir: root_dir.map(|dir| dir.to_string()),
       handles,
     };
 
@@ -97,7 +97,10 @@ impl Machine {
       let Some(filename) = filename.strip_prefix("D:\\") else {
         panic!("Expected all file opens to be in 'D:\'");
       };
-      format!("{}/{}", self.dos.filesystem.root_dir, filename.to_lowercase())
+      let Some(root_dir) = &self.dos.filesystem.root_dir else {
+        panic!("Expected a root dir configuration");
+      };
+      format!("{}/{}", root_dir, filename.to_lowercase())
     };
 
     let file = File::open(host_path).unwrap();

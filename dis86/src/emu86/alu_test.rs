@@ -112,6 +112,34 @@ macro_rules! check_shr16 {
   }};
 }
 
+macro_rules! check_sbb8 {
+  ($lhs:expr, $rhs:expr, cf_in=$cf_in:expr, cf=$cf:expr, zf=$zf:expr, sf=$sf:expr, of=$of:expr, pf=$pf:expr, af=$af:expr) => {{
+    let mut flags_in = Flags(0);
+    if $cf_in != 0 { flags_in.set(FLAG_CF, true) };
+    let (_result, f) = alu::binary(alu::BinaryOp::Sbb, Value::U8($lhs), Value::U8($rhs), flags_in);
+    assert_eq!(f.get(FLAG_CF), $cf != 0, "CF mismatch");
+    assert_eq!(f.get(FLAG_ZF), $zf != 0, "ZF mismatch");
+    assert_eq!(f.get(FLAG_SF), $sf != 0, "SF mismatch");
+    assert_eq!(f.get(FLAG_OF), $of != 0, "OF mismatch");
+    assert_eq!(f.get(FLAG_PF), $pf != 0, "PF mismatch");
+    assert_eq!(f.get(FLAG_AF), $af != 0, "AF mismatch");
+  }};
+}
+
+macro_rules! check_sbb16 {
+  ($lhs:expr, $rhs:expr, cf_in=$cf_in:expr, cf=$cf:expr, zf=$zf:expr, sf=$sf:expr, of=$of:expr, pf=$pf:expr, af=$af:expr) => {{
+    let mut flags_in = Flags(0);
+    if $cf_in != 0 { flags_in.set(FLAG_CF, true) };
+    let (_result, f) = alu::binary(alu::BinaryOp::Sbb, Value::U16($lhs), Value::U16($rhs), flags_in);
+    assert_eq!(f.get(FLAG_CF), $cf != 0, "CF mismatch");
+    assert_eq!(f.get(FLAG_ZF), $zf != 0, "ZF mismatch");
+    assert_eq!(f.get(FLAG_SF), $sf != 0, "SF mismatch");
+    assert_eq!(f.get(FLAG_OF), $of != 0, "OF mismatch");
+    assert_eq!(f.get(FLAG_PF), $pf != 0, "PF mismatch");
+    assert_eq!(f.get(FLAG_AF), $af != 0, "AF mismatch");
+  }};
+}
+
 // --- sub8 ---
 
 #[test]
@@ -533,7 +561,7 @@ fn shl16_count_17_cf_zero() {
   check_shl16!(0xFFFF, 17, cf=0, zf=1, sf=0, of=0, pf=1);
 }
 
-// --- SHR ---
+// --- shr8 ---
 
 #[test]
 fn shr8_lsb_into_cf() {
@@ -564,4 +592,183 @@ fn shr8_cf_from_bit1_count2() {
 fn shr8_sign_never_set() {
   // SHR always zero-fills, SF is always 0 for count >= 1
   check_shr8!(0xFF, 1, cf=1, zf=0, sf=0, of=1, pf=0);
+}
+
+// --- sbb8 ---
+
+#[test]
+fn sbb8_no_borrow_in_equal() {
+  // 5 - 5 - 0 = 0: behaves like SUB, ZF set
+  check_sbb8!(0x05, 0x05, cf_in=0, cf=0, zf=1, sf=0, of=0, pf=1, af=0);
+}
+
+#[test]
+fn sbb8_borrow_in_makes_zero() {
+  // 6 - 5 - 1 = 0: CF_in converts a positive SUB result into zero
+  check_sbb8!(0x06, 0x05, cf_in=1, cf=0, zf=1, sf=0, of=0, pf=1, af=0);
+}
+
+#[test]
+fn sbb8_borrow_in_causes_carry() {
+  // 0x01 - 0x01 - 1 = 0xFF: borrow-in causes unsigned borrow that SUB would not
+  // CF=1, SF=1, 0xFF = 8 ones = even parity, AF=1 (low nibble borrow)
+  check_sbb8!(0x01, 0x01, cf_in=1, cf=1, zf=0, sf=1, of=0, pf=1, af=1);
+}
+
+#[test]
+fn sbb8_zero_minus_zero_borrow_in() {
+  // 0x00 - 0x00 - 1 = 0xFF: pure borrow-in propagates out, signed result -1 fits in i8, OF=0
+  check_sbb8!(0x00, 0x00, cf_in=1, cf=1, zf=0, sf=1, of=0, pf=1, af=1);
+}
+
+#[test]
+fn sbb8_no_borrow_in_no_borrow() {
+  // 0x07 - 0x03 - 0 = 0x04: no flags set, 0x04 = 1 one = odd parity
+  check_sbb8!(0x07, 0x03, cf_in=0, cf=0, zf=0, sf=0, of=0, pf=0, af=0);
+}
+
+#[test]
+fn sbb8_borrow_in_reduces_result() {
+  // 0x07 - 0x03 - 1 = 0x03: CF_in reduces result, no borrow, 0x03 = 2 ones = even parity
+  check_sbb8!(0x07, 0x03, cf_in=1, cf=0, zf=0, sf=0, of=0, pf=1, af=0);
+}
+
+#[test]
+fn sbb8_signed_overflow_positive() {
+  // 0x7F (127) - 0xFF (-1) - 0 = 0x80: OF=1 (127-(-1)=128 overflows i8), CF=1 (borrow)
+  // 0x80 = 1 one = odd parity
+  check_sbb8!(0x7F, 0xFF, cf_in=0, cf=1, zf=0, sf=1, of=1, pf=0, af=0);
+}
+
+#[test]
+fn sbb8_signed_overflow_positive_with_borrow_in() {
+  // 0x7F (127) - 0xFE (-2) - 1 = 0x80: same final result as above via different path
+  // CF_in shifts the effective subtraction: 127-(-2)-1 = 128, still overflows
+  check_sbb8!(0x7F, 0xFE, cf_in=1, cf=1, zf=0, sf=1, of=1, pf=0, af=0);
+}
+
+#[test]
+fn sbb8_signed_overflow_negative() {
+  // 0x80 (-128) - 0x01 (1) - 0 = 0x7F: OF=1 (-128-1=-129 overflows i8), SF=0
+  // 0x7F = 7 ones = odd parity, AF=1 (low nibble: 0 - 1 borrows)
+  check_sbb8!(0x80, 0x01, cf_in=0, cf=0, zf=0, sf=0, of=1, pf=0, af=1);
+}
+
+#[test]
+fn sbb8_signed_overflow_negative_with_borrow_in() {
+  // 0x80 (-128) - 0x00 (0) - 1 = 0x7F: same result as above, borrow-in triggers overflow
+  check_sbb8!(0x80, 0x00, cf_in=1, cf=0, zf=0, sf=0, of=1, pf=0, af=1);
+}
+
+#[test]
+fn sbb8_auxiliary_carry_from_operands() {
+  // 0x10 - 0x01 - 0 = 0x0F: AF=1 (low nibble 0 < 1, borrow), 0x0F = 4 ones = even parity
+  check_sbb8!(0x10, 0x01, cf_in=0, cf=0, zf=0, sf=0, of=0, pf=1, af=1);
+}
+
+#[test]
+fn sbb8_auxiliary_carry_from_borrow_in() {
+  // 0x10 - 0x00 - 1 = 0x0F: AF=1 (low nibble 0 - 0 - 1 borrows), same result as above
+  check_sbb8!(0x10, 0x00, cf_in=1, cf=0, zf=0, sf=0, of=0, pf=1, af=1);
+}
+
+#[test]
+fn sbb8_zero_result_max() {
+  // 0xFF - 0xFF - 0 = 0: no borrow, ZF set
+  check_sbb8!(0xFF, 0xFF, cf_in=0, cf=0, zf=1, sf=0, of=0, pf=1, af=0);
+}
+
+#[test]
+fn sbb8_zero_result_with_borrow_in() {
+  // 0xFF - 0xFE - 1 = 0: borrow-in absorbed exactly, no borrow out
+  // low nibble: 0xF - 0xE - 1 = 0, no AF
+  check_sbb8!(0xFF, 0xFE, cf_in=1, cf=0, zf=1, sf=0, of=0, pf=1, af=0);
+}
+
+#[test]
+fn sbb8_zero_minus_one_no_borrow_in() {
+  // 0x00 - 0x01 - 0 = 0xFF: CF=1, SF=1, 0xFF = even parity, AF=1
+  check_sbb8!(0x00, 0x01, cf_in=0, cf=1, zf=0, sf=1, of=0, pf=1, af=1);
+}
+
+// --- sbb16 ---
+
+#[test]
+fn sbb16_no_borrow_in_equal() {
+  // 0x1234 - 0x1234 - 0 = 0: ZF set
+  check_sbb16!(0x1234, 0x1234, cf_in=0, cf=0, zf=1, sf=0, of=0, pf=1, af=0);
+}
+
+#[test]
+fn sbb16_borrow_in_makes_zero() {
+  // 0x1235 - 0x1234 - 1 = 0: CF_in converts SUB result 1 into zero
+  // low nibble: 5 - 4 - 1 = 0, no AF
+  check_sbb16!(0x1235, 0x1234, cf_in=1, cf=0, zf=1, sf=0, of=0, pf=1, af=0);
+}
+
+#[test]
+fn sbb16_borrow_in_causes_carry() {
+  // 0x0001 - 0x0001 - 1 = 0xFFFF: borrow-in causes borrow out, low byte 0xFF = even parity
+  check_sbb16!(0x0001, 0x0001, cf_in=1, cf=1, zf=0, sf=1, of=0, pf=1, af=1);
+}
+
+#[test]
+fn sbb16_zero_minus_zero_borrow_in() {
+  // 0x0000 - 0x0000 - 1 = 0xFFFF: pure borrow-in propagates, OF=0 (signed -1 fits in i16)
+  check_sbb16!(0x0000, 0x0000, cf_in=1, cf=1, zf=0, sf=1, of=0, pf=1, af=1);
+}
+
+#[test]
+fn sbb16_signed_overflow_positive() {
+  // 0x7FFF (32767) - 0xFFFF (-1) - 0 = 0x8000: OF=1, CF=1, low byte 0x00 = even parity
+  check_sbb16!(0x7FFF, 0xFFFF, cf_in=0, cf=1, zf=0, sf=1, of=1, pf=1, af=0);
+}
+
+#[test]
+fn sbb16_signed_overflow_positive_with_borrow_in() {
+  // 0x7FFF (32767) - 0xFFFE (-2) - 1 = 0x8000: same result via borrow-in
+  // low nibble: 0xF - 0xE - 1 = 0, no AF
+  check_sbb16!(0x7FFF, 0xFFFE, cf_in=1, cf=1, zf=0, sf=1, of=1, pf=1, af=0);
+}
+
+#[test]
+fn sbb16_signed_overflow_negative() {
+  // 0x8000 (-32768) - 0x0001 (1) - 0 = 0x7FFF: OF=1, SF=0, low byte 0xFF = even parity
+  check_sbb16!(0x8000, 0x0001, cf_in=0, cf=0, zf=0, sf=0, of=1, pf=1, af=1);
+}
+
+#[test]
+fn sbb16_signed_overflow_negative_with_borrow_in() {
+  // 0x8000 (-32768) - 0x0000 - 1 = 0x7FFF: borrow-in triggers the same overflow
+  check_sbb16!(0x8000, 0x0000, cf_in=1, cf=0, zf=0, sf=0, of=1, pf=1, af=1);
+}
+
+#[test]
+fn sbb16_zero_result_max() {
+  // 0xFFFF - 0xFFFF - 0 = 0: ZF set
+  check_sbb16!(0xFFFF, 0xFFFF, cf_in=0, cf=0, zf=1, sf=0, of=0, pf=1, af=0);
+}
+
+#[test]
+fn sbb16_parity_uses_low_byte_only() {
+  // 0x0103 - 0x0001 - 0 = 0x0102: low byte 0x02 = 1 one = odd parity
+  check_sbb16!(0x0103, 0x0001, cf_in=0, cf=0, zf=0, sf=0, of=0, pf=0, af=0);
+}
+
+#[test]
+fn sbb16_auxiliary_carry_from_operands() {
+  // 0x0010 - 0x0001 - 0 = 0x000F: AF=1 (low nibble borrow), 0x0F = 4 ones = even parity
+  check_sbb16!(0x0010, 0x0001, cf_in=0, cf=0, zf=0, sf=0, of=0, pf=1, af=1);
+}
+
+#[test]
+fn sbb16_auxiliary_carry_from_borrow_in() {
+  // 0x0010 - 0x0000 - 1 = 0x000F: AF=1 from borrow-in alone, same result as above
+  check_sbb16!(0x0010, 0x0000, cf_in=1, cf=0, zf=0, sf=0, of=0, pf=1, af=1);
+}
+
+#[test]
+fn sbb16_zero_minus_one_no_borrow_in() {
+  // 0x0000 - 0x0001 - 0 = 0xFFFF: CF=1, SF=1, low byte 0xFF = even parity, AF=1
+  check_sbb16!(0x0000, 0x0001, cf_in=0, cf=1, zf=0, sf=1, of=0, pf=1, af=1);
 }

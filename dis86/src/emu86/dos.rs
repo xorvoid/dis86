@@ -19,7 +19,7 @@ pub struct Dos {
 
 // Init
 impl Dos {
-  pub fn new(root_dir: &str, mem: &mut Memory) -> Dos {
+  pub fn new(root_dir: Option<&str>, mem: &mut Memory) -> Dos {
     let mut dos = Dos {
       interrupt_vectors: [SegOff::new(0, 0); 256],
       filesystem: Filesystem::new(root_dir),
@@ -33,7 +33,7 @@ impl Dos {
     dos.interrupt_vectors[0x06] = SegOff::new(0xf000, 0xca60); // Invalid opcode
     dos.interrupt_vectors[0x3f] = SegOff::new(0xf000, 0xca60); // Overlay load interrupt
 
-    // NOTE: JUST TO MATCH DOSBOX
+    // NOTE: JUST TO MATCH DOSBOX (FIXME: MAKE THIS LESS HACKY / DO IT RIGHT)
     let env_addr = SegOff::new(ENV_SEG, 0);
     mem.slice_mut_starting_at(env_addr)[..10*16].copy_from_slice(&[
       0x43, 0x4f, 0x4d, 0x53, 0x50, 0x45, 0x43, 0x3d, 0x5a, 0x3a, 0x5c, 0x43, 0x4f, 0x4d, 0x4d, 0x41,

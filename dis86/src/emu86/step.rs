@@ -290,6 +290,7 @@ impl Machine {
       Opcode::OP_ADD => self.op_binary(&instr, alu::BinaryOp::Add),
       Opcode::OP_ADC => self.op_binary(&instr, alu::BinaryOp::Adc),
       Opcode::OP_SUB => self.op_binary(&instr, alu::BinaryOp::Sub),
+      Opcode::OP_SBB => self.op_binary(&instr, alu::BinaryOp::Sbb),
       Opcode::OP_SHL => self.op_shift(&instr, alu::ShiftOp::Shl),
       Opcode::OP_SHR => self.op_shift(&instr, alu::ShiftOp::Shr),
 
