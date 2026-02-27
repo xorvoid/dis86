@@ -22,6 +22,11 @@ impl ShmMem {
   pub fn slice_starting_at(&self, addr: SegOff) -> &[u8] {
     &self.slice()[addr.abs_normal()..]
   }
+
+  #[allow(dead_code)]
+  pub fn read_u8(&self, addr: SegOff) -> u8 {
+    self.slice()[addr.abs_normal()]
+  }
 }
 
 impl ShmMem {
