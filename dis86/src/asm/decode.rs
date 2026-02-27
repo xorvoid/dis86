@@ -44,20 +44,20 @@ fn operand_rel(bin: &mut RegionIter, sz: Size) -> Result<Operand, String> {
   Ok(Operand::Rel(OperandRel { val }))
 }
 
-fn operand_src(sz: Size) -> Result<Operand, String> {
+fn operand_src(sz: Size, sreg: Option<Reg>) -> Result<Operand, String> {
   Ok(Operand::Mem(OperandMem {
     sz: sz,
-    sreg: Reg::DS, // TODO FIMXE: ARE SEG OVERRIDES ALLOWED FOR THESE??
+    sreg: sreg.unwrap_or(Reg::DS),
     reg1: Some(Reg::SI),
     reg2: None,
     off: None,
   }))
 }
 
-fn operand_dst(sz: Size) -> Result<Operand, String> {
+fn operand_dst(sz: Size, sreg: Option<Reg>) -> Result<Operand, String> {
   Ok(Operand::Mem(OperandMem {
     sz: sz,
-    sreg: Reg::ES, // TODO FIMXE: ARE SEG OVERRIDES ALLOWED FOR THESE??
+    sreg: sreg.unwrap_or(Reg::ES),
     reg1: Some(Reg::DI),
     reg2: None,
     off: None,
@@ -252,10 +252,10 @@ pub fn decode_one_impl<'a>(bin: &mut RegionIter<'a>) -> Result<Option<(Instr, &'
       instr_fmt::Oper::OPER_LIT3  => operand_imm8(3),
 
       // Implied string operations operands
-      instr_fmt::Oper::OPER_SRC8  => operand_src(Size::Size8),
-      instr_fmt::Oper::OPER_SRC16 => operand_src(Size::Size16),
-      instr_fmt::Oper::OPER_DST8  => operand_dst(Size::Size8),
-      instr_fmt::Oper::OPER_DST16 => operand_dst(Size::Size16),
+      instr_fmt::Oper::OPER_SRC8  => operand_src(Size::Size8, sreg),
+      instr_fmt::Oper::OPER_SRC16 => operand_src(Size::Size16, sreg),
+      instr_fmt::Oper::OPER_DST8  => operand_dst(Size::Size8, sreg),
+      instr_fmt::Oper::OPER_DST16 => operand_dst(Size::Size16, sreg),
 
       // Explicit register operands
       instr_fmt::Oper::OPER_R8    => operand_reg(Reg::reg8(modrm_reg(modrm))),
@@ -583,6 +583,7 @@ mod tests {
     TestCase { addr: 0x0000, dat: &[0x6b, 0x1e, 0x79, 0x1e, 0x6b], asm: "imul   bx,WORD PTR ds:0x1e79,0x6b" },
     TestCase { addr: 0x0000, dat: &[0x69, 0xf6, 0xa0, 0x00],       asm: "imul   si,si,0xa0" },
     TestCase { addr: 0x0000, dat: &[0x69, 0x01, 0x79, 0x01],       asm: "imul   ax,WORD PTR ds:[bx+di],0x179" },
+    TestCase { addr: 0x0000, dat: &[0x36, 0xac],                   asm: "lods   al,BYTE PTR ss:[si]" },
   ];
 
   #[test]
