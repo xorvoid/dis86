@@ -53,7 +53,6 @@ pub fn run(exe_path: &str) -> Result<(), String> {
       machine.reg_write_u16(CX, hydra_state.reg_read_u16(CX));
       machine.reg_write_u16(DX, hydra_state.reg_read_u16(DX));
     }
-
     let mut machine_state = machine.cpu.clone();
 
     // Clear the AF flag... It just creates problems... its behavior is undefined in
@@ -62,6 +61,7 @@ pub fn run(exe_path: &str) -> Result<(), String> {
     machine_state.regs[FLAGS.idx as usize] &= !(1<<4);
 
     if machine_state != hydra_state {
+      eprintln!("");
       eprintln!("State divergence:");
       eprintln!("  hydra  @  {}", hydra_addr);
       eprintln!("  emu86  @  {}", machine_addr);

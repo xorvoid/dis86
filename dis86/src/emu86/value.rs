@@ -70,4 +70,12 @@ impl Value {
       Value::Addr(_) => 4,
     }
   }
+
+  pub fn join(high: Value, low: Value) -> Value {
+    match (high, low) {
+      (Value::U8(high),  Value::U8(low))  => Value::U16((high as u16) << 8  | (low as u16)),
+      (Value::U16(high), Value::U16(low)) => Value::U32((high as u32) << 16 | (low as u32)),
+      _ => panic!("Cannot join these values"),
+    }
+  }
 }

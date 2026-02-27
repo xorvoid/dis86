@@ -105,8 +105,36 @@ fn update_flags_shr(f: &mut Flags, a: u16, n: u8, r: u16, sign_mask: u16, value_
   f.set(FLAG_AF, false);
 }
 
+// Returns (quotient, remainder, flags)
+pub fn divmod(a: Value, b: Value, mut f: Flags) -> (Value, Value, Flags) {
+  let Value::U32(a) = a else { panic!("expected u32 for lhs") };
+  let Value::U16(b) = b else { panic!("expected u16 for rhs") };
+  let b = b as u32;
+
+  let quotient = a / b;
+  let remainder = a % b;
+
+  if quotient > 0xffff {
+    panic!("Divide Error"); // What should be done about this??
+  }
+
+  // Mirroring the behaviour of dosbox-x
+  f.set(FLAG_CF, (remainder&3) >= 1 && (remainder&3) <= 2);  // Set iff low 2 bits of remainder are 01 or 10 )
+  f.set(FLAG_ZF, remainder == 0 && (quotient&1) != 0);       // Set iff remainder is zero AND quotient is odd
+  f.set(FLAG_SF, false);
+  f.set(FLAG_OF, false);
+  f.set(FLAG_AF, false);
+
+  // Set iff rem and quo have the same parity
+  let rem_parity = remainder.count_ones() % 2 != 0;
+  let quo_parity = quotient.count_ones() % 2 != 0;
+  f.set(FLAG_PF, rem_parity == quo_parity);
+
+  (Value::U16(quotient as u16), Value::U16(remainder as u16), f)
+}
+
 pub fn binary(op: BinaryOp, a: Value, b: Value, mut f: Flags) -> (Value, Flags) {
-  // Unpack
+  // Unpack common case
   let (size, sign_mask, value_mask, a, b) = match (a, b) {
     (Value::U8(a),  Value::U8(b))  => (1, 0x80,   0xff,   a as u16, b as u16),
     (Value::U16(a), Value::U16(b)) => (2, 0x8000, 0xffff, a, b),

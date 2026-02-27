@@ -315,6 +315,19 @@ impl Machine {
         self.operand_write(&instr, 1, Value::U16(result as u16));
       }
 
+      Opcode::OP_DIV => {
+        let high = self.operand_read(&instr, 0);
+        let low = self.operand_read(&instr, 1);
+        let lhs = Value::join(high, low);
+        let rhs = self.operand_read(&instr, 2);
+
+        let (quotient, remainder, flags) = alu::divmod(lhs, rhs, self.flag_read_all());
+        self.flag_write_all(flags);
+
+        self.operand_write(&instr, 1, quotient);
+        self.operand_write(&instr, 0, remainder);
+      }
+
       Opcode::OP_XCHG => {
         let lhs = self.operand_read(&instr, 0);
         let rhs = self.operand_read(&instr, 1);
