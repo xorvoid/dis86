@@ -37,9 +37,11 @@ fn flag_generic_sf(r: u16, sign_mask: u16)  -> bool { (r & sign_mask) != 0 }
 fn flag_generic_zf(r: u16, value_mask: u16) -> bool { (r & value_mask) == 0 }
 fn flag_generic_pf(r: u16)                  -> bool { (r as u8).count_ones() % 2 == 0 } // PF uses low byte only
 
-fn update_flags_sub(f: &mut Flags, a: u16, b: u16, carry_in: u16, r: u16, sign_mask: u16, value_mask: u16) {
+fn update_flags_sub(f: &mut Flags, a: u16, b: u16, carry_in: u16, r: u16, sign_mask: u16, value_mask: u16, update_cf: bool) {
   assert!(carry_in <= 1);
-  f.set(FLAG_CF, (a as u32) < (b as u32) + (carry_in as u32));
+  let cf = (a as u32) < (b as u32) + (carry_in as u32);
+
+  if update_cf { f.set(FLAG_CF, cf) };
   f.set(FLAG_ZF, flag_generic_zf(r, value_mask));
   f.set(FLAG_SF, flag_generic_sf(r, sign_mask));
   f.set(FLAG_PF, flag_generic_pf(r));
@@ -203,12 +205,12 @@ pub fn binary(op: BinaryOp, a: Value, b: Value, mut f: Flags) -> (Value, Flags) 
     }
     BinaryOp::Sub => {
       result = a.wrapping_sub(b);
-      update_flags_sub(&mut f, a, b, 0, result, sign_mask, value_mask);
+      update_flags_sub(&mut f, a, b, 0, result, sign_mask, value_mask, true);
     }
     BinaryOp::Sbb => {
       let carry_in = f.get(FLAG_CF) as u16;
       result = a.wrapping_sub(b).wrapping_sub(carry_in);
-      update_flags_sub(&mut f, a, b, carry_in, result, sign_mask, value_mask);
+      update_flags_sub(&mut f, a, b, carry_in, result, sign_mask, value_mask, true);
     }
     BinaryOp::And => {
       result = a & b;
@@ -246,7 +248,7 @@ pub fn unary(op: UnaryOp, a: Value, mut f: Flags) -> (Value, Flags) {
   match op {
     UnaryOp::Neg => {
       result = -(a as i16) as u16;
-      update_flags_sub(&mut f, 0, a, 0, result, sign_mask, value_mask);
+      update_flags_sub(&mut f, 0, a, 0, result, sign_mask, value_mask, true);
     }
     UnaryOp::Inc => {
       let r32 = (a as u32) + (1 as u32);
@@ -255,7 +257,7 @@ pub fn unary(op: UnaryOp, a: Value, mut f: Flags) -> (Value, Flags) {
     }
     UnaryOp::Dec => {
       result = a.wrapping_sub(1);
-      update_flags_sub(&mut f, a, 1, 0, result, sign_mask, value_mask);
+      update_flags_sub(&mut f, a, 1, 0, result, sign_mask, value_mask, false);
     }
   };
 
