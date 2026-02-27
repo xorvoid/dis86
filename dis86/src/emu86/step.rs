@@ -106,6 +106,10 @@ impl Machine {
     }
   }
 
+  pub fn operand_write_u16(&mut self, instr: &Instr, oper: usize, val: u16) {
+    self.operand_write(instr, oper, Value::U16(val))
+  }
+
   pub fn op_unary(&mut self, instr: &Instr, op: alu::UnaryOp) {
     let val = self.operand_read(instr, 0);
     let (result, flags) = alu::unary(op, val, self.flag_read_all());
@@ -253,6 +257,18 @@ impl Machine {
       Opcode::OP_JCXZ => {
         let tgt = self.operand_read_addr(&instr, 1);
         if self.reg_read_u16(CX) == 0 { self.reg_write_addr(CS, IP, tgt); }
+      }
+
+      Opcode::OP_LOOP => {
+        let count = self.operand_read_u16(&instr, 0);
+        let tgt   = self.operand_read_addr(&instr, 1);
+
+        let new_count = count.wrapping_sub(1);
+        self.operand_write_u16(&instr, 0, new_count);
+
+        if new_count != 0 {
+          self.reg_write_addr(CS, IP, tgt);
+        }
       }
 
       Opcode::OP_JE   => self.op_jump_cond(&instr, f.get(FLAG_ZF)),
