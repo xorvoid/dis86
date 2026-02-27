@@ -284,7 +284,15 @@ impl Machine {
       ////////////////////////////////////////////////////////////////////////////////
       // Jumps
 
-      Opcode::OP_JMP |
+      Opcode::OP_JMP => {
+        let off = match self.operand_read(&instr, 0) {
+          Value::Addr(addr) => addr.off.0,
+          Value::U16(off) => off,
+          _ => panic!("unexpected value type"),
+        };
+        self.reg_write_u16(IP, off);
+      }
+
       Opcode::OP_JMPF => {
         let tgt = self.operand_read_addr(&instr, 0);
         self.reg_write_addr(CS, IP, tgt);
