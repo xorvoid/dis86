@@ -1,0 +1,230 @@
+8086 Flags: CMP, Arithmetic, and String Operations
+====================================================
+
+Overview
+--------
+The 8086 has a 16-bit FLAGS register. Most arithmetic and logic
+instructions set a subset of the status flags as a side effect.
+CMP is just a SUB that discards the result -- it exists solely to
+set flags. Many other instructions set the same flags in the same
+way, which is why the same conditional jumps work after all of them.
+
+
+The Status Flags
+----------------
+Bit  Name  Symbol  Meaning
+---  ----  ------  -------
+ 0   CF    Carry   Unsigned overflow/borrow. Set if result overflowed
+                   the operand size (carry out of MSB for ADD, or
+                   borrow into MSB for SUB/CMP).
+
+ 2   PF    Parity  Set if the low byte of the result has an even
+                   number of 1 bits. Rarely used outside BCD/comms.
+
+ 4   AF    Aux     Auxiliary carry. Set if there was a carry/borrow
+     Carry         between bits 3 and 4 (the "nibble" boundary).
+                   Used only by DAA, DAS, AAA, AAS (BCD correction).
+
+ 6   ZF    Zero    Set if result is exactly zero.
+
+ 7   SF    Sign    Set if the high bit (MSB) of the result is 1.
+                   Reflects the sign of the result in two's complement.
+
+11   OF    Over-   Signed overflow. Set if the result overflowed the
+      flow         signed range for the operand size:
+                     byte: outside -128..127
+                     word: outside -32768..32767
+                   OF is set when the sign of the result is wrong
+                   relative to the signs of the inputs.
+
+
+How CMP Sets Flags
+------------------
+CMP dst, src  performs  (dst - src)  and discards the result.
+SUB dst, src  performs  (dst - src)  and stores the result.
+Both set flags identically.
+
+For an 8-bit example, CMP AL, BL computes (AL - BL):
+
+  AL=0x05, BL=0x03  ->  result=0x02  CF=0 ZF=0 SF=0 OF=0  (5 > 3)
+  AL=0x05, BL=0x05  ->  result=0x00  CF=0 ZF=1 SF=0 OF=0  (equal)
+  AL=0x03, BL=0x05  ->  result=0xFE  CF=1 ZF=0 SF=1 OF=0  (3 < 5 unsigned)
+  AL=0x7F, BL=0xFF  ->  result=0x80  CF=1 ZF=0 SF=1 OF=1  (signed overflow)
+
+CF (borrow) detail:
+  CF is set when src > dst treating both as unsigned. The CPU performs
+  the subtraction using borrow logic: CF=1 means "we had to borrow",
+  i.e., the true mathematical result is negative.
+
+OF (signed overflow) detail:
+  OF is set when the operands' signs implied one result sign, but the
+  actual result has the opposite sign:
+    positive - negative = negative?  -> OF=1 (should have been positive)
+    negative - positive = positive?  -> OF=1 (should have been negative)
+  Formally: OF = (sign(dst) != sign(src)) AND (sign(result) != sign(dst))
+
+
+Interpreting Flags After CMP dst, src
+--------------------------------------
+Unsigned comparisons:
+  dst == src    ZF=1
+  dst != src    ZF=0
+  dst <  src    CF=1
+  dst >= src    CF=0
+  dst >  src    CF=0 AND ZF=0
+  dst <= src    CF=1 OR  ZF=1
+
+Signed comparisons:
+  dst == src    ZF=1
+  dst != src    ZF=0
+  dst <  src    SF != OF
+  dst >= src    SF == OF
+  dst >  src    ZF=0 AND SF==OF
+  dst <= src    ZF=1 OR  SF!=OF
+
+Why signed needs SF xor OF:
+  If no overflow occurred, SF directly tells you the result's sign:
+    SF=1 means result<0 means dst<src.
+  If overflow DID occur, the sign bit was corrupted, so the truth is
+  the opposite: SF=0 actually means dst<src.
+  In both cases: less-than is true when SF and OF differ.
+
+
+Conditional Jump Reference (after CMP dst, src)
+-------------------------------------------------
+Mnemonic       Condition           Flags           Notes
+----------     ---------           -----           -----
+JE  / JZ       equal               ZF=1
+JNE / JNZ      not equal           ZF=0
+
+-- Unsigned --
+JB  / JC / JNAE  below            CF=1
+JAE / JNC / JNB  above or equal   CF=0
+JA  / JNBE       above            CF=0 AND ZF=0
+JBE / JNA        below or equal   CF=1 OR  ZF=1
+
+-- Signed --
+JL  / JNGE     less               SF!=OF
+JGE / JNL      greater or equal   SF==OF
+JG  / JNLE     greater            ZF=0 AND SF==OF
+JLE / JNG      less or equal      ZF=1 OR  SF!=OF
+
+-- Sign/overflow --
+JS             sign (negative)     SF=1
+JNS            no sign (positive)  SF=0
+JO             overflow            OF=1
+JNO            no overflow         OF=0
+
+-- Parity --
+JP  / JPE      parity even         PF=1
+JNP / JPO      parity odd          PF=0
+
+
+Instructions That Set Flags the Same Way as CMP/SUB
+----------------------------------------------------
+
+SUB dst, src
+  Identical flag behavior to CMP. Stores result in dst.
+
+SBB dst, src
+  Subtract with borrow: dst = dst - src - CF.
+  Sets all six flags the same way. Used for multi-word subtraction.
+
+NEG dst
+  Computes dst = 0 - dst. Sets flags as if CMP did (0 - dst):
+    CF=0 only if dst was already 0; CF=1 otherwise.
+    ZF=1 if dst was 0.
+    OF=1 if dst was 0x80 (byte) or 0x8000 (word) -- the one value
+         whose negation overflows.
+
+SCAS (Scan String)
+  SCASB: compares AL with byte at ES:[DI]
+  SCASW: compares AX with word at ES:[DI]
+  Sets flags exactly as CMP AL,ES:[DI] or CMP AX,ES:[DI].
+  Then adjusts DI by +1/+2 (DF=0) or -1/-2 (DF=1).
+  Used with REP prefixes:
+    REPE  SCAS  -- repeat while equal (ZF=1) and CX!=0
+                   stops at first byte/word that differs from AL/AX
+    REPNE SCAS  -- repeat while not equal (ZF=0) and CX!=0
+                   stops at first byte/word that matches AL/AX
+  After REP, ZF tells you why the loop ended:
+    ZF=1: last comparison was equal
+    ZF=0: last comparison was not equal
+
+CMPS (Compare String)
+  CMPSB: compares DS:[SI] with ES:[DI]
+  CMPSW: compares DS:[SI] with ES:[DI] (word)
+  Sets flags as CMP DS:[SI], ES:[DI].
+  Adjusts both SI and DI by +/-1 or +/-2.
+  Used with REPE/REPNE to find first differing/matching position.
+
+ADD dst, src
+  Sets all six flags. CF=carry out (unsigned overflow).
+  OF=signed overflow. SF/ZF/PF/AF as usual.
+
+ADC dst, src
+  Add with carry: dst = dst + src + CF.
+  Sets all flags same as ADD. Used for multi-word addition.
+
+INC dst
+  Sets SF, ZF, OF, PF, AF.
+  DOES NOT AFFECT CF. (Deliberate -- allows loop counting
+  inside multi-word add/subtract without disturbing CF.)
+
+DEC dst
+  Sets SF, ZF, OF, PF, AF.
+  DOES NOT AFFECT CF. (Same reason as INC.)
+
+
+Instructions That Partially Clear Flags
+----------------------------------------
+AND dst, src
+OR  dst, src
+XOR dst, src
+TEST dst, src  (like AND but discards result)
+  These always clear CF and OF.
+  Set SF, ZF, PF based on result.
+  AF is undefined.
+  Because CF=0 and OF=0 after these, the signed and unsigned
+  conditional jumps give the same result, which makes sense since
+  the MSB is now the actual sign, not a carry/overflow artifact.
+
+SHL/SHR/SAR/ROL/ROR/RCL/RCR:
+  CF = last bit shifted/rotated out.
+  OF = defined only for 1-bit shifts (undefined for count>1).
+  SF, ZF, PF set from result.
+  AF undefined.
+
+
+Flags NOT Set by Certain Operations
+-------------------------------------
+  PUSH, POP, MOV, LEA, LES, LDS  -- no flags affected at all.
+  XCHG                            -- no flags affected.
+  MUL/IMUL  -- CF and OF set if result > operand size, SF/ZF/PF/AF undefined.
+  DIV/IDIV  -- all flags undefined.
+
+
+The Direction Flag (DF) -- Not a Status Flag
+---------------------------------------------
+DF controls string instruction direction:
+  DF=0 (CLD): SI and DI increment after each operation (forward scan)
+  DF=1 (STD): SI and DI decrement (reverse scan)
+DF does not get set by arithmetic. Set explicitly with CLD or STD.
+DOS convention: DF=0 on entry to any DOS function; restore it on exit.
+
+
+Practical Example: REPNE SCASB to find a byte
+----------------------------------------------
+  ; Find 0x00 (null terminator) in a string
+  ; ES:DI = pointer to string, CX = max length
+
+  CLD               ; DF=0, scan forward
+  MOV AL, 0x00      ; byte to search for
+  XOR CX, CX        ; CX = 0
+  DEC CX            ; CX = 0xFFFF (max scan length)
+  REPNE SCASB        ; scan until AL found or CX=0
+  ; After:
+  ;   ZF=1: found (DI points one past the match)
+  ;   ZF=0: not found (CX reached 0)
+  ;   CX = remaining count
+  ;   DI = address after found byte (or end of scan)

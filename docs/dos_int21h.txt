@@ -1,0 +1,463 @@
+DOS INT 21h Function Reference
+================================
+
+INT 21h is the main DOS API dispatcher. Set AH to the function number
+before calling. Unless noted, CF (carry flag) set on return indicates
+an error and AX contains the error code.
+
+Error codes are detailed by AH=0x59 (Get Extended Error Info).
+
+
+Character I/O
+-------------
+AH=0x01  Character Input with Echo
+  Out: AL = character read (waits; checks Ctrl-C)
+
+AH=0x02  Character Output
+  In:  DL = character to write
+  (Ctrl-C checked; if DL=0x08 backspace is handled)
+
+AH=0x03  Auxiliary Input (COM1 / stdaux)
+  Out: AL = character
+
+AH=0x04  Auxiliary Output (COM1 / stdaux)
+  In:  DL = character
+
+AH=0x05  Printer Output (LPT1 / stdprn)
+  In:  DL = character
+
+AH=0x06  Direct Console I/O
+  In:  DL = 0xFF to read, or character value to write
+  Out: (read) ZF=1 no char available; ZF=0 AL=character
+       Does NOT check Ctrl-C
+
+AH=0x07  Direct Console Input Without Echo
+  Out: AL = character (no Ctrl-C check)
+
+AH=0x08  Console Input Without Echo
+  Out: AL = character (Ctrl-C checked)
+
+AH=0x09  Write String to Stdout
+  In:  DS:DX = pointer to '$'-terminated string
+
+AH=0x0A  Buffered Keyboard Input
+  In:  DS:DX = pointer to input buffer:
+         byte 0: max characters to accept
+         byte 1: (filled) actual characters read
+         byte 2+: (filled) input data, terminated by 0x0D
+
+AH=0x0B  Check Keyboard Status
+  Out: AL = 0xFF if character waiting, 0x00 if not
+
+AH=0x0C  Flush Stdin Buffer and Read
+  In:  AL = function to call after flush (01/06/07/08/0A)
+       (other registers per the called function)
+
+
+Drive and Disk
+--------------
+AH=0x0D  Disk Reset
+  Flushes all file buffers to disk. No return value.
+
+AH=0x0E  Select Default Drive
+  In:  DL = drive number (0=A, 1=B, 2=C, ...)
+  Out: AL = total number of logical drives
+
+AH=0x19  Get Current Default Drive
+  Out: AL = current drive (0=A, 1=B, 2=C, ...)
+
+AH=0x1A  Set Disk Transfer Area (DTA)
+  In:  DS:DX = pointer to new DTA buffer
+  (default DTA is at PSP:0x0080, 128 bytes)
+
+AH=0x1B  Get Allocation Info for Default Drive
+  Out: AL = sectors per cluster
+       CX = bytes per sector
+       DX = total clusters
+       DS:BX = pointer to FAT ID byte
+
+AH=0x1C  Get Allocation Info for Specified Drive
+  In:  DL = drive (0=default, 1=A, ...)
+  Out: same as AH=0x1B
+
+AH=0x2F  Get DTA Address
+  Out: ES:BX = pointer to current DTA
+
+AH=0x36  Get Free Disk Space
+  In:  DL = drive (0=default, 1=A, ...)
+  Out: AX = sectors per cluster (0xFFFF = invalid drive)
+       BX = number of free clusters
+       CX = bytes per sector
+       DX = total clusters on drive
+
+
+Date and Time
+-------------
+AH=0x2A  Get System Date
+  Out: CX = year (1980-2099)
+       DH = month (1-12)
+       DL = day (1-31)
+       AL = day of week (0=Sunday)
+
+AH=0x2B  Set System Date
+  In:  CX = year, DH = month, DL = day
+  Out: AL = 0x00 success, 0xFF invalid date
+
+AH=0x2C  Get System Time
+  Out: CH = hours (0-23)
+       CL = minutes (0-59)
+       DH = seconds (0-59)
+       DL = centiseconds (0-99)
+
+AH=0x2D  Set System Time
+  In:  CH = hours, CL = minutes, DH = seconds, DL = centiseconds
+  Out: AL = 0x00 success, 0xFF invalid time
+
+
+System Info
+-----------
+AH=0x25  Set Interrupt Vector
+  In:  AL = interrupt number
+       DS:DX = pointer to new handler
+
+AH=0x26  Create New PSP
+  In:  DX = segment address for new PSP
+  (copies current PSP to DX, updates fields)
+
+AH=0x2E  Set Verify Flag
+  In:  AL = 0 disable verify, 1 enable verify after writes
+
+AH=0x30  Get DOS Version
+  Out: AL = major version (e.g. 5)
+       AH = minor version (e.g. 0)
+       BH = OEM serial number
+       BL:CX = 24-bit user serial number
+
+AH=0x33  Get/Set Ctrl-C Check Flag
+  In:  AL = 0 get, 1 set
+       DL = new flag value (0=off, 1=on) if AL=1
+  Out: DL = current flag value
+
+AH=0x34  Get InDOS Flag Address
+  Out: ES:BX = pointer to InDOS flag byte
+  (byte is non-zero when DOS is not re-entrant)
+
+AH=0x35  Get Interrupt Vector
+  In:  AL = interrupt number
+  Out: ES:BX = current handler address (reads from IVT at 0000:AL*4)
+
+AH=0x54  Get Verify Flag
+  Out: AL = 0 verify off, 1 verify on
+
+AH=0x58  Get/Set Memory Allocation Strategy
+  In:  AL = 0 get, 1 set
+       BX = strategy if setting:
+              0 = first fit (scan from low memory)
+              1 = best fit (smallest sufficient block)
+              2 = last fit (scan from high memory)
+  Out: AX = current strategy if getting; CF set on error
+
+AH=0x59  Get Extended Error Information
+  Out: AX = extended error code
+       BH = error class
+              01 = out of resource
+              02 = temporary situation
+              03 = authorization failure
+              04 = internal DOS error
+              05 = hardware failure
+              06 = system software failure
+              07 = application error
+              08 = not found
+              09 = bad format
+              0A = locked
+              0B = media error
+              0C = already exists
+              0D = unknown
+       BL = recommended action
+              01 = retry
+              02 = retry after pause
+              03 = ask user to re-enter input
+              04 = abort with cleanup
+              05 = immediate abort
+              06 = ignore
+              07 = retry with user intervention
+       CH = locus
+              01 = unknown
+              02 = block device (disk)
+              03 = network
+              04 = serial device
+              05 = memory
+
+
+Memory Management
+-----------------
+AH=0x48  Allocate Memory Block
+  In:  BX = number of paragraphs requested
+  Out: CF clear: AX = segment of allocated block
+       CF set:   AX = error code (08 = insufficient memory)
+                 BX = max paragraphs available
+
+AH=0x49  Free Memory Block
+  In:  ES = segment of block to free
+  Out: CF set on error
+
+AH=0x4A  Resize Memory Block
+  In:  ES = segment of block to resize
+       BX = new size in paragraphs
+  Out: CF set on error; BX = max available paragraphs if error
+
+AH=0x67  Set Handle Count
+  In:  BX = new maximum number of open handles
+  Out: CF set on error
+
+
+Process Control
+---------------
+AH=0x00  Terminate Program (legacy)
+  (equivalent to INT 20h; use AH=0x4C instead)
+
+AH=0x31  Terminate and Stay Resident (TSR)
+  In:  AL = exit code
+       DX = number of paragraphs to keep resident
+       (everything from PSP base up to DX paragraphs is kept)
+
+AH=0x4B  Execute Program (EXEC)
+  In:  AL = 0 load and execute child process
+            3 load overlay (no execution)
+       DS:DX = ASCIIZ path to executable
+       ES:BX = parameter block:
+                 word 0: segment of environment (0 = inherit parent's)
+                 dword 2: far pointer to command tail
+                 dword 6: far pointer to FCB 1
+                 dword A: far pointer to FCB 2
+  Out: CF set on error; child exit code via AH=0x4D
+
+AH=0x4C  Exit Program
+  In:  AL = exit code (0 = success)
+
+AH=0x4D  Get Exit Code of Child Process
+  Out: AH = exit type:
+              00 = normal termination
+              01 = terminated by Ctrl-C
+              02 = terminated by critical error
+              03 = terminated by TSR (AH=0x31)
+       AL = exit code passed to AH=0x4C
+
+AH=0x50  Set Current PSP Segment
+  In:  BX = segment of PSP to make current
+
+AH=0x51  Get Current PSP Segment
+  Out: BX = segment of current PSP
+
+AH=0x62  Get Current PSP Address (DOS 3+)
+  Out: BX = segment of current PSP
+  (same as 0x51 but officially documented)
+
+
+Directory Operations
+--------------------
+AH=0x39  Create Directory
+  In:  DS:DX = ASCIIZ path
+  Out: CF set on error; AX = error code
+
+AH=0x3A  Remove Directory
+  In:  DS:DX = ASCIIZ path
+  Out: CF set on error; AX = error code
+
+AH=0x3B  Change Current Directory
+  In:  DS:DX = ASCIIZ path
+  Out: CF set on error; AX = error code
+
+AH=0x47  Get Current Directory
+  In:  DL = drive (0=default, 1=A, ...)
+       DS:SI = pointer to 64-byte buffer
+  Out: buffer filled with path (no drive letter, no leading backslash)
+       CF set on error
+
+
+File Operations (Handle-Based, DOS 2+)
+---------------------------------------
+AH=0x3C  Create or Truncate File
+  In:  DS:DX = ASCIIZ filename
+       CX = file attributes:
+              bit 0 = read only
+              bit 1 = hidden
+              bit 2 = system
+              bit 5 = archive
+  Out: CF clear: AX = file handle
+       CF set:   AX = error code
+
+AH=0x3D  Open File
+  In:  DS:DX = ASCIIZ filename
+       AL = access mode:
+              00 = read only
+              01 = write only
+              02 = read/write
+              (bits 4-6 = sharing mode, DOS 3+)
+  Out: CF clear: AX = file handle
+       CF set:   AX = error code
+
+AH=0x3E  Close File Handle
+  In:  BX = file handle
+  Out: CF set on error
+
+AH=0x3F  Read from File or Device
+  In:  BX = file handle
+       CX = number of bytes to read
+       DS:DX = buffer address
+  Out: CF clear: AX = bytes actually read (0 = EOF)
+       CF set:   AX = error code
+
+AH=0x40  Write to File or Device
+  In:  BX = file handle
+       CX = number of bytes to write (0 = truncate at current position)
+       DS:DX = buffer address
+  Out: CF clear: AX = bytes actually written
+       CF set:   AX = error code
+
+AH=0x41  Delete File
+  In:  DS:DX = ASCIIZ filename (no wildcards)
+  Out: CF set on error; AX = error code
+
+AH=0x42  Set File Position (Seek)
+  In:  BX = file handle
+       CX:DX = signed offset (CX=high word, DX=low word)
+       AL = method:
+              00 = from beginning of file
+              01 = from current position
+              02 = from end of file
+  Out: CF clear: DX:AX = new file position (DX=high, AX=low)
+       CF set:   AX = error code
+
+AH=0x43  Get or Set File Attributes
+  In:  AL = 0 get attributes, 1 set attributes
+       DS:DX = ASCIIZ filename
+       CX = new attributes (if AL=1)
+  Out: CF clear: CX = file attributes (if AL=0)
+       CF set:   AX = error code
+
+AH=0x45  Duplicate File Handle
+  In:  BX = existing handle
+  Out: CF clear: AX = new handle (shares position with original)
+       CF set:   AX = error code
+
+AH=0x46  Force Duplicate File Handle
+  In:  BX = existing handle
+       CX = handle number to redirect to BX
+  Out: CF set on error
+  (closes CX if open, then makes CX refer to same file as BX)
+
+AH=0x56  Rename or Move File
+  In:  DS:DX = ASCIIZ current name
+       ES:DI = ASCIIZ new name
+  Out: CF set on error; AX = error code
+
+AH=0x57  Get or Set File Date and Time
+  In:  AL = 0 get, 1 set
+       BX = file handle
+       CX = new time (if AL=1): bits 15-11=hours, 10-5=minutes, 4-0=2-second units
+       DX = new date (if AL=1): bits 15-9=year-1980, 8-5=month, 4-0=day
+  Out: CF clear, if get: CX=time, DX=date
+       CF set on error
+
+AH=0x5A  Create Temporary File
+  In:  CX = file attributes
+       DS:DX = ASCIIZ path with trailing backslash (e.g. "C:\TEMP\")
+  Out: CF clear: AX = handle, DS:DX buffer updated with full filename
+       CF set:   AX = error code
+
+AH=0x5B  Create New File (Fails if Exists)
+  In:  CX = file attributes
+       DS:DX = ASCIIZ filename
+  Out: CF clear: AX = file handle
+       CF set:   AX = error code (05 if file already exists)
+
+AH=0x5C  Lock or Unlock File Region
+  In:  AL = 0 lock, 1 unlock
+       BX = file handle
+       CX:DX = region offset (CX=high)
+       SI:DI = region length (SI=high)
+  Out: CF set on error
+
+AH=0x68  Commit File (Flush Buffers)
+  In:  BX = file handle
+  Out: CF set on error
+  (writes all dirty buffers; safer than close/reopen for crash recovery)
+
+
+File Search
+-----------
+AH=0x4E  Find First Matching File
+  In:  CX = search attributes (bitmask, includes normal files plus these)
+       DS:DX = ASCIIZ filespec (wildcards * and ? allowed)
+  Out: CF clear: DTA filled with find data (see below)
+       CF set:   AX = error code (12h = no match)
+
+AH=0x4F  Find Next Matching File
+  (no additional input; uses state saved in DTA by AH=0x4E)
+  Out: CF clear: DTA updated with next match
+       CF set:   AX = 0x12 no more files
+
+Find Data in DTA (at current DTA address, set via AH=0x1A):
+  byte  0-20:  reserved (DOS search state)
+  byte    21:  attribute of found file
+  word    22:  file time
+  word    24:  file date
+  dword   26:  file size (low word first)
+  byte 30-42:  ASCIIZ filename (8.3 format, null-terminated)
+
+
+FCB-Based File I/O (Legacy, DOS 1 / CP/M Compatibility)
+---------------------------------------------------------
+These use File Control Blocks (FCBs) rather than handles. Present in
+DOS 1.x; superseded by handle-based calls above. Avoid in new code.
+
+AH=0x0F  Open File via FCB
+AH=0x10  Close File via FCB
+AH=0x11  Find First via FCB
+AH=0x12  Find Next via FCB
+AH=0x13  Delete File via FCB
+AH=0x14  Sequential Read via FCB
+AH=0x15  Sequential Write via FCB
+AH=0x16  Create File via FCB
+AH=0x17  Rename File via FCB
+AH=0x21  Random Read via FCB
+AH=0x22  Random Write via FCB
+AH=0x23  Get File Size via FCB
+AH=0x24  Set Random Record Field via FCB
+AH=0x27  Random Block Read via FCB
+AH=0x28  Random Block Write via FCB
+AH=0x29  Parse Filename into FCB
+  In:  DS:SI = string to parse, ES:DI = FCB buffer
+  (all operate on FCB structure pointed to by DS:DX)
+
+
+IOCTL (AH=0x44)
+----------------
+AH=0x44  I/O Control for Devices
+  In:  AL = subfunction:
+    00  Get device info          BX=handle  Out: DX=info word
+    01  Set device info          BX=handle, DX=info word
+    02  Read from char device    BX=handle, CX=count, DS:DX=buffer
+    03  Write to char device     BX=handle, CX=count, DS:DX=buffer
+    04  Read from block device   BL=drive, CX=count, DS:DX=buffer
+    05  Write to block device    BL=drive, CX=count, DS:DX=buffer
+    06  Get input status         BX=handle  Out: AL=FF ready / 00 not ready
+    07  Get output status        BX=handle  Out: AL=FF ready / 00 not ready
+    08  Check if removable       BL=drive   Out: AX=0 removable / 1 fixed
+    09  Check if remote          BL=drive   Out: DX attribute word
+    0A  Check if handle remote   BX=handle  Out: DX attribute word
+    0B  Set sharing retry count  CX=count, DX=delay
+    0C  Generic char IOCTL       (DOS 3.3+, subfunction in CH)
+    0D  Generic block IOCTL      (DOS 3.2+, subfunction in CH)
+    0E  Get logical drive map    BL=drive
+    0F  Set logical drive map    BL=drive
+
+
+Country and Code Page
+---------------------
+AH=0x38  Get or Set Country Information
+  In:  AL = 0 get for current country
+            country code in BX if >255
+       DS:DX = buffer (34 bytes) or 0xFFFF:anything to set
+  Out: BX = country code, buffer filled with country data

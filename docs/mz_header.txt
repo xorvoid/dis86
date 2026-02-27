@@ -1,0 +1,96 @@
+MZ EXE Header Dissection -- ssg.exe
+=====================================
+
+Raw Header (first 32 bytes)
+----------------------------
+00000000: 4d5a 0000 dd00 d003 2001 0000 ffff 781a  MZ...... .....x.
+00000010: 8000 0000 0000 0000 3e00 0000 0100 fb50  ........>......P
+
+
+Header Fields
+-------------
+Offset  Field            Value              Description
+----------------------------------------------------------------------
+0x0000  e_magic          0x5A4D  (23117)    Magic number -- "MZ" (Mark Zbikowski)
+0x0002  e_cblp           0x0000  (    0)    Bytes on last page of file
+                                            (0 means last page is a full 512 bytes)
+0x0004  e_cp             0x00DD  (  221)    Pages in file
+0x0006  e_crlc           0x03D0  (  976)    Number of relocation entries
+0x0008  e_cparhdr        0x0120  (  288)    Size of header in paragraphs
+0x000A  e_minalloc       0x0000  (    0)    Minimum extra paragraphs needed
+0x000C  e_maxalloc       0xFFFF  (65535)    Maximum extra paragraphs needed
+0x000E  e_ss             0x1A78  ( 6776)    Initial SS (relative to load segment)
+0x0010  e_sp             0x0080  (  128)    Initial SP value
+0x0012  e_csum           0x0000  (    0)    Checksum (unused, zero)
+0x0014  e_ip             0x0000  (    0)    Initial IP value
+0x0016  e_cs             0x0000  (    0)    Initial CS (relative to load segment)
+0x0018  e_lfarlc         0x003E  (   62)    File offset of relocation table
+0x001A  e_ovno           0x0000  (    0)    Overlay number (0 = main program)
+
+
+Derived / Computed Values
+--------------------------
+  Declared file size:        (221 - 1) * 512 + 512 = 113,152 bytes
+  Actual file size:          213,200 bytes
+  Appended data:             ~100,048 bytes after declared end
+                             (likely assets, overlay data, or packed payload)
+
+  Header size:               288 * 16 = 4,608 bytes
+  Load image offset in file: 0x1200 (4,608 decimal)
+
+  Entry point (CS:IP):       0000:0000  relative to load point
+                             -> executes at first byte of load image
+  Initial stack (SS:SP):     1A78:0080  relative to load point
+                             -> linear offset 0x1A800 from load image base
+
+  Relocation table offset:   0x003E (starts immediately after fixed header)
+  Relocation entry count:    976  (each entry is 4 bytes: offset word + segment word)
+  Relocation table size:     976 * 4 = 3,904 bytes
+
+  Min extra memory:          0 paragraphs (0 bytes)
+  Max extra memory:          0xFFFF paragraphs = unlimited (grab all free memory)
+
+
+Relocation Table (first 10 of 976 entries)
+-------------------------------------------
+Each entry is a seg:off pair pointing into the load image at a word that
+needs the load segment added to it at load time.
+
+  #    File Offset  Seg:Off    Linear (relative to image base)
+  ---  -----------  ---------  --------------------------------
+    0  0x003E       0000:0001  0x00001
+    1  0x0042       0000:005B  0x0005B
+    2  0x0046       0000:00A0  0x000A0
+    3  0x004A       0000:014C  0x0014C
+    4  0x004E       02E0:0401  0x03201
+    5  0x0052       02E0:03F9  0x031F9
+    6  0x0056       02E0:03EC  0x031EC
+    7  0x005A       02E0:03E5  0x031E5
+    8  0x005E       02E0:03D9  0x031D9
+    9  0x0062       02E0:03CE  0x031CE
+  ... (966 more entries)
+
+
+Notes
+-----
+- The "MZ" magic bytes are the initials of Mark Zbikowski, the Microsoft
+  engineer who designed the format (circa 1981).
+
+- e_cblp = 0 is a special case. Normally it holds the number of valid
+  bytes in the last 512-byte page. Zero means the last page is entirely
+  used (treat as 512).
+
+- 976 relocations is typical of a compiler-generated real-mode program
+  (Turbo C, Borland C++, Watcom, etc.) where every far pointer to a
+  data or code segment must be patched at load time.
+
+- e_maxalloc = 0xFFFF is the standard DOS idiom for "allocate all
+  available memory", preventing other programs from loading above this
+  one. Common in games that want exclusive memory access.
+
+- e_sp = 0x0080 (128 bytes) is a very small initial stack. The program
+  likely switches to its own larger stack early in startup.
+
+- e_cs = 0x0000 and e_ip = 0x0000 means execution starts at the very
+  first byte of the load image, which at file offset 0x1200 is the
+  program's startup code.

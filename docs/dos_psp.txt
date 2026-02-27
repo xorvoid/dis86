@@ -1,0 +1,174 @@
+DOS Program Segment Prefix (PSP)
+=================================
+
+Overview
+--------
+The PSP is a 256-byte (16-paragraph) block created by DOS at the start of
+every program's memory allocation, immediately before the load image. It
+serves as the interface between the program and DOS, holding command-line
+arguments, environment pointer, file handles, and legacy compatibility
+fields inherited from CP/M.
+
+The PSP occupies segment load_seg. The load image begins at load_seg+0x10.
+DOS sets DS and ES to load_seg (pointing at the PSP) on program entry.
+
+
+PSP Layout (256 bytes at segment load_seg)
+------------------------------------------
+Offset  Size  Field                  Description
+----------------------------------------------------------------------
+0x00    2     INT 20h instruction    CDh 20h -- legacy CP/M exit call
+                                     Executing this returns to DOS.
+                                     Programs can do a far call to PSP:0x00
+                                     to terminate.
+
+0x02    2     Top of memory          Segment of first paragraph beyond
+                                     the program's allocated memory.
+                                     (In paragraphs)
+
+0x04    1     Reserved               (CP/M remnant, unused)
+
+0x05    5     CP/M far call          Long call to DOS function dispatcher.
+                                     Bytes: 9A F0 FE 1D F0 (varies by DOS).
+                                     Legacy method of calling DOS (obsolete;
+                                     use INT 21h instead).
+
+0x0A    4     INT 22h vector         Terminate address -- where DOS jumps
+                                     when the program exits. Saved from IVT
+                                     at load time; restored on exit.
+
+0x0E    4     INT 23h vector         Ctrl-C handler address. Saved/restored
+                                     the same way as INT 22h.
+
+0x12    4     INT 24h vector         Critical error handler address.
+                                     Saved/restored at load/exit.
+
+0x16    2     Parent PSP segment     Segment of the parent process's PSP
+                                     (e.g., COMMAND.COM). Used by DOS to
+                                     restore state on exit.
+
+0x18    20    JFT (Job File Table)   20 entries, one per open file handle.
+                                     Each byte is an index into the System
+                                     File Table (SFT), or 0xFF if unused.
+                                     Handles 0-4 are pre-opened:
+                                       0 = stdin   (CON)
+                                       1 = stdout  (CON)
+                                       2 = stderr  (CON)
+                                       3 = stdaux  (AUX/COM1)
+                                       4 = stdprn  (PRN/LPT1)
+
+0x2C    2     Environment segment    Segment address of the program's
+                                     environment block. Contains
+                                     null-terminated "VAR=VALUE" strings,
+                                     double-null terminated, followed by
+                                     the program's full path (DOS 3+).
+
+0x2E    4     Stack save (SS:SP)     DOS saves the caller's SS:SP here
+                                     when INT 21h AH=50h is used; also
+                                     used internally by DOS during calls.
+
+0x32    2     JFT size               Number of entries in the JFT.
+                                     Default 20; expandable via
+                                     INT 21h AH=67h.
+
+0x34    4     JFT pointer            Far pointer to the JFT. Normally
+                                     points to PSP:0x18, but can be
+                                     redirected to a larger table.
+
+0x38    4     Previous PSP           Used internally by DOS (share.exe,
+                                     network redirectors).
+
+0x3C    4     Reserved               Unused / DOS version dependent.
+
+0x40    2     DOS version            Reported DOS version (may be faked
+                                     by SETVER). Low byte = minor,
+                                     high byte = major.
+
+0x42    14    Reserved               Unused.
+
+0x50    3     INT 21h / RETF         CDh 21h CBh -- another legacy
+                                     CP/M compatibility entry point.
+                                     Some old programs call PSP:0x50
+                                     instead of issuing INT 21h directly.
+
+0x53    9     Reserved               Unused.
+
+0x5C    16    FCB 1                  First default File Control Block,
+                                     pre-filled from the first command-
+                                     line argument (if present).
+                                     (Legacy CP/M file I/O structure)
+
+0x6C    16    FCB 2                  Second default FCB, pre-filled from
+                                     the second command-line argument.
+
+0x7C    4     Reserved               Overlap area (FCBs can overwrite
+                                     this if opened).
+
+0x80    1     Command tail length    Number of bytes in the command tail
+                                     (characters after the program name).
+
+0x81    127   Command tail           The raw command-line arguments,
+                                     starting with a space, terminated
+                                     by 0x0D (CR). This is what C runtime
+                                     argv parsing reads.
+
+                                     Total: 128 bytes at 0x80-0xFF
+
+
+Key PSP Uses in Practice
+------------------------
+1. Command-line arguments
+   DS:0x80 = length byte, DS:0x81 = argument string (space-prefixed, CR-terminated)
+   The C runtime (crt0) parses this to build argv[].
+
+2. Environment access
+   Word at DS:0x2C is the segment of the environment block.
+   To read PATH: scan the environment block for "PATH=".
+   DOS 3+: after the double-null, a word (usually 0x0001) precedes the
+   program's full path string.
+
+3. Program termination
+     - INT 21h AH=4Ch AL=exit_code  (preferred, DOS 2+)
+     - INT 20h                       (no exit code, legacy)
+     - Far call / JMP to PSP:0x00   (CP/M compatibility)
+     - INT 21h AH=00h               (obsolete)
+
+4. File handles
+   The JFT at PSP:0x18 maps logical handles (0, 1, 2...) to the kernel's
+   System File Table. When a program opens a file with INT 21h AH=3Dh,
+   DOS finds a free slot in the JFT and returns its index as the handle.
+
+
+PSP vs COM vs EXE
+-----------------
+Both COM and EXE programs get a PSP:
+
+  COM file:
+    Loaded at load_seg:0x100 (PSP at load_seg:0x00 occupies 0x00-0xFF)
+    CS = DS = ES = SS = load_seg
+    IP = 0x100 (execution starts right after the PSP in the same segment)
+    SP = 0xFFFE (top of segment, stack grows down)
+    Single 64KB segment for everything.
+
+  EXE file (like ssg.exe):
+    PSP at load_seg:0x00 -- 0xFF
+    Load image at (load_seg+0x10):0x0000
+    CS, SS set relative to (load_seg+0x10) per header fields
+    DS, ES = load_seg (pointing at PSP) on entry
+    Multiple segments, relocatable.
+
+
+Relationship to ssg.exe
+------------------------
+On entry to ssg.exe:
+  ES = DS = load_seg            (PSP segment)
+  CS = load_seg + 0x10 + 0x00  (e_cs = 0, so CS = load image base)
+  IP = 0x0000                   (first byte of load image)
+  SS = load_seg + 0x10 + 0x1A78
+  SP = 0x0080
+
+The startup code will typically:
+  1. Set DS/ES away from the PSP to its own data segment
+  2. Optionally save PSP address for later argv/environment access
+  3. Call C runtime initialization (if compiled with a C compiler)
+  4. Call main()

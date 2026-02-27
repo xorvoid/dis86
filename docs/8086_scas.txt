@@ -1,0 +1,227 @@
+8086 SCAS -- Scan String Instruction
+======================================
+
+Overview
+--------
+SCAS compares a value in AL (or AX) against a byte or word in memory
+at ES:DI, sets flags exactly as CMP would, then automatically advances
+DI to the next element. It does not store the result of the comparison.
+
+There are two forms:
+  SCASB   -- scan byte:  compares AL  with ES:[DI], adjusts DI by 1
+  SCASW   -- scan word:  compares AX  with ES:[DW], adjusts DI by 2
+
+The segment is always ES and cannot be overridden with a segment prefix.
+This is unlike MOVS/LODS where the source segment can be overridden.
+DI is always the index register; SI is not used by SCAS.
+
+
+Direction Flag (DF)
+-------------------
+DF controls which way DI moves after each comparison:
+  DF=0 (set by CLD):  DI increments -- scans forward through memory
+  DF=1 (set by STD):  DI decrements -- scans backward through memory
+
+DOS convention requires DF=0 on entry to any DOS function. Always CLD
+before a scan unless you specifically intend to scan backwards.
+
+
+Flags Set
+---------
+SCAS sets the same six flags as CMP (see 8086_flags.txt):
+  CF  borrow:   set if ES:[DI] > AL/AX (unsigned)
+  ZF  zero:     set if AL/AX == ES:[DI]  (the most useful one for SCAS)
+  SF  sign:     set if result high bit is 1
+  OF  overflow: set if signed overflow
+  PF  parity:   set if low byte of result has even number of 1 bits
+  AF  aux carry: set if borrow from bit 3
+
+
+Pseudo-code: SCASB (single iteration)
+--------------------------------------
+  temp  = AL - ES:[DI]       ; subtract, discard result
+  set_flags(temp)            ; CF, ZF, SF, OF, PF, AF
+  if DF == 0:
+    DI = DI + 1              ; advance forward
+  else:
+    DI = DI - 1              ; advance backward
+
+
+Pseudo-code: SCASW (single iteration)
+--------------------------------------
+  temp  = AX - ES:[DI]       ; 16-bit subtract
+  set_flags(temp)
+  if DF == 0:
+    DI = DI + 2
+  else:
+    DI = DI - 2
+
+
+REP Prefixes
+------------
+SCAS is most useful with a repeat prefix. There are two:
+
+  REPE  / REPZ    repeat while ZF=1 (while equal)   and CX != 0
+  REPNE / REPNZ   repeat while ZF=0 (while not equal) and CX != 0
+
+CX holds the iteration count (maximum number of comparisons to make).
+CX is decremented after each iteration. The loop terminates when either:
+  a) CX reaches 0 (scan exhausted without finding what we wanted)
+  b) The repeat condition fails (match or mismatch found)
+
+IMPORTANT: If CX=0 before the instruction starts, no comparison is
+performed at all and DI is not changed. Always initialise CX correctly.
+
+
+Pseudo-code: REPE SCASB
+------------------------
+  while CX != 0:
+    temp = AL - ES:[DI]
+    set_flags(temp)
+    CX = CX - 1
+    if DF == 0: DI = DI + 1
+    else:       DI = DI - 1
+    if ZF == 0: break        ; stop: found a byte that differs from AL
+
+After loop:
+  ZF=1 -> every byte matched AL (or CX was 0)
+  ZF=0 -> stopped at first byte that differed; DI points one past it
+
+
+Pseudo-code: REPNE SCASB
+-------------------------
+  while CX != 0:
+    temp = AL - ES:[DI]
+    set_flags(temp)
+    CX = CX - 1
+    if DF == 0: DI = DI + 1
+    else:       DI = DI - 1
+    if ZF == 1: break        ; stop: found a byte equal to AL
+
+After loop:
+  ZF=1 -> match found; DI points one past the matching byte
+  ZF=0 -> no match found (CX reached 0)
+
+
+Reading DI After a REP SCAS
+-----------------------------
+After the loop, DI always points ONE PAST the last byte compared.
+To get the address of the matching (or non-matching) byte:
+
+  Forward scan (DF=0):  match_address = DI - 1  (byte) / DI - 2 (word)
+  Backward scan (DF=1): match_address = DI + 1  (byte) / DI + 2 (word)
+
+The initial value of DI is not preserved; save it beforehand if needed.
+
+
+Reading CX After a REP SCAS
+-----------------------------
+CX holds the number of comparisons NOT yet made when the loop stopped.
+  iterations_done = initial_CX - final_CX
+  position_of_match = initial_DI + iterations_done - 1  (forward, byte)
+
+If CX=0 after the loop, either:
+  - The scan completed all initial_CX iterations, or
+  - CX was 0 to begin with (no iterations occurred)
+Use ZF to distinguish: ZF=1 after REPNE means match found; ZF=0 means not.
+
+
+Common Use Cases
+----------------
+
+1. Find a specific byte in a buffer (like C memchr)
+   ------------------------------------------------
+   ; Search for 0x0A (newline) in buffer at ES:DI, length in CX
+   CLD
+   MOV AL, 0x0A
+   REPNE SCASB
+   JZ  found          ; ZF=1: match, DI-1 points at the newline
+   ; fall through: not found (CX exhausted)
+   found:
+   LEA BX, [DI - 1]   ; BX = address of matching byte
+
+
+2. Find null terminator / compute string length (like C strlen)
+   -------------------------------------------------------------
+   ; ES:DI = start of null-terminated string
+   ; Returns length in AX
+   CLD
+   MOV  AL, 0x00       ; search for null byte
+   MOV  CX, 0xFFFF     ; scan up to 65535 bytes
+   REPNE SCASB
+   ; DI now points two past the null (one for the null, one for DI advance)
+   ; CX = 0xFFFF - chars_scanned
+   NOT  CX             ; CX = chars_scanned (including null)
+   DEC  CX             ; subtract 1 to exclude null terminator
+   MOV  AX, CX         ; AX = string length
+
+
+3. Skip over a run of identical bytes (like C strspn for one char)
+   ----------------------------------------------------------------
+   ; Skip all spaces (0x20) at ES:DI
+   CLD
+   MOV AL, 0x20
+   MOV CX, max_length
+   REPE SCASB
+   ; Loop stopped when a non-space was found, or CX=0
+   JNZ non_space_found
+   ; all bytes were spaces
+   non_space_found:
+   ; DI-1 points at the first non-space byte (if ZF=0)
+   LEA BX, [DI - 1]
+
+
+4. Backward scan (find last occurrence)
+   --------------------------------------
+   ; Find last 0x00 in buffer. ES:DI = one past end of buffer.
+   STD                 ; scan backward
+   MOV AL, 0x00
+   MOV CX, buffer_len
+   REPNE SCASB
+   CLD                 ; restore DF=0 (good practice)
+   JNZ not_found
+   LEA BX, [DI + 1]   ; DI+1 because we scanned backward
+
+
+SCASW vs SCASB
+--------------
+SCASW compares AX with the word at ES:[DI] and steps DI by 2.
+Use it when scanning arrays of 16-bit values:
+
+   ; Find value 0x0000 in word array at ES:DI, CX = element count
+   CLD
+   MOV AX, 0x0000
+   REPNE SCASW
+   JZ  found_zero_word
+
+
+Relationship to Other String Instructions
+-----------------------------------------
+The 8086 string instruction family all use SI/DI and DF:
+
+  MOVS  -- move:    DS:[SI] -> ES:[DI], advance both SI and DI
+  LODS  -- load:    DS:[SI] -> AL/AX,   advance SI
+  STOS  -- store:   AL/AX   -> ES:[DI], advance DI
+  SCAS  -- scan:    AL/AX vs ES:[DI],   advance DI only    (sets flags)
+  CMPS  -- compare: DS:[SI] vs ES:[DI], advance both       (sets flags)
+
+SCAS and CMPS are the only two that set flags for conditional branching.
+SCAS scans for a value in a single buffer; CMPS compares two buffers.
+
+REP (plain repeat while CX!=0) is valid but useless with SCAS/CMPS since
+it ignores ZF -- use REPE or REPNE instead. REP is mainly for MOVS/STOS.
+
+
+Summary Table
+-------------
+Prefix   Continues while         Stops when               Use for
+------   ---------------         ----------               -------
+(none)   --                      after 1 compare          single compare
+REPE     ZF=1 and CX!=0          ZF=0 or CX=0             skip matching bytes
+REPNE    ZF=0 and CX!=0          ZF=1 or CX=0             find a specific byte
+
+After any REP SCAS:
+  ZF=1 and CX=0  -> scan exhausted (after REPE: all matched; REPNE: not found)
+  ZF=1 and CX!=0 -> REPNE found a match (ZF=1 means last compare was equal)
+  ZF=0 and CX=0  -> scan exhausted (after REPNE: not found; REPE: all differed)
+  ZF=0 and CX!=0 -> REPE found a mismatch (ZF=0 means last compare was unequal)

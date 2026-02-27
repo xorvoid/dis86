@@ -1,0 +1,132 @@
+DOS Interrupt Vector Table (IVT)
+=================================
+
+Overview
+--------
+The 8086 IVT contains exactly 256 vectors (0x00-0xFF). Each is a 4-byte
+seg:off far pointer occupying the first 1KB of physical memory:
+
+  Address = 0x0000:(vector_num * 4)
+
+INT 21h AH=0x35 (GetInterruptVector) reads from this table:
+  Input:  AH = 0x35, AL = interrupt number
+  Output: ES:BX = far pointer to current handler
+  Equivalent to: handler = *(far*)(vector_num * 4)
+  Never fails, no flags affected.
+
+
+CPU Exceptions (0x00-0x07)
+--------------------------
+  0x00  Divide by zero
+  0x01  Single step / debug trap
+  0x02  NMI (non-maskable interrupt)
+  0x03  Breakpoint (INT3)
+  0x04  Overflow (INTO instruction)
+  0x05  BOUND range exceeded (286+)
+  0x06  Invalid opcode (286+)
+  0x07  Coprocessor not available (286+)
+
+
+Hardware IRQs via PIC (0x08-0x0F)
+----------------------------------
+  0x08  IRQ0  PIT timer (18.2 Hz tick)
+  0x09  IRQ1  Keyboard
+  0x0A  IRQ2  Cascade to second PIC (AT+)
+  0x0B  IRQ3  COM2 / COM4
+  0x0C  IRQ4  COM1 / COM3
+  0x0D  IRQ5  LPT2 / Sound Blaster
+  0x0E  IRQ6  Floppy disk controller
+  0x0F  IRQ7  LPT1
+
+
+BIOS Services (0x10-0x1C)
+--------------------------
+  0x10  Video services
+  0x11  Equipment list
+  0x12  Conventional memory size
+  0x13  Disk services
+  0x14  Serial port services
+  0x15  Misc system services (extended memory, A20, etc.)
+  0x16  Keyboard services
+  0x17  Printer services
+  0x18  ROM BASIC entry
+  0x19  Bootstrap loader (warm reboot)
+  0x1A  Time of day / RTC
+  0x1B  Ctrl-Break handler (keyboard)
+  0x1C  Timer tick user hook (called by INT 0x08 each tick)
+
+
+BIOS Data Pointers (0x1D-0x1F)
+-------------------------------
+  0x1D  Video parameter table pointer
+  0x1E  Floppy disk parameter table pointer
+  0x1F  Graphics character table pointer (upper 128 chars)
+
+
+DOS Interrupts (0x20-0x2F)
+---------------------------
+  0x20  Program terminate (legacy, no exit code)
+  0x21  DOS function dispatcher (AH = function number)
+  0x22  Terminate address -- DOS internal, not called directly
+          Saved into PSP:0x0A at load time, restored on exit
+  0x23  Ctrl-C handler
+          Saved into PSP:0x0E at load time, restored on exit
+  0x24  Critical error handler ("Abort, Retry, Ignore?")
+          Saved into PSP:0x12 at load time, restored on exit
+  0x25  Absolute disk read
+  0x26  Absolute disk write
+  0x27  TSR -- terminate and stay resident (old method, use AH=31h instead)
+  0x28  DOS idle -- called when INT 21h polls for input, allows TSRs to run
+  0x29  Fast console output -- bypasses DOS, writes character direct to BIOS
+  0x2A  Microsoft Networks
+  0x2B  Reserved by DOS
+  0x2C  Reserved by DOS
+  0x2D  Reserved by DOS
+  0x2E  COMMAND.COM -- execute command string (re-enters command processor)
+  0x2F  Multiplex interrupt -- shared by multiple programs via chain:
+          PRINT.COM, MSCDEX, DOSKEY, SHARE, APPEND, etc.
+          AH = program ID, AL = function
+
+
+Secondar PIC / AT Hardware IRQs (0x70-0x77)
+------------------------------------------
+  0x70  IRQ8   Real-time clock
+  0x71  IRQ9   Redirected IRQ2 / network
+  0x72  IRQ10  Free
+  0x73  IRQ11  Free
+  0x74  IRQ12  PS/2 mouse
+  0x75  IRQ13  FPU / math coprocessor
+  0x76  IRQ14  Primary IDE controller
+  0x77  IRQ15  Secondary IDE controller
+
+
+Notable Others
+--------------
+  0x33  Microsoft mouse driver
+          AX = function (0x00 reset, 0x01 show cursor, 0x03 get position, etc.)
+  0x41  Hard disk parameter table pointer (drive 0)
+  0x46  Hard disk parameter table pointer (drive 1)
+  0x4A  RTC alarm
+  0x67  EMS expanded memory manager (Lotus-Intel-Microsoft spec)
+
+
+Vectors 0x08-0x0F vs 0x70-0x77 -- PIC Note
+--------------------------------------------
+The original IBM PC had one 8259A PIC handling IRQ0-IRQ7, mapped to
+INT 0x08-0x0F. The AT added a second cascaded PIC for IRQ8-IRQ15, mapped
+to INT 0x70-0x77. IRQ2 on the first PIC became the cascade line, so
+IRQ9 (INT 0x71) redirects to the IRQ2 handler for compatibility.
+
+The PIC mapping to 0x08 was a poor choice -- it overlaps the CPU exception
+range (0x00-0x07) in protected mode, which is why protected-mode OSes
+remap the PICs to higher vectors.
+
+
+Vectors Reserved / Undefined
+------------------------------
+Vectors not listed above (0x30-0x32, 0x34-0x3F, 0x42-0x66, 0x68-0x6F,
+0x78-0xFF) are either:
+  - Reserved by DOS (contain IRET stubs or zeroed)
+  - Used by specific hardware / drivers when present
+  - Available for application or TSR use
+  - Pointed at ROM BIOS dummy handlers (IRET)

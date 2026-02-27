@@ -1,0 +1,161 @@
+DOS Real-Mode Memory Map & MZ EXE Loading
+==========================================
+
+MZ EXE Header (ssg.exe)
+------------------------
+Offset  Field            Value         Description
+0x0000  e_magic          0x5A4D        Magic number "MZ" -- valid DOS EXE
+0x0002  e_cblp           0x0000        0 bytes on last page (last page is full 512 bytes)
+0x0004  e_cp             0x00DD (221)  221 pages x 512 = 113,152 bytes declared
+0x0006  e_crlc           0x03D0 (976)  976 relocation entries
+0x0008  e_cparhdr        0x0120 (288)  Header = 288 paragraphs = 4,608 bytes
+0x000A  e_minalloc       0x0000        No minimum extra memory required
+0x000C  e_maxalloc       0xFFFF        Grab all available memory (typical DOS)
+0x000E  e_ss             0x1A78        Initial SS (relative to load point)
+0x0010  e_sp             0x0080 (128)  Initial SP -- small stack
+0x0012  e_csum           0x0000        Checksum unused
+0x0014  e_ip             0x0000        Entry point IP
+0x0016  e_cs             0x0000        Entry point CS (relative to load point)
+0x0018  e_lfarlc         0x003E (62)   Relocation table starts at byte 62
+0x001A  e_ovno           0x0000        Not an overlay
+
+Derived Values
+--------------
+  File size (from header):   113,152 bytes  (actual file: 213,200 bytes)
+  Header size:               4,608 bytes  (288 paragraphs)
+  Load image offset in file: 0x1200
+  Entry point (CS:IP):       0000:0000 -> relative offset 0
+  Initial stack (SS:SP):     1A78:0080 -> relative linear 0x1A800
+  Relocation table offset:   0x003E
+  Min extra memory:          0 bytes
+  Max extra memory:          unlimited (0xFFFF)
+
+  NOTE: Actual file is 213,200 bytes vs 113,152 declared -- ~100KB of
+  appended data after the declared end (likely assets, overlay, or
+  self-extractor payload).
+
+
+How DOS Loads an MZ EXE
+------------------------
+DOS EXEs are relocatable -- not loaded at a fixed address like COM files.
+
+Step 1: PSP Creation
+  DOS finds a free memory block and creates a Program Segment Prefix (PSP)
+  at its start. Call this segment load_seg. PSP occupies 256 bytes (16
+  paragraphs).
+
+Step 2: Load Image Placement
+  The load image (file contents after the header) is copied to:
+    load_seg + 0x10  (skipping the 256-byte PSP)
+  From the file, the image starts at byte e_cparhdr x 16 = 0x1200.
+
+Step 3: Relocation Patching
+  Each of the 976 relocation entries points to a word in the loaded image
+  containing a raw segment value. DOS adds the load segment to each:
+    *reloc_entry += (load_seg + 0x10)
+  Without this, all far pointers would be wrong.
+
+Step 4: Register Setup
+  Register   Formula                              This binary
+  CS         (load_seg + 0x10) + e_cs             load_seg + 0x10
+  IP         e_ip                                 0x0000
+  SS         (load_seg + 0x10) + e_ss             load_seg + 0x1A88
+  SP         e_sp                                 0x0080
+  DS, ES     load_seg (both point at PSP)
+
+  CS:IP = 0000:0000 in the header are RELATIVE to the load point.
+  The actual runtime address depends on where DOS placed the program.
+
+
+DOS Real-Mode Memory Map (1MB address space)
+--------------------------------------------
+Linear Addr   Segment    Size      Contents
+----------------------------------------------------------------------
+0x00000       0x0000     1 KB      Interrupt Vector Table (IVT)
+                                   256 vectors x 4 bytes (seg:off)
+                                   e.g. INT 0x21 at 0x0000:0x0084
+
+0x00400       0x0040     256 B     BIOS Data Area (BDA)
+                                   keyboard buffer, video mode,
+                                   serial ports, equipment flags
+
+0x00500       0x0050     256 B     DOS Communication Area
+                                   (PRINT.COM spool, misc DOS state)
+
+0x00600       0x0060     ~varies   IO.SYS / IBMBIO.COM
+                                   (DOS low-level hardware layer)
+
+              ~0x0070+             MSDOS.SYS / IBMDOS.COM
+                                   (DOS kernel proper)
+
+              ~0x0200+             DOS internal data: buffers,
+                                   FCBs, disk cache, stacks
+
+              ~0x0300+             COMMAND.COM resident portion
+                                   (INT 0x2E handler, critical error)
+
+              varies               Loaded TSRs / device drivers
+                                   (each preceded by an MCB)
+
+------------- first free paragraph -----------------------------------
+load_seg      ~0x0700    varies    Your program's PSP starts here
+load_seg+0x10            ...       Load image (code + data)
+                                   Stack grows down within SS:SP
+----------------------------------------------------------------------
+~0x9000                            COMMAND.COM transient portion
+                                   (overwritten by large programs,
+                                    reloaded from disk on return)
+
+0xA0000                  384 KB   Upper Memory Area (UMA) / ROM
+  0xA0000     0xA000               EGA/VGA framebuffer (graphics)
+  0xB0000     0xB000               MDA text video RAM
+  0xB8000     0xB800               CGA/VGA text video RAM
+  0xC0000     0xC000               Adapter ROMs (VGA BIOS, SCSI...)
+  0xF0000     0xF000               System ROM BIOS
+
+0x100000                           HMA (High Memory Area, 286+)
+                                   first 64KB above 1MB if A20 enabled
+
+
+Segment 0x0000 -- The Interrupt Vector Table
+--------------------------------------------
+Segment 0x0000 is fully occupied by the IVT. Every interrupt vector is
+a seg:off pair stored at 0x0000:(int_num x 4):
+
+  INT 0x00  -> 0x0000:0x0000  (divide by zero)
+  INT 0x08  -> 0x0000:0x0020  (IRQ0 timer tick)
+  INT 0x21  -> 0x0000:0x0084  (DOS API)
+  INT 0xFF  -> 0x0000:0x03FC  (last vector)
+
+Writing to segment 0x0000 means patching interrupt handlers -- something
+TSRs and device drivers do deliberately.
+
+
+Typical load_seg Values
+-----------------------
+Scenario                              Approximate load_seg
+------------------------------------------------------------
+Minimal DOS 2.x, no TSRs             0x0600 - 0x0800
+Typical DOS 3.3 / 5.0, no extras     0x0800 - 0x1200
+With HIMEM.SYS + EMM386              0x1000 - 0x2000
+With mouse driver, sound TSR, etc.   0x2000 - 0x3000+
+
+For ssg.exe, if load_seg = 0x1000:
+  Stack top = (0x1000 + 0x10 + 0x1A78) << 4 + 0x0080
+            = linear ~0x2B800  (well inside conventional memory)
+
+
+Memory Control Blocks (MCBs)
+-----------------------------
+DOS tracks every allocation with a one-paragraph (16-byte) MCB sitting
+just before each allocated block:
+
+  Offset  Size  Field
+  0x00    1     Signature: 'M' = more blocks follow, 'Z' = last block
+  0x01    2     Owner PSP segment (0x0000 = free block)
+  0x03    2     Size of block in paragraphs (not counting MCB itself)
+  0x05    11    Reserved (DOS 4+ stores name here)
+
+The MCB chain starts right after the DOS kernel. MEM.EXE walks this
+chain to report all allocations. Each program (including ssg.exe) gets
+one MCB node pointing at its PSP.
