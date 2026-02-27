@@ -66,6 +66,7 @@ impl Machine {
       0x3f => self.dos_read_file(),
       0x40 => self.dos_write_file(),
       0x42 => self.dos_seek_file(),
+      0x44 => self.dos_ioctl(),
       0x4a => self.dos_mem_resize(),
       0x4c => self.dos_exit_program(),
       _ => panic!("unimplemented DOS function: {}", func),
@@ -96,6 +97,23 @@ impl Machine {
     let idx = self.reg_read_u8(AL);
     let addr = self.dos.interrupt_vectors[idx as usize];
     self.reg_write_addr(ES, BX, addr);
+  }
+
+  // func: 0x44
+  fn dos_ioctl(&mut self) {
+    let func = self.reg_read_u8(AL);
+    match func {
+      0 => self.dos_ioctl_get_device_info(),
+      _ => panic!("unimplmented ioctl"),
+    }
+  }
+
+  fn dos_ioctl_get_device_info(&mut self) {
+    let handle = Handle(self.reg_read_u16(BX));
+
+    // NOTE: JUST TO MATCH DOSBOX
+    self.reg_write_u16(DX, 0x80d3);
+    self.reg_write_u16(AX, 0x80d3);
   }
 
   // func: 0x4a

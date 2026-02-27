@@ -8,7 +8,7 @@ const FILE_HANDLES_MAX: usize = 128;
 // Wrapper type for file handle ids. Not strictly required, but it makes
 // the API type-signatures more clear
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Handle(u16);
+pub struct Handle(pub u16);
 
 // Standard File Handles
 #[allow(dead_code)] const FILE_HANDLE_STDIN:  Handle = Handle(0);
