@@ -101,17 +101,6 @@ macro_rules! check_shr8 {
   }};
 }
 
-macro_rules! check_shr16 {
-  ($lhs:expr, $count:expr, cf=$cf:expr, zf=$zf:expr, sf=$sf:expr, of=$of:expr, pf=$pf:expr) => {{
-    let (_result, f) = alu::shift(alu::ShiftOp::Shr, Value::U16($lhs), $count, Flags(0));
-    assert_eq!(f.get(FLAG_CF), $cf != 0, "CF mismatch");
-    assert_eq!(f.get(FLAG_ZF), $zf != 0, "ZF mismatch");
-    assert_eq!(f.get(FLAG_SF), $sf != 0, "SF mismatch");
-    assert_eq!(f.get(FLAG_OF), $of != 0, "OF mismatch");
-    assert_eq!(f.get(FLAG_PF), $pf != 0, "PF mismatch");
-  }};
-}
-
 macro_rules! check_sbb8 {
   ($lhs:expr, $rhs:expr, cf_in=$cf_in:expr, cf=$cf:expr, zf=$zf:expr, sf=$sf:expr, of=$of:expr, pf=$pf:expr, af=$af:expr) => {{
     let mut flags_in = Flags(0);

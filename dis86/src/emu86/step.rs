@@ -149,9 +149,13 @@ impl Machine {
 
     // Report
     if DEBUG {
-      let instr_addr_adj = SegOff::new(cs - (PSP_SEGMENT.unwrap_normal() + 0x10), ip);
-      println!("{:6} | {}   {}", self.exec_count, instr_addr_adj, instr_str(&instr));
-      //println!("{:?}", instr);
+      let code_seg = PSP_SEGMENT.unwrap_normal() + 0x10;
+      if cs < code_seg {
+        println!("{:6} | unknown", self.exec_count);
+      } else {
+        let instr_addr_adj = SegOff::new(cs - code_seg, ip);
+        println!("{:6} | {}   {}", self.exec_count, instr_addr_adj, instr_str(&instr));
+      }
     }
 
     // Special Ops (rep aware)
