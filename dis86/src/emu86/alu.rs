@@ -24,7 +24,7 @@ pub enum UnaryOp {
   Neg,
   Inc,
   Dec,
-  //Not,
+  Not,
 }
 
 pub enum ShiftOp {
@@ -258,6 +258,9 @@ pub fn unary(op: UnaryOp, a: Value, mut f: Flags) -> (Value, Flags) {
     UnaryOp::Dec => {
       result = a.wrapping_sub(1);
       update_flags_sub(&mut f, a, 1, 0, result, sign_mask, value_mask, false);
+    }
+    UnaryOp::Not => {
+      result = !a;
     }
   };
 

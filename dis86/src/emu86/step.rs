@@ -344,6 +344,7 @@ impl Machine {
       Opcode::OP_AND => self.op_binary(&instr, alu::BinaryOp::And),
       Opcode::OP_OR  => self.op_binary(&instr, alu::BinaryOp::Or),
       Opcode::OP_XOR => self.op_binary(&instr, alu::BinaryOp::Xor),
+      Opcode::OP_NOT => self.op_unary(&instr, alu::UnaryOp::Not),
       Opcode::OP_ADD => self.op_binary(&instr, alu::BinaryOp::Add),
       Opcode::OP_ADC => self.op_binary(&instr, alu::BinaryOp::Adc),
       Opcode::OP_SUB => self.op_binary(&instr, alu::BinaryOp::Sub),
