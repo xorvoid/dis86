@@ -156,6 +156,18 @@ impl Machine {
     if cond { self.reg_write_addr(CS, IP, tgt); }
   }
 
+  pub fn op_loop(&mut self, instr: &Instr, zero_flag_cond: bool) {
+    let count = self.operand_read_u16(&instr, 0);
+    let tgt   = self.operand_read_addr(&instr, 1);
+
+    let new_count = count.wrapping_sub(1);
+    self.operand_write_u16(&instr, 0, new_count);
+
+    if new_count != 0 && zero_flag_cond {
+      self.reg_write_addr(CS, IP, tgt);
+    }
+  }
+
   pub fn step(&mut self) -> Result<(), String> {
     // Get instr addr
 
@@ -283,17 +295,9 @@ impl Machine {
         if self.reg_read_u16(CX) == 0 { self.reg_write_addr(CS, IP, tgt); }
       }
 
-      Opcode::OP_LOOP => {
-        let count = self.operand_read_u16(&instr, 0);
-        let tgt   = self.operand_read_addr(&instr, 1);
-
-        let new_count = count.wrapping_sub(1);
-        self.operand_write_u16(&instr, 0, new_count);
-
-        if new_count != 0 {
-          self.reg_write_addr(CS, IP, tgt);
-        }
-      }
+      Opcode::OP_LOOP   => self.op_loop(&instr, true),
+      Opcode::OP_LOOPE  => self.op_loop(&instr, f.get(FLAG_ZF)),
+      Opcode::OP_LOOPNE => self.op_loop(&instr, !f.get(FLAG_ZF)),
 
       Opcode::OP_JE   => self.op_jump_cond(&instr, f.get(FLAG_ZF)),
       Opcode::OP_JNE  => self.op_jump_cond(&instr, !f.get(FLAG_ZF)),
