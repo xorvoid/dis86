@@ -183,6 +183,7 @@ impl Machine {
     match instr.opcode {
       Opcode::OP_SCAS => return self.opcode_scas(&instr),
       Opcode::OP_STOS => return self.opcode_stos(&instr),
+      Opcode::OP_MOVS => return self.opcode_movs(&instr),
       _ => (),
     }
 

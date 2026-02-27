@@ -13,6 +13,7 @@ impl Machine {
     // NOTE: JUST TO MATCH DOSBOX
     psp.mem_top = dos::MEM_TOP;
     psp.env_seg = dos::ENV_SEG;
+    psp.cmd_tail[0] = 0x0d;
     // ... missing fields ...
 
     // Determine image region to copy

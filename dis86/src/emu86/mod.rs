@@ -6,6 +6,7 @@ mod cpu;
 mod cpu_flags;
 mod cpu_scas;
 mod cpu_stos;
+mod cpu_movs;
 
 pub mod alu;
 
