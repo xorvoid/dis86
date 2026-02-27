@@ -13,7 +13,11 @@ pub enum BinaryOp {
   And,
   Or,
   Xor,
-  Mul,
+}
+
+pub enum MultiplyOp {
+  Unsigned,
+  Signed,
 }
 
 pub enum UnaryOp {
@@ -134,6 +138,48 @@ pub fn divmod(a: Value, b: Value, mut f: Flags) -> (Value, Value, Flags) {
   (Value::U16(quotient as u16), Value::U16(remainder as u16), f)
 }
 
+pub fn multiply(op: MultiplyOp, a: Value, b: Value, mut f: Flags) -> (Value, Flags) {
+  // Unpack common case
+  let (size, sign_mask, value_mask, a, b) = match (a, b) {
+    (Value::U8(a),  Value::U8(b))  => (1, 0x80,   0xff,   a as u16, b as u16),
+    (Value::U16(a), Value::U16(b)) => (2, 0x8000, 0xffff, a, b),
+    _ => panic!("Mismatched sizes"),
+  };
+
+  let result: u32;
+  match op {
+    MultiplyOp::Unsigned => {
+      result = (a as u32) * (b as u32);
+
+      let ovf = (result & (value_mask as u32)) != result;
+      f.set(FLAG_CF, ovf);
+      f.set(FLAG_OF, ovf);
+      f.set(FLAG_ZF, result == 0);
+    }
+    MultiplyOp::Signed => {
+      result = match size {
+        1 => ((a as i8 as i16)  * (b as i8 as i16))  as u16 as u32,
+        2 => ((a as i16 as i32) * (b as i16 as i32)) as u32,
+        _ => unreachable!(),
+      };
+
+      let ovf = (result & (value_mask as u32)) != result;
+      f.set(FLAG_CF, ovf);
+      f.set(FLAG_OF, ovf);
+      f.set(FLAG_ZF, result == 0);
+    }
+  }
+
+  // Special re-pack because they return larger types
+  let val = match size {
+    1 => Value::U16(result as u16),
+    2 => Value::U32(result),
+    _ => unreachable!(),
+  };
+
+  (val, f)
+}
+
 pub fn binary(op: BinaryOp, a: Value, b: Value, mut f: Flags) -> (Value, Flags) {
   // Unpack common case
   let (size, sign_mask, value_mask, a, b) = match (a, b) {
@@ -175,24 +221,6 @@ pub fn binary(op: BinaryOp, a: Value, b: Value, mut f: Flags) -> (Value, Flags) 
     BinaryOp::Xor => {
       result = a ^ b;
       update_flags_bitwise(&mut f, result, sign_mask, value_mask);
-    }
-    BinaryOp::Mul => {
-      let r32 = (a as u32) * (b as u32);
-
-      // Special re-pack because they return larger types
-      let val = match size {
-        1 => Value::U16(r32 as u16),
-        2 => Value::U32(r32),
-        _ => unreachable!(),
-      };
-
-      let ovf = (r32 & (value_mask as u32)) != r32;
-
-      f.set(FLAG_CF, ovf);
-      f.set(FLAG_OF, ovf);
-      f.set(FLAG_ZF, r32 == 0);
-
-      return (val, f);
     }
   };
 

@@ -134,6 +134,23 @@ impl Machine {
     self.operand_write(instr, 0, result);
   }
 
+  pub fn op_multiply(&mut self, instr: &Instr, op: alu::MultiplyOp) {
+    let lhs = self.operand_read(&instr, 1);
+    let rhs = self.operand_read(&instr, 2);
+
+    // Special-cased 16-bit
+    // FIXME: Add 8-bit
+    assert!(lhs.is_u16());
+    assert!(rhs.is_u16());
+
+    let (result, flags) = alu::multiply(op, lhs, rhs, self.flag_read_all());
+    self.flag_write_all(flags);
+
+    let result = result.unwrap_u32();
+    self.operand_write(&instr, 0, Value::U16((result>>16) as u16));
+    self.operand_write(&instr, 1, Value::U16(result as u16));
+  }
+
   pub fn op_jump_cond(&mut self, instr: &Instr, cond: bool) {
     let tgt = self.operand_read_addr(&instr, 0);
     if cond { self.reg_write_addr(CS, IP, tgt); }
@@ -322,22 +339,8 @@ impl Machine {
       Opcode::OP_SHR => self.op_shift(&instr, alu::ShiftOp::Shr),
       Opcode::OP_ROL => self.op_shift(&instr, alu::ShiftOp::Rol),
 
-      Opcode::OP_MUL => {
-        let lhs = self.operand_read(&instr, 1);
-        let rhs = self.operand_read(&instr, 2);
-
-        // Special-cased 16-bit
-        // FIXME: Add 8-bit
-        assert!(lhs.is_u16());
-        assert!(rhs.is_u16());
-
-        let (result, flags) = alu::binary(alu::BinaryOp::Mul, lhs, rhs, self.flag_read_all());
-        self.flag_write_all(flags);
-
-        let result = result.unwrap_u32();
-        self.operand_write(&instr, 0, Value::U16((result>>16) as u16));
-        self.operand_write(&instr, 1, Value::U16(result as u16));
-      }
+      Opcode::OP_MUL  => self.op_multiply(&instr, alu::MultiplyOp::Unsigned),
+      Opcode::OP_IMUL => self.op_multiply(&instr, alu::MultiplyOp::Signed),
 
       Opcode::OP_DIV => {
         let high = self.operand_read(&instr, 0);
