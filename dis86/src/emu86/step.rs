@@ -201,12 +201,12 @@ impl Machine {
 
       Opcode::OP_RETF => {
         let off = self.stack_pop();
+        let seg = self.stack_pop();
         if instr.operands.len() == 1 {
           // handle stack args removal
           let adj = self.operand_read(&instr, 0).unwrap_u16();
           self.reg_write_u16(SP, self.reg_read_u16(SP) + adj);
         }
-        let seg = self.stack_pop();
         self.reg_write(CS, seg);
         self.reg_write(IP, off);
       }
