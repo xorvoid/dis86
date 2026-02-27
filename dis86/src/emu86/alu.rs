@@ -19,6 +19,7 @@ pub enum BinaryOp {
 pub enum UnaryOp {
   Neg,
   Inc,
+  Dec,
   //Not,
 }
 
@@ -223,6 +224,10 @@ pub fn unary(op: UnaryOp, a: Value, mut f: Flags) -> (Value, Flags) {
       let r32 = (a as u32) + (1 as u32);
       result = r32 as u16;
       update_flags_add(&mut f, a, 1, 0, r32, sign_mask, value_mask, false);
+    }
+    UnaryOp::Dec => {
+      result = a.wrapping_sub(1);
+      update_flags_sub(&mut f, a, 1, 0, result, sign_mask, value_mask);
     }
   };
 

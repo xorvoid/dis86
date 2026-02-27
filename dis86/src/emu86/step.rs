@@ -230,6 +230,8 @@ impl Machine {
       Opcode::OP_STD => self.flag_write(FLAG_DF, true),
       Opcode::OP_CLI => self.flag_write(FLAG_IF, false),
       Opcode::OP_STI => self.flag_write(FLAG_IF, true),
+      Opcode::OP_CLC => self.flag_write(FLAG_CF, false),
+      Opcode::OP_STC => self.flag_write(FLAG_CF, true),
 
       Opcode::OP_LODS => {
         let value = self.operand_read(&instr, 1);
@@ -303,6 +305,7 @@ impl Machine {
       }
 
       Opcode::OP_INC => self.op_unary(&instr, alu::UnaryOp::Inc),
+      Opcode::OP_DEC => self.op_unary(&instr, alu::UnaryOp::Dec),
       Opcode::OP_NEG => self.op_unary(&instr, alu::UnaryOp::Neg),
       Opcode::OP_AND => self.op_binary(&instr, alu::BinaryOp::And),
       Opcode::OP_OR  => self.op_binary(&instr, alu::BinaryOp::Or),
