@@ -2,15 +2,19 @@ use super::machine::*;
 
 impl Machine {
   pub fn interrupt(&mut self, num: u8) {
-    // Handle custom behavior
+    self.interrupt_save();
+
+    // Is there a user-configured handler?
     if let Some(addr) = self.interrupt_vectors[num as usize] {
-      self.interrupt_custom_handler(addr)
-    } else {
-      self.interrupt_default_handler(num)
+      return self.reg_write_addr(CS, IP, addr);
     }
+
+    // Otherwise use the default handler
+    self.interrupt_restore();
+    self.interrupt_default_handler(num);
   }
 
-  fn interrupt_custom_handler(&mut self, handler_addr: SegOff) {
+  fn interrupt_save(&mut self) {
     // Push flags
     let mut flags = self.reg_read_u16(FLAGS);
     flags |= 1<<1; // NOTE: JUST TO MATCH DOSBOX ... 1-bit always seems to be set
@@ -22,16 +26,20 @@ impl Machine {
 
     // Push CS
     let cs = self.reg_read(CS);
-    //println!("pushing cs: 0x{:x}", cs.unwrap_u16());
     self.stack_push(cs);
 
     // Push IP
     let ip = self.reg_read(IP);
-    //println!("pushing ip: 0x{:x}", ip.unwrap_u16());
     self.stack_push(ip);
+  }
 
-    // Set handler CS:IP
-    self.reg_write_addr(CS, IP, handler_addr);
+  pub fn interrupt_restore(&mut self) {
+    let ip = self.stack_pop();
+    let cs = self.stack_pop();
+    let flags = self.stack_pop_u16();
+    self.reg_write_u16(FLAGS, flags);
+    self.reg_write(CS, cs);
+    self.reg_write(IP, ip);
   }
 
   fn interrupt_default_handler(&mut self, num: u8) {

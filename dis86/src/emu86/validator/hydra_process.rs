@@ -85,9 +85,7 @@ impl HydraProcess {
     cpu.regs[DS.idx as usize]    = shmdata_read!(self.data, ds);
     cpu.regs[ES.idx as usize]    = shmdata_read!(self.data, es);
     cpu.regs[SS.idx as usize]    = shmdata_read!(self.data, ss);
-
-    let flags = shmdata_read!(self.data, flags);
-    cpu.regs[FLAGS.idx as usize] = flags & FLAG_MASK;
+    cpu.regs[FLAGS.idx as usize] = shmdata_read!(self.data, flags);
 
     cpu
   }

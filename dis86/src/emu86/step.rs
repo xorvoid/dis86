@@ -204,11 +204,23 @@ impl Machine {
     let f = self.flag_read_all();
     match instr.opcode {
       Opcode::OP_MOV   => self.operand_write(&instr, 0, self.operand_read(&instr, 1)),
-      Opcode::OP_PUSH  => self.stack_push(self.operand_read(&instr, 0)),
+      Opcode::OP_PUSH  => {
+        let val = self.operand_read(&instr, 0).unwrap_u16();
+        self.stack_push_u16(val);
+      }
       Opcode::OP_POP   => { let val = self.stack_pop(); self.operand_write(&instr, 0, val) }
-      Opcode::OP_PUSHF => self.stack_push(self.operand_read(&instr, 0)),
-      Opcode::OP_POPF  => { let val = self.stack_pop(); self.operand_write(&instr, 0, val) }
+      Opcode::OP_PUSHF => {
+        let mut flags = self.operand_read(&instr, 0).unwrap_u16();
+        flags |= 1<<1; // NOTE: JUST TO MATCH DOSBOX ... these bits always seem to be set
+        self.stack_push_u16(flags);
+      }
+      Opcode::OP_POPF  => {
+        let mut flags = self.stack_pop().unwrap_u16();
+        flags = (flags | 1<<1) & FLAG_MASK;
+        self.operand_write(&instr, 0, Value::U16(flags))
+      }
       Opcode::OP_INT   => self.interrupt(self.operand_read_u8(&instr, 0)),
+      Opcode::OP_IRET  => self.interrupt_restore(),
       Opcode::OP_CALL  => {
         let off = match self.operand_read(&instr, 0) {
           Value::Addr(addr) => addr.off.0,

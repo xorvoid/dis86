@@ -48,6 +48,22 @@ pub fn run(exe_path: &str) -> Result<(), String> {
 
     let mut hydra_state = hydra.cpu_state();
 
+    // Check stack (near stack pointer)
+    let tos_addr = hydra_state.reg_read_addr(SS, SP);
+    //let s_addr = tos_addr.add_offset((-16 as i16) as u16);
+
+    // println!("Top of Stack | hydra: 0x{:x} | emu86: 0x{:x}\n",
+    //          hydra.mem.read_u16(tos_addr), machine.mem.read_u16(tos_addr));
+
+    // let hydra_stack = crate::util::hexdump::hexdump(&hydra.mem.slice_starting_at(s_addr)[..32]);
+    // let emu86_stack = crate::util::hexdump::hexdump(&machine.mem.slice_starting_at(s_addr)[..32]);
+    // if hydra_stack != emu86_stack {
+    //   panic!("stack mismatch");
+    // }
+
+    // let m = machine.mem.slice_starting_at(addr);
+    // println!("Emu86 Stack |\n{}", crate::util::hexdump::hexdump(&m[..32]));
+
     // Handle mirroring overrides
     if hydra_addr == SegOff::new(0x823, 0x010d) {
       machine.reg_write_u16(CX, hydra_state.reg_read_u16(CX));

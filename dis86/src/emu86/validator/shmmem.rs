@@ -27,6 +27,12 @@ impl ShmMem {
   pub fn read_u8(&self, addr: SegOff) -> u8 {
     self.slice()[addr.abs_normal()]
   }
+
+  #[allow(dead_code)]
+  pub fn read_u16(&self, addr: SegOff) -> u16 {
+    let idx = addr.abs_normal();
+    u16::from_le_bytes(self.slice()[idx..idx+2].try_into().unwrap())
+  }
 }
 
 impl ShmMem {
