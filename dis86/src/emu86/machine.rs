@@ -12,6 +12,7 @@ pub struct Machine {
   pub mem: Memory,
   pub cpu: Cpu,
   pub dos: Dos,
+  pub interrupt_vectors: [Option<SegOff>; 256],
   pub exec_count: u64,
 }
 
@@ -25,6 +26,7 @@ impl Machine {
     Machine {
       halted: false,
       mem, cpu, dos,
+      interrupt_vectors: [None; 256],
       exec_count: 0,
     }
   }

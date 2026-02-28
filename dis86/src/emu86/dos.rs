@@ -8,7 +8,7 @@ pub const ENV_SEG: u16 = 0x07ca;
 
 pub struct Dos {
   // interrupts
-  pub interrupt_vectors: [SegOff; 256],
+  pub default_interrupt_vectors: [SegOff; 256],
 
   // file i/op
   pub filesystem: Filesystem,
@@ -21,17 +21,17 @@ pub struct Dos {
 impl Dos {
   pub fn new(root_dir: Option<&str>, mem: &mut Memory) -> Dos {
     let mut dos = Dos {
-      interrupt_vectors: [SegOff::new(0, 0); 256],
+      default_interrupt_vectors: [SegOff::new(0, 0); 256],
       filesystem: Filesystem::new(root_dir),
       mem_resize_call_count: 0,
     };
 
     // NOTE: JUST TO MATCH DOSBOX
-    dos.interrupt_vectors[0x00] = SegOff::new(0xf000, 0xca60); // Divide by zero
-    dos.interrupt_vectors[0x04] = SegOff::new(0x0070, 0x00f4); // Overflow (INTO Instruction)
-    dos.interrupt_vectors[0x05] = SegOff::new(0xf000, 0xff54); // BOUND range exceeded
-    dos.interrupt_vectors[0x06] = SegOff::new(0xf000, 0xca60); // Invalid opcode
-    dos.interrupt_vectors[0x3f] = SegOff::new(0xf000, 0xca60); // Overlay load interrupt
+    dos.default_interrupt_vectors[0x00] = SegOff::new(0xf000, 0xca60); // Divide by zero
+    dos.default_interrupt_vectors[0x04] = SegOff::new(0x0070, 0x00f4); // Overflow (INTO Instruction)
+    dos.default_interrupt_vectors[0x05] = SegOff::new(0xf000, 0xff54); // BOUND range exceeded
+    dos.default_interrupt_vectors[0x06] = SegOff::new(0xf000, 0xca60); // Invalid opcode
+    dos.default_interrupt_vectors[0x3f] = SegOff::new(0xf000, 0xca60); // Overlay load interrupt
 
     // NOTE: JUST TO MATCH DOSBOX (FIXME: MAKE THIS LESS HACKY / DO IT RIGHT)
     let env_addr = SegOff::new(ENV_SEG, 0);
@@ -76,8 +76,9 @@ impl Machine {
   // func: 0x25
   fn dos_set_interrupt_vector(&mut self) {
     let idx = self.reg_read_u8(AL);
+    println!("set_interrupt_vector | AL=0x{:x}", idx);
     let addr = self.reg_read_addr(DS, DX);
-    self.dos.interrupt_vectors[idx as usize] = addr;
+    self.interrupt_vectors[idx as usize] = Some(addr);
   }
 
   // func: 0x30
@@ -95,7 +96,10 @@ impl Machine {
   // func: 0x35
   fn dos_get_interrupt_vector(&mut self) {
     let idx = self.reg_read_u8(AL);
-    let addr = self.dos.interrupt_vectors[idx as usize];
+    let addr = match self.interrupt_vectors[idx as usize] {
+      Some(addr) => addr,
+      None => self.dos.default_interrupt_vectors[idx as usize],
+    };
     self.reg_write_addr(ES, BX, addr);
   }
 
