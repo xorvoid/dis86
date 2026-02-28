@@ -40,12 +40,16 @@ impl Machine {
   }
 
   pub fn stack_push(&mut self, val: Value) {
+    self.stack_push_u16(val.unwrap_u16());
+  }
+
+  pub fn stack_push_u16(&mut self, val: u16) {
     let mut addr = self.reg_read_addr(SS, SP);
     addr.off.0 -= 2;
 
     self.reg_write_u16(SP, addr.off.0);
 
-    self.mem.write_u16(addr, val.unwrap_u16());
+    self.mem.write_u16(addr, val);
   }
 
   pub fn stack_pop(&mut self) -> Value {

@@ -12,8 +12,9 @@ impl Machine {
 
   fn interrupt_custom_handler(&mut self, handler_addr: SegOff) {
     // Push flags
-    let flags = self.reg_read(FLAGS);
-    self.stack_push(flags);
+    let mut flags = self.reg_read_u16(FLAGS);
+    flags |= 1<<1; // NOTE: JUST TO MATCH DOSBOX ... 1-bit always seems to be set
+    self.stack_push_u16(flags);
 
     // Clear IF, TF
     self.flag_write(FLAG_IF, false);
@@ -21,10 +22,12 @@ impl Machine {
 
     // Push CS
     let cs = self.reg_read(CS);
+    //println!("pushing cs: 0x{:x}", cs.unwrap_u16());
     self.stack_push(cs);
 
     // Push IP
     let ip = self.reg_read(IP);
+    //println!("pushing ip: 0x{:x}", ip.unwrap_u16());
     self.stack_push(ip);
 
     // Set handler CS:IP
