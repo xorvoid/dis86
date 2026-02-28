@@ -203,11 +203,13 @@ impl Machine {
 
     let f = self.flag_read_all();
     match instr.opcode {
-      Opcode::OP_MOV  => self.operand_write(&instr, 0, self.operand_read(&instr, 1)),
-      Opcode::OP_PUSH => self.stack_push(self.operand_read(&instr, 0)),
-      Opcode::OP_POP  => { let val = self.stack_pop(); self.operand_write(&instr, 0, val) }
-      Opcode::OP_INT  => self.interrupt(self.operand_read_u8(&instr, 0)),
-      Opcode::OP_CALL => {
+      Opcode::OP_MOV   => self.operand_write(&instr, 0, self.operand_read(&instr, 1)),
+      Opcode::OP_PUSH  => self.stack_push(self.operand_read(&instr, 0)),
+      Opcode::OP_POP   => { let val = self.stack_pop(); self.operand_write(&instr, 0, val) }
+      Opcode::OP_PUSHF => self.stack_push(self.operand_read(&instr, 0)),
+      Opcode::OP_POPF  => { let val = self.stack_pop(); self.operand_write(&instr, 0, val) }
+      Opcode::OP_INT   => self.interrupt(self.operand_read_u8(&instr, 0)),
+      Opcode::OP_CALL  => {
         let off = match self.operand_read(&instr, 0) {
           Value::Addr(addr) => addr.off.0,
           Value::U16(off) => off,
