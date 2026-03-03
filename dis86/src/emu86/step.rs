@@ -250,6 +250,14 @@ impl Machine {
         self.reg_write_addr(CS, IP, tgt);
       }
 
+      Opcode::OP_LEAVE => {
+        let val = self.reg_read(BP);
+        self.reg_write(SP, val);
+
+        let val = self.stack_pop();
+        self.reg_write(BP, val);
+      }
+
       Opcode::OP_RET => {
         let off = self.stack_pop();
         if instr.operands.len() == 1 {
