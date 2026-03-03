@@ -81,11 +81,19 @@ impl Machine {
   }
 
   pub fn operand_read_u8(&self, instr: &Instr, oper: usize) -> u8 {
-    self.operand_read(instr, oper).unwrap_u8()
+    let value = self.operand_read(instr, oper);
+    let Value::U8(val) = value else {
+      panic!("Expected Value::U8, but got {:?}", value);
+    };
+    val
   }
 
   pub fn operand_read_u16(&self, instr: &Instr, oper: usize) -> u16 {
-    self.operand_read(instr, oper).unwrap_u16()
+    let value = self.operand_read(instr, oper);
+    let Value::U16(val) = value else {
+      panic!("Expected Value::U16, but got {:?}", value);
+    };
+    val
   }
 
   pub fn operand_read_addr(&self, instr: &Instr, oper: usize) -> SegOff {
@@ -205,12 +213,17 @@ impl Machine {
     match instr.opcode {
       Opcode::OP_MOV   => self.operand_write(&instr, 0, self.operand_read(&instr, 1)),
       Opcode::OP_PUSH  => {
-        let val = self.operand_read(&instr, 0).unwrap_u16();
+        let value = self.operand_read(&instr, 0);
+        let val = match value {
+          Value::U16(val) => val,
+          Value::U8(val) => val as i8 as i16 as u16, // sign-extended 8-bit immediates
+          _ => panic!("Invalid value type: {:?}", value),
+        };
         self.stack_push_u16(val);
       }
       Opcode::OP_POP   => { let val = self.stack_pop(); self.operand_write(&instr, 0, val) }
       Opcode::OP_PUSHF => {
-        let mut flags = self.operand_read(&instr, 0).unwrap_u16();
+        let mut flags = self.operand_read_u16(&instr, 0);
         flags |= 1<<1; // NOTE: JUST TO MATCH DOSBOX ... these bits always seem to be set
         self.stack_push_u16(flags);
       }
