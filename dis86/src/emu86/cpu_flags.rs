@@ -14,7 +14,7 @@ pub const FLAG_IF: Flag = Flag { mask: 0x0200, shift: 9  };  // Interrupt Enable
 pub const FLAG_DF: Flag = Flag { mask: 0x0400, shift: 10 };  // Direction
 pub const FLAG_OF: Flag = Flag { mask: 0x0800, shift: 11 };  // Overflow
 
-pub const FLAG_MASK: u16 = 0x7fd7;
+pub const FLAG_MASK: u16 = 0x0fd7;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Flags(pub u16);
