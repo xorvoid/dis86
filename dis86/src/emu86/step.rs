@@ -136,7 +136,14 @@ impl Machine {
   pub fn op_shift(&mut self, instr: &Instr, op: alu::ShiftOp) {
     let lhs = self.operand_read(instr, 0);
     let rhs = self.operand_read(instr, 1);
-    let count = rhs.unwrap_u8();
+    let count = match rhs {
+      Value::U8(val) => val,
+      Value::U16(val) => {
+        assert!(val as u8 as u16 == val);
+        val as u8
+      }
+      _ => panic!("Invalid value for count: {:?}", rhs),
+    };
     let (result, flags) = alu::shift(op, lhs, count, self.flag_read_all());
     self.flag_write_all(flags);
     self.operand_write(instr, 0, result);
