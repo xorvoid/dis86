@@ -28,6 +28,7 @@ pub struct Filesystem {
 pub struct HandleData {
   filename: String,        // Dos filename, e.g. 'D:\SSG.EXE'
   handle:   Handle,        // Handle number
+  info:     u16,           // Device Info
   file:     Option<File>,  // Host system file (for actual I/O) [May be None for standard handles]
 }
 
@@ -43,11 +44,12 @@ impl Filesystem {
     };
 
     // init the standard handles
-    fs.handles[0] = Some(HandleData { filename: "<stdin>".to_string(),  handle: Handle(0), file: None });
-    fs.handles[1] = Some(HandleData { filename: "<stdout>".to_string(), handle: Handle(1), file: None });
-    fs.handles[2] = Some(HandleData { filename: "<stderr>".to_string(), handle: Handle(2), file: None });
-    fs.handles[3] = Some(HandleData { filename: "<stdaux>".to_string(), handle: Handle(3), file: None });
-    fs.handles[4] = Some(HandleData { filename: "<stdprn>".to_string(), handle: Handle(4), file: None });
+    // FIXME: INFO MIGHT BE WRONG
+    fs.handles[0] = Some(HandleData { filename: "<stdin>".to_string(),  handle: Handle(0), info: 0x80d3, file: None });
+    fs.handles[1] = Some(HandleData { filename: "<stdout>".to_string(), handle: Handle(1), info: 0x80d3, file: None });
+    fs.handles[2] = Some(HandleData { filename: "<stderr>".to_string(), handle: Handle(2), info: 0x80d3, file: None });
+    fs.handles[3] = Some(HandleData { filename: "<stdaux>".to_string(), handle: Handle(3), info: 0x80d3, file: None });
+    fs.handles[4] = Some(HandleData { filename: "<stdprn>".to_string(), handle: Handle(4), info: 0x80d3, file: None });
 
     fs
   }
@@ -61,12 +63,13 @@ impl Filesystem {
     None
   }
 
-  fn create_handle(&mut self, filename: &str, file: File) -> Option<Handle> {
+  fn create_handle(&mut self, filename: &str, file: File, info: u16) -> Option<Handle> {
     let handle = self.find_unused_handle()?;
 
     self.handles[handle.0 as usize] = Some(HandleData {
       filename: filename.to_string(),
       handle,
+      info,
       file: Some(file),
     });
 
@@ -86,26 +89,89 @@ impl Filesystem {
   }
 }
 
+struct DosPath {
+  drive: Option<char>,
+  components: Vec<String>,
+}
+
+impl DosPath {
+  fn parse(s: &str) -> Result<DosPath, String> {
+    if s.is_empty() {
+      return Err("Path cannot be empty".to_string());
+    }
+
+    let mut drive = None;
+    let mut rest = s;
+    if s.len() >= 2 && s.as_bytes()[1] == b':' {
+      let d = s.chars().next().unwrap();
+      if !d.is_ascii_alphabetic() {
+        return Err(format!("Invalid drive letter: '{}'", d));
+      }
+      drive = Some(d.to_ascii_uppercase());
+      rest = &s[2..];
+    }
+
+    // Normalize separators: DOS allows both \ and /
+    let rest = rest.replace('/', "\\");
+
+    let components: Vec<String> = rest
+      .split('\\')
+      .filter(|c| !c.is_empty())
+      .map(|c| {
+        // Validate each component: no forbidden characters
+        // DOS forbidden: < > : " / \ | ? *
+        for ch in c.chars() {
+          if matches!(ch, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') {
+            return Err(format!("Invalid character '{}' in path component '{}'", ch, c));
+          }
+          if (ch as u32) < 32 {
+            return Err(format!("Control character in path component '{}'", c));
+          }
+        }
+        Ok(c.to_string())
+      })
+      .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(DosPath { drive, components })
+  }
+
+  fn to_hostpath(&self, host_rootdir: &str) -> String {
+    match self.drive {
+      None => (), // Relative path
+      Some('D') => (), // Abs path
+      _ => panic!("Only drive D is supported currently"),
+    };
+
+    let mut path = host_rootdir.to_string();
+    for component in &self.components {
+      path += "/";
+      path += &component.to_lowercase();
+    }
+    path
+  }
+}
+
 // Filesystem API implementations
 impl Machine {
   // func: 0x3d
   pub fn dos_open_file(&mut self) {
     let filename_addr = self.reg_read_addr(DS, DX);
     let filename = self.mem.asciiz(filename_addr);
+    let path = DosPath::parse(filename).unwrap();
 
-    let host_path = {
-      let Some(filename) = filename.strip_prefix("D:\\") else {
-        panic!("Expected all file opens to be in 'D:\'");
-      };
-      let Some(root_dir) = &self.dos.filesystem.root_dir else {
-        panic!("Expected a root dir configuration");
-      };
-      format!("{}/{}", root_dir, filename.to_lowercase())
+    println!("open file | '{}'", filename);
+
+    let Some(root_dir) = &self.dos.filesystem.root_dir else {
+      panic!("Expected a root dir configuration");
     };
 
-    let file = File::open(host_path).unwrap();
+    let dos_path = DosPath::parse(filename).unwrap();
+    let host_path = dos_path.to_hostpath(root_dir);
 
-    let Some(handle) = self.dos.filesystem.create_handle(filename, file) else {
+    let file = File::open(host_path).unwrap();
+    let info = 0x3;
+
+    let Some(handle) = self.dos.filesystem.create_handle(filename, file, info) else {
       panic!("Failed to allocate a new file handle");
     };
 
@@ -214,5 +280,29 @@ impl Machine {
     self.reg_write_u16(AX, 0x20);
     self.reg_write_u16(CX, 0x20);
     self.flag_write(FLAG_CF, false);
+  }
+
+
+  // func: 0x44
+  pub fn dos_ioctl(&mut self) {
+    let func = self.reg_read_u8(AL);
+    match func {
+      0 => self.dos_ioctl_get_device_info(),
+      _ => panic!("unimplmented ioctl"),
+    }
+  }
+
+  fn dos_ioctl_get_device_info(&mut self) {
+    let handle = Handle(self.reg_read_u16(BX));
+    println!("ioctl handle: {}", handle.0);
+
+    let Some(handle_data) = self.dos.filesystem.lookup_handle(handle) else {
+      panic!("No open handle {}", handle.0);
+    };
+
+    let info = handle_data.info;
+
+    self.reg_write_u16(DX, info);
+    self.reg_write_u16(AX, info);
   }
 }

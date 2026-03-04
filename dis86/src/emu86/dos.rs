@@ -104,23 +104,6 @@ impl Machine {
     self.reg_write_addr(ES, BX, addr);
   }
 
-  // func: 0x44
-  fn dos_ioctl(&mut self) {
-    let func = self.reg_read_u8(AL);
-    match func {
-      0 => self.dos_ioctl_get_device_info(),
-      _ => panic!("unimplmented ioctl"),
-    }
-  }
-
-  fn dos_ioctl_get_device_info(&mut self) {
-    let handle = Handle(self.reg_read_u16(BX));
-
-    // NOTE: JUST TO MATCH DOSBOX
-    self.reg_write_u16(DX, 0x80d3);
-    self.reg_write_u16(AX, 0x80d3);
-  }
-
   // func: 0x4a
   fn dos_mem_resize(&mut self) {
     let segment_block = self.reg_read_u16(ES);
