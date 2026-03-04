@@ -23,6 +23,7 @@ mod dos_filesystem;
 
 mod video;
 mod mouse;
+mod io;
 
 mod mzhdr;
 

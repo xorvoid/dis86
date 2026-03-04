@@ -114,6 +114,10 @@ impl Machine {
     }
   }
 
+  pub fn operand_write_u8(&mut self, instr: &Instr, oper: usize, val: u8) {
+    self.operand_write(instr, oper, Value::U8(val))
+  }
+
   pub fn operand_write_u16(&mut self, instr: &Instr, oper: usize, val: u16) {
     self.operand_write(instr, oper, Value::U16(val))
   }
@@ -336,6 +340,18 @@ impl Machine {
         };
         self.reg_write_u16(SI, new_idx);
       },
+
+      Opcode::OP_IN => {
+        let port = self.operand_read_u16(&instr, 1);
+        let data = self.io_port_inb(port);
+        self.operand_write_u8(&instr, 0, data);
+      }
+
+      Opcode::OP_OUT => {
+        let port = self.operand_read_u16(&instr, 0);
+        let data = self.operand_read_u8(&instr, 1);
+        self.io_port_outb(port, data);
+      }
 
       ////////////////////////////////////////////////////////////////////////////////
       // Jumps
