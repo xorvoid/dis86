@@ -30,6 +30,7 @@ pub enum UnaryOp {
 pub enum ShiftOp {
   Shl,
   Shr,
+  Sar,
   Rol,
 }
 
@@ -301,6 +302,14 @@ pub fn shift(op: ShiftOp, a: Value, n: u8, mut f: Flags) -> (Value, Flags) {
         0
       };
       result = r32 as u16;
+      update_flags_shr(&mut f, a, n, result, sign_mask, value_mask);
+    }
+    ShiftOp::Sar => {
+      result = match size {
+        1 => (a as i8).wrapping_shr(n as u32) as u8 as u16,
+        2 => (a as i16).wrapping_shr(n as u32) as u16,
+        _ => unreachable!(),
+      };
       update_flags_shr(&mut f, a, n, result, sign_mask, value_mask);
     }
     ShiftOp::Rol => {
