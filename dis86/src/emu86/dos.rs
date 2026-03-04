@@ -66,6 +66,7 @@ impl Machine {
       0x3f => self.dos_read_file(),
       0x40 => self.dos_write_file(),
       0x42 => self.dos_seek_file(),
+      0x43 => self.dos_get_or_set_file_attrs(),
       0x44 => self.dos_ioctl(),
       0x4a => self.dos_mem_resize(),
       0x4c => self.dos_exit_program(),

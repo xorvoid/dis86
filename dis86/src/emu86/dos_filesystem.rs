@@ -190,4 +190,29 @@ impl Machine {
     self.reg_write_u32(DX, AX, new_pos as u32);
     self.flag_write(FLAG_CF, false);
   }
+
+  // func: 0x43
+  pub fn dos_get_or_set_file_attrs(&mut self) {
+    let get_or_set = self.reg_read_u8(AL);
+    match get_or_set {
+      // get
+      0 => self.dos_get_file_attrs(),
+      // set
+      1 => panic!("Attr set is unimplmented"),
+      _ => panic!("Invalid value for get_or_set: {}", get_or_set),
+    }
+  }
+
+  // func: 0x43, AL=0
+  pub fn dos_get_file_attrs(&mut self) {
+    let filename_addr = self.reg_read_addr(DS, DX);
+    let filename = self.mem.asciiz(filename_addr);
+
+    // TODO: Use the actual filename and actually impl attr info
+
+    // NOTE: JUST TO MATCH DOSBOX
+    self.reg_write_u16(AX, 0x20);
+    self.reg_write_u16(CX, 0x20);
+    self.flag_write(FLAG_CF, false);
+  }
 }
