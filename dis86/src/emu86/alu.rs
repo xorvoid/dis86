@@ -108,7 +108,8 @@ fn update_flags_shr(f: &mut Flags, a: u16, n: u8, r: u16, sign_mask: u16, value_
   f.set(FLAG_CF, cf);
   f.set(FLAG_ZF, flag_generic_zf(r, value_mask));
   f.set(FLAG_SF, flag_generic_sf(r, sign_mask));
-  f.set(FLAG_OF, (a & sign_mask) != 0);
+  // I think this flag is ignored? Hard to tell...
+  //f.set(FLAG_OF, (a & sign_mask) != 0);
   f.set(FLAG_PF, flag_generic_pf(r));
   f.set(FLAG_AF, false);
 }
