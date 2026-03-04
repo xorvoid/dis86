@@ -40,7 +40,8 @@ impl Emulator {
 
   pub fn step(&mut self) -> Result<(), String> {
     // Avoid updating SDL on every instruction ... too slow
-    if self.step_count % (1<<10) == 0 {
+    // FIXME: Add a proper time-based update (try to maintain some update Hz)
+    if self.step_count % (1<<8) == 0 {
       let quit = self.app.update()?;
       if quit { return Err(format!("SDL Exited")) };
     }
