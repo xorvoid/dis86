@@ -257,6 +257,20 @@ impl Machine {
         self.reg_write_addr(CS, IP, tgt);
       }
 
+      Opcode::OP_ENTER => {
+        // No support for handling non-zero params here
+        let unknown_1 = self.operand_read(&instr, 1);
+        let unknown_2 = self.operand_read(&instr, 2);
+        assert_eq!(unknown_1, Value::U16(0));
+        assert_eq!(unknown_2, Value::U8(0));
+
+        let val = self.reg_read(BP);
+        self.stack_push(val);
+
+        let val = self.reg_read(SP);
+        self.reg_write(BP, val);
+      }
+
       Opcode::OP_LEAVE => {
         let val = self.reg_read(BP);
         self.reg_write(SP, val);

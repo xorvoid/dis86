@@ -1,6 +1,6 @@
 use crate::segoff::SegOff;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Value {
   U8(u8),
   U16(u16),
