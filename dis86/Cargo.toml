@@ -10,6 +10,7 @@ pico-args = "0.5.0"
 itertools = "0.12.1"
 static_assertions = "1.1.0"
 libc = "0.2"
+sdl2 = { version = "0.38", features = ["use-pkgconfig", "unsafe_textures"] } ## Used for emu86 only
 
 [build-dependencies]
 cc = "1.0.87"

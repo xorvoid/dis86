@@ -21,7 +21,11 @@ mod dos_ivt;
 mod dos_structs;
 mod dos_filesystem;
 
+mod video;
+
 mod mzhdr;
+
+mod sdl;
 pub mod emu;
 
 pub use emu::run;

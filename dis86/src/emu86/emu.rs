@@ -1,5 +1,6 @@
 use crate::binfmt::mz;
 use super::machine::Machine;
+use super::sdl;
 use std::path::Path;
 
 pub struct Emulator {
@@ -8,6 +9,8 @@ pub struct Emulator {
   #[allow(dead_code)]
   exe: mz::Exe,
   pub machine: Machine,
+  app: sdl::App,
+  step_count: u64,
 }
 
 impl Emulator {
@@ -24,16 +27,31 @@ impl Emulator {
     let mut machine = Machine::new(Some(root_dir));
     machine.load_exe(&exe)?;
 
+    let app = sdl::App::new();
+
     Ok(Emulator {
       exe_path: exe_path.to_string(),
       exe,
       machine,
+      app,
+      step_count: 0,
     })
+  }
+
+  pub fn step(&mut self) -> Result<(), String> {
+    // Avoid updating SDL on every instruction ... too slow
+    if self.step_count % (1<<10) == 0 {
+      let quit = self.app.update()?;
+      if quit { return Err(format!("SDL Exited")) };
+    }
+    self.machine.step()?;
+    self.step_count += 1;
+    Ok(())
   }
 
   fn run(&mut self) -> Result<(), String> {
     while !self.machine.halted() {
-      self.machine.step()?;
+      self.step()?;
     }
     println!("CPU State:");
     println!("{}", self.machine.cpu);

@@ -30,7 +30,6 @@ fn print_changes(prev: &Cpu, cur: &Cpu) {
 
 pub fn run(exe_path: &str) -> Result<(), String> {
   let mut emu = Emulator::new(exe_path)?;
-  let     machine = &mut emu.machine;
   let mut hydra = HydraProcess::spawn(exe_path)?;
 
   hydra.begin();
@@ -40,11 +39,11 @@ pub fn run(exe_path: &str) -> Result<(), String> {
   // }
 
   let mut hydra_state_prev = hydra.cpu_state();
-  let mut machine_state_prev = machine.cpu.clone();
+  let mut machine_state_prev = emu.machine.cpu.clone();
 
   loop {
     let hydra_addr = hydra.instr_addr();
-    let machine_addr = machine.instr_addr();
+    let machine_addr = emu.machine.instr_addr();
 
     let mut hydra_state = hydra.cpu_state();
 
@@ -66,10 +65,10 @@ pub fn run(exe_path: &str) -> Result<(), String> {
 
     // Handle mirroring overrides
     if hydra_addr == SegOff::new(0x823, 0x010d) {
-      machine.reg_write_u16(CX, hydra_state.reg_read_u16(CX));
-      machine.reg_write_u16(DX, hydra_state.reg_read_u16(DX));
+      emu.machine.reg_write_u16(CX, hydra_state.reg_read_u16(CX));
+      emu.machine.reg_write_u16(DX, hydra_state.reg_read_u16(DX));
     }
-    let mut machine_state = machine.cpu.clone();
+    let mut machine_state = emu.machine.cpu.clone();
 
     // Clear the AF flag... It just creates problems... its behavior is undefined in
     // a number of cases
@@ -99,7 +98,7 @@ pub fn run(exe_path: &str) -> Result<(), String> {
     hydra_state_prev = hydra_state;
     machine_state_prev = machine_state;
 
-    machine.step()?;
+    emu.step()?;
     hydra.step();
   }
 }
