@@ -201,11 +201,14 @@ impl Machine {
       panic!("Buffer length overruns memory!");
     }
 
-    // FIXME: DOS API ALLOWS PARTIAL LENGTH READS
     let file = handle_data.file.as_mut().unwrap();
-    file.read_exact(&mut buffer[..num_bytes as usize]).unwrap();
 
-    self.reg_write_u16(AX, num_bytes);
+    let len = match file.read(&mut buffer[..num_bytes as usize]) {
+      Ok(len) => len,
+      Err(err) => panic!("Failed to read with {:?}", err),
+    };
+
+    self.reg_write_u16(AX, len as u16);
   }
 
   // func: 0x40
