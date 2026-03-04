@@ -22,6 +22,7 @@ mod dos_structs;
 mod dos_filesystem;
 
 mod video;
+mod mouse;
 
 mod mzhdr;
 

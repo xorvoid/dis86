@@ -28,6 +28,19 @@ fn print_changes(prev: &Cpu, cur: &Cpu) {
   print_change_reg("FLAGS", FLAGS, prev, cur);
 }
 
+fn apply_mirroring_overrides(addr: SegOff, emu: &mut Emulator, hydra_state: &Cpu) {
+  // Reads the timestamp, non-deterministic
+  if addr == SegOff::new(0x823, 0x010d) {
+    emu.machine.reg_write_u16(CX, hydra_state.reg_read_u16(CX));
+    emu.machine.reg_write_u16(DX, hydra_state.reg_read_u16(DX));
+  }
+
+  // overlay_0005 (HACKY, FIXME)
+  if addr == SegOff::new(0x2533, 0x21) {
+    emu.machine.reg_write_u16(BX, 0xeb); // WHY??
+  }
+}
+
 pub fn run(exe_path: &str) -> Result<(), String> {
   let mut emu = Emulator::new(exe_path)?;
   let mut hydra = HydraProcess::spawn(exe_path)?;
@@ -64,10 +77,11 @@ pub fn run(exe_path: &str) -> Result<(), String> {
     // println!("Emu86 Stack |\n{}", crate::util::hexdump::hexdump(&m[..32]));
 
     // Handle mirroring overrides
-    if hydra_addr == SegOff::new(0x823, 0x010d) {
-      emu.machine.reg_write_u16(CX, hydra_state.reg_read_u16(CX));
-      emu.machine.reg_write_u16(DX, hydra_state.reg_read_u16(DX));
-    }
+    // if hydra_addr == SegOff::new(0x823, 0x010d) {
+    //   emu.machine.reg_write_u16(CX, hydra_state.reg_read_u16(CX));
+    //   emu.machine.reg_write_u16(DX, hydra_state.reg_read_u16(DX));
+    // }
+    apply_mirroring_overrides(hydra_addr, &mut emu, &hydra_state);
     let mut machine_state = emu.machine.cpu.clone();
 
     // Clear the AF flag... It just creates problems... its behavior is undefined in

@@ -48,6 +48,7 @@ impl Machine {
       0x1a => self.bios_time_of_day(),
       0x10 => self.video_interrupt_0x10(),
       0x21 => self.dos_interrupt_0x21(),
+      0x33 => self.mouse_interrupt_0x33(),
       _ => panic!("unimplemnted interrupt"),
     }
   }
