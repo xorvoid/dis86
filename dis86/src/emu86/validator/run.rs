@@ -39,6 +39,21 @@ fn apply_mirroring_overrides(addr: SegOff, emu: &mut Emulator, hydra_state: &Cpu
   if addr == SegOff::new(0x2533, 0x21) {
     emu.machine.reg_write_u16(BX, 0xeb); // WHY??
   }
+
+  // Ignore result of "in al,dx", used to verify that opl hardware exists
+  // Timing can very significantly and non-deterministically
+  if addr.seg.unwrap_normal() == 0xbb4+0x823 && 0xba <= addr.off.0 && addr.off.0 <= 0xdc {
+    emu.machine.reg_write_u16(AX, hydra_state.reg_read_u16(AX));
+  }
+  if addr == SegOff::new(0xbb4+0x823, 0x166) {
+    emu.machine.reg_write_u16(AX, hydra_state.reg_read_u16(AX));
+  }
+  if addr == SegOff::new(0xbb4+0x823, 0x169) {
+    emu.machine.reg_write_u16(AX, hydra_state.reg_read_u16(AX));
+  }
+  if addr.seg.unwrap_normal() == 0xbb4+0x823 && 0xaf <= addr.off.0 && addr.off.0 <= 0xb4 {
+    emu.machine.reg_write_u16(AX, hydra_state.reg_read_u16(AX));
+  }
 }
 
 pub fn run(exe_path: &str) -> Result<(), String> {

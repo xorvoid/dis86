@@ -2,6 +2,8 @@ pub use super::value::*;
 pub use super::mem::*;
 pub use super::cpu::*;
 pub use super::cpu_flags::*;
+pub use super::io::*;
+pub use super::adlib::*;
 pub use super::alu;
 
 pub use super::dos::Dos;
@@ -13,6 +15,7 @@ pub struct Machine {
   pub cpu: Cpu,
   pub dos: Dos,
   pub interrupt_vectors: [Option<SegOff>; 256],
+  pub adlib: Adlib,
   pub exec_count: u64,
 }
 
@@ -22,11 +25,13 @@ impl Machine {
     let cpu = Cpu::default();
 
     let dos = Dos::new(root_dir, &mut mem);
+    let adlib = Adlib::new();
 
     Machine {
       halted: false,
       mem, cpu, dos,
       interrupt_vectors: [None; 256],
+      adlib,
       exec_count: 0,
     }
   }
