@@ -29,6 +29,10 @@ impl Validator {
       let hydra_addr = self.hydra.instr_addr();
       let emu86_addr = self.emu86.instr_addr();
 
+      // let addr = SegOff::new(0, 0);
+      // dump_mem("hydra", self.hydra.as_ref(), addr, 16);
+      // dump_mem("emu86", self.emu86.as_ref(), addr, 16);
+
       self.hydra.step()?;
       self.emu86.step()?;
 
@@ -114,4 +118,14 @@ fn print_changes(prev: &Cpu, cur: &Cpu) {
   print_change_reg("ES", ES, prev, cur);
   print_change_reg("SS", SS, prev, cur);
   print_change_reg("FLAGS", FLAGS, prev, cur);
+}
+
+
+fn dump_mem(msg: &str, emu: &dyn Emu, addr: SegOff, len: u32) {
+  let mem = emu.mem_slice(addr, 16);
+  let hex = crate::util::hexdump::hexdump(mem);
+
+  println!("Memdump for '{}'", msg);
+  println!("----------------------------------------------");
+  println!("{}", hex);
 }

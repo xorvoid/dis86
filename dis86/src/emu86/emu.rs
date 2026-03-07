@@ -69,8 +69,11 @@ pub trait Emu {
   fn step(&mut self) -> Result<(), String>;
   fn cpu_state(&self) -> Cpu;
   fn instr_addr(&self) -> SegOff;
+
   fn reg_read(&self, reg: Register) -> Value;
   fn reg_write(&mut self, reg: Register, val: Value);
+
+  fn mem_slice(&self, addr: SegOff, len: u32) -> &[u8];
 
   fn code_load_seg(&self) -> Seg {
     Seg::Normal(0x823)
@@ -92,6 +95,9 @@ impl Emu for Emulator {
   }
   fn reg_write(&mut self, reg: Register, val: Value) {
     self.machine.reg_write(reg, val)
+  }
+  fn mem_slice(&self, addr: SegOff, len: u32) -> &[u8] {
+    &self.machine.mem.slice_starting_at(addr)[..len as usize]
   }
 }
 

@@ -127,4 +127,7 @@ impl Emu for HydraProcess {
   fn reg_write(&mut self, reg: Register, val: Value) {
     panic!("reg_write unimpl for hydra process");
   }
+  fn mem_slice(&self, addr: SegOff, len: u32) -> &[u8] {
+    &self.mem.slice_starting_at(addr)[..len as usize]
+  }
 }
