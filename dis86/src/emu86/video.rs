@@ -4,9 +4,15 @@ impl Machine {
   pub fn video_interrupt_0x10(&mut self) {
     let func = self.reg_read_u8(AH);
     match func {
+      0x00 => self.video_set_mode(),
       0x1a => self.video_get_or_set_display_combination_code(),
       _ => panic!("unsupported video function: 0x{:x}", func),
     }
+  }
+
+  fn video_set_mode(&mut self) {
+    let mode = self.reg_read_u8(AL);
+    if mode != 0x13 { panic!("Only video mode 0x13 is supported"); }
   }
 
   fn video_get_or_set_display_combination_code(&mut self) {
