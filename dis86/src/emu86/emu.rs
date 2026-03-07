@@ -2,6 +2,7 @@ use crate::binfmt::mz;
 use super::machine::Machine;
 use super::sdl;
 use std::path::Path;
+use crate::segoff::Seg;
 
 pub struct Emulator {
   #[allow(dead_code)]

@@ -3,9 +3,14 @@ use super::dos;
 use crate::binfmt::mz;
 
 impl Machine {
-  pub fn load_exe(&mut self, exe: &mz::Exe) -> Result<(), String> {
+  pub fn code_load_seg(&self) -> Seg {
     let load_seg = PSP_SEGMENT;
     let code_seg = Seg::Normal(load_seg.unwrap_normal() + 0x10);
+    code_seg
+  }
+
+  pub fn load_exe(&mut self, exe: &mz::Exe) -> Result<(), String> {
+    let code_seg = self.code_load_seg();
     let code_seg_u16 = code_seg.unwrap_normal();
 
     // Configure the PSP
