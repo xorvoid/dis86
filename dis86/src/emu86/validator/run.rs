@@ -67,6 +67,12 @@ fn apply_mirroring_overrides(addr: SegOff, emu: &mut Emulator, hydra_state: &Cpu
     emu.machine.reg_write_u16(CX, hydra_state.reg_read_u16(CX));
     emu.machine.reg_write_u16(DX, hydra_state.reg_read_u16(DX));
   }
+
+  // Reads current system time (non-deterministic)
+  if addr == SegOff::new(0x000+0x823, 0x3a6) {
+    emu.machine.reg_write_u16(CX, hydra_state.reg_read_u16(CX));
+    emu.machine.reg_write_u16(DX, hydra_state.reg_read_u16(DX));
+  }
 }
 
 pub fn run(exe_path: &str) -> Result<(), String> {

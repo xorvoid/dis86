@@ -63,6 +63,7 @@ impl Machine {
     match func {
       0x25 => self.dos_set_interrupt_vector(),
       0x2a => self.dos_get_system_date(),
+      0x2c => self.dos_get_system_time(),
       0x30 => self.dos_get_version(),
       0x35 => self.dos_get_interrupt_vector(),
       0x3d => self.dos_open_file(),
@@ -93,7 +94,18 @@ impl Machine {
     self.reg_write_u8(DH, 1);
     self.reg_write_u8(DL, 1);
     self.reg_write_u8(AL, 5);
+  }
 
+  // func: 0x2c
+  fn dos_get_system_time(&mut self) {
+    // FIXME: IMPLEMENT! Obviously the party starts at midnight..
+    self.reg_write_u8(CH, 0); // hours
+    self.reg_write_u8(CL, 0); // minutes
+    self.reg_write_u8(DH, 0); // seconds
+    self.reg_write_u8(DL, 0); // centiseconds
+
+    // NOTE: JUST TO MATCH DOSBOX
+    self.reg_write_u8(AL, 0); // ???
   }
 
   // func: 0x30
