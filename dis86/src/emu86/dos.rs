@@ -62,6 +62,7 @@ impl Machine {
     let func = self.reg_read_u8(AH);
     match func {
       0x25 => self.dos_set_interrupt_vector(),
+      0x2a => self.dos_get_system_date(),
       0x30 => self.dos_get_version(),
       0x35 => self.dos_get_interrupt_vector(),
       0x3d => self.dos_open_file(),
@@ -83,6 +84,16 @@ impl Machine {
     println!("set_interrupt_vector | AL=0x{:x}", idx);
     let addr = self.reg_read_addr(DS, DX);
     self.interrupt_vectors[idx as usize] = Some(addr);
+  }
+
+  // func: 0x2a
+  fn dos_get_system_date(&mut self) {
+    // FIXME: IMPLEMENT! For now, let's party like it's 1999!
+    self.reg_write_u16(CX, 1999);
+    self.reg_write_u8(DH, 1);
+    self.reg_write_u8(DL, 1);
+    self.reg_write_u8(AL, 5);
+
   }
 
   // func: 0x30
