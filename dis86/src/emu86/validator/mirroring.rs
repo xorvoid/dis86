@@ -1,4 +1,4 @@
-use super::super::emu::Emulator;
+use super::super::emu::Emu;
 use super::super::cpu::*;
 use crate::segoff::SegOff;
 
@@ -19,13 +19,13 @@ fn get_entries() -> Vec<Entry> {
   ]
 }
 
-pub fn apply_overrides(addr: SegOff, emu: &mut Emulator, hydra_state: &Cpu) {
-  let code_seg = emu.machine.code_load_seg().unwrap_normal();
+pub fn apply_overrides(addr: SegOff, emu: &mut dyn Emu, hydra_state: &Cpu) {
+  let code_seg = emu.code_load_seg().unwrap_normal();
   for entry in &get_entries() {
     let mirror_addr = SegOff::new(entry.seg + code_seg, entry.off);
     if mirror_addr == addr {
       for reg in entry.regs.iter().cloned() {
-        emu.machine.reg_write(reg, hydra_state.reg_read(reg));
+        emu.reg_write(reg, hydra_state.reg_read(reg));
       }
       return;
     }
@@ -39,40 +39,40 @@ pub fn apply_overrides(addr: SegOff, emu: &mut Emulator, hydra_state: &Cpu) {
 
   // // overlay_0005 (HACKY, FIXME)
   // if addr == SegOff::new(0x2533, 0x21) {
-  //   emu.machine.reg_write_u16(BX, 0xeb); // WHY??
+  //   emu.reg_write_u16(BX, 0xeb); // WHY??
   // }
 
   // Ignore result of "in al,dx", used to verify that opl hardware exists
   // Timing can very significantly and non-deterministically
   if addr.seg.unwrap_normal() == 0xbb4+0x823 && 0xba <= addr.off.0 && addr.off.0 <= 0xdc {
-    emu.machine.reg_write_u16(AX, hydra_state.reg_read_u16(AX));
+    emu.reg_write(AX, hydra_state.reg_read(AX));
   }
   if addr == SegOff::new(0xbb4+0x823, 0x166) {
-    emu.machine.reg_write_u16(AX, hydra_state.reg_read_u16(AX));
+    emu.reg_write(AX, hydra_state.reg_read(AX));
   }
   if addr == SegOff::new(0xbb4+0x823, 0x169) {
-    emu.machine.reg_write_u16(AX, hydra_state.reg_read_u16(AX));
+    emu.reg_write(AX, hydra_state.reg_read(AX));
   }
   if addr.seg.unwrap_normal() == 0xbb4+0x823 && 0xaf <= addr.off.0 && addr.off.0 <= 0xb4 {
-    emu.machine.reg_write_u16(AX, hydra_state.reg_read_u16(AX));
+    emu.reg_write(AX, hydra_state.reg_read(AX));
   }
 
   // HACKY work around for mouse interrupt... TODO: IMPL PROPERLY
   if addr == SegOff::new(0x454+0x823, 0x0010) {
-    emu.machine.reg_write_u16(AX, hydra_state.reg_read_u16(AX));
-    emu.machine.reg_write_u16(BX, hydra_state.reg_read_u16(BX));
+    emu.reg_write(AX, hydra_state.reg_read(AX));
+    emu.reg_write(BX, hydra_state.reg_read(BX));
   }
 
   // Reads current system data (non-deterministic)
   if addr == SegOff::new(0x000+0x823, 0x393) {
-    emu.machine.reg_write_u16(AX, hydra_state.reg_read_u16(AX));
-    emu.machine.reg_write_u16(CX, hydra_state.reg_read_u16(CX));
-    emu.machine.reg_write_u16(DX, hydra_state.reg_read_u16(DX));
+    emu.reg_write(AX, hydra_state.reg_read(AX));
+    emu.reg_write(CX, hydra_state.reg_read(CX));
+    emu.reg_write(DX, hydra_state.reg_read(DX));
   }
 
   // Reads current system time (non-deterministic)
   if addr == SegOff::new(0x000+0x823, 0x3a6) {
-    emu.machine.reg_write_u16(CX, hydra_state.reg_read_u16(CX));
-    emu.machine.reg_write_u16(DX, hydra_state.reg_read_u16(DX));
+    emu.reg_write(CX, hydra_state.reg_read(CX));
+    emu.reg_write(DX, hydra_state.reg_read(DX));
   }
 }

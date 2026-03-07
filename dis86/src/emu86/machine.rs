@@ -40,7 +40,7 @@ impl Machine {
     self.halted
   }
 
-  pub fn instr_addr(&mut self) -> SegOff {
+  pub fn instr_addr(&self) -> SegOff {
     SegOff::new(self.reg_read_u16(CS), self.reg_read_u16(IP))
   }
 

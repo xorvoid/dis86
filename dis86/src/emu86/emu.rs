@@ -1,8 +1,10 @@
 use crate::binfmt::mz;
 use super::machine::Machine;
+use super::cpu::{Cpu, Register};
+use super::value::Value;
 use super::sdl;
 use std::path::Path;
-use crate::segoff::Seg;
+use crate::segoff::{Seg, SegOff};
 
 pub struct Emulator {
   #[allow(dead_code)]
@@ -58,6 +60,38 @@ impl Emulator {
     println!("CPU State:");
     println!("{}", self.machine.cpu);
     Ok(())
+  }
+}
+
+// A generic trait to make a unified interface for doing validation / comparisons of two very
+// different implementations
+pub trait Emu {
+  fn step(&mut self) -> Result<(), String>;
+  fn cpu_state(&self) -> Cpu;
+  fn instr_addr(&self) -> SegOff;
+  fn reg_read(&self, reg: Register) -> Value;
+  fn reg_write(&mut self, reg: Register, val: Value);
+
+  fn code_load_seg(&self) -> Seg {
+    Seg::Normal(0x823)
+  }
+}
+
+impl Emu for Emulator {
+  fn step(&mut self) -> Result<(), String> {
+    Self::step(self)
+  }
+  fn cpu_state(&self) -> Cpu {
+    self.machine.cpu.clone()
+  }
+  fn instr_addr(&self) -> SegOff {
+    self.machine.instr_addr()
+  }
+  fn reg_read(&self, reg: Register) -> Value {
+    self.machine.reg_read(reg)
+  }
+  fn reg_write(&mut self, reg: Register, val: Value) {
+    self.machine.reg_write(reg, val)
   }
 }
 
