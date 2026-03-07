@@ -31,6 +31,10 @@ fn build_entries(code_seg: Seg) -> Vec<Entry> {
     // Confusing setting of PF on an unsigned multiplys (FIXME)
     Entry::new_addr( code+0x0000, 0x067f, vec![FLAGS]),
     Entry::new_addr( code+0x0000, 0x0689, vec![FLAGS]),
+
+    // Confusing setting of OF on SHR (FIXME)
+    Entry::new_addr( code+0x0b48, 0x01aa, vec![FLAGS]),
+    Entry::new_addr( code+0x0b48, 0x01ca, vec![FLAGS]),
   ]
 }
 
