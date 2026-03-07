@@ -27,6 +27,10 @@ fn build_entries(code_seg: Seg) -> Vec<Entry> {
 
     // Reads current system time (non-deterministic)
     Entry::new_addr( code+0x0000, 0x03a4, vec![CX, DX]),
+
+    // Confusing setting of PF on an unsigned multiplys (FIXME)
+    Entry::new_addr( code+0x0000, 0x067f, vec![FLAGS]),
+    Entry::new_addr( code+0x0000, 0x0689, vec![FLAGS]),
   ]
 }
 
