@@ -12,10 +12,10 @@ struct Entry {
 fn get_entries() -> Vec<Entry> {
   vec![
     // Reads the timestamp, non-deterministic
-    Entry { seg: 0x0000, off: 0x010d, regs: vec![CX, DX] },
+    Entry { seg: 0x0000, off: 0x010b, regs: vec![CX, DX] },
 
     // overlay_0005 (HACKY, FIXME)
-    Entry { seg: 0x1d10, off: 0x21, regs: vec![BX] },
+    Entry { seg: 0x1d10, off: 0x1e, regs: vec![BX] },
   ]
 }
 
@@ -44,34 +44,34 @@ pub fn apply_overrides(addr: SegOff, emu: &mut dyn Emu, hydra_state: &Cpu) {
 
   // Ignore result of "in al,dx", used to verify that opl hardware exists
   // Timing can very significantly and non-deterministically
-  if addr.seg.unwrap_normal() == 0xbb4+0x823 && 0xba <= addr.off.0 && addr.off.0 <= 0xdc {
+  if addr.seg.unwrap_normal() == 0xbb4+0x823 && 0xb9 <= addr.off.0 && addr.off.0 <= 0xdb {
     emu.reg_write(AX, hydra_state.reg_read(AX));
   }
-  if addr == SegOff::new(0xbb4+0x823, 0x166) {
+  if addr == SegOff::new(0xbb4+0x823, 0x165) {
     emu.reg_write(AX, hydra_state.reg_read(AX));
   }
-  if addr == SegOff::new(0xbb4+0x823, 0x169) {
+  if addr == SegOff::new(0xbb4+0x823, 0x168) {
     emu.reg_write(AX, hydra_state.reg_read(AX));
   }
-  if addr.seg.unwrap_normal() == 0xbb4+0x823 && 0xaf <= addr.off.0 && addr.off.0 <= 0xb4 {
+  if addr.seg.unwrap_normal() == 0xbb4+0x823 && 0xae <= addr.off.0 && addr.off.0 <= 0xb3 {
     emu.reg_write(AX, hydra_state.reg_read(AX));
   }
 
   // HACKY work around for mouse interrupt... TODO: IMPL PROPERLY
-  if addr == SegOff::new(0x454+0x823, 0x0010) {
+  if addr == SegOff::new(0x454+0x823, 0x000e) {
     emu.reg_write(AX, hydra_state.reg_read(AX));
     emu.reg_write(BX, hydra_state.reg_read(BX));
   }
 
   // Reads current system data (non-deterministic)
-  if addr == SegOff::new(0x000+0x823, 0x393) {
+  if addr == SegOff::new(0x000+0x823, 0x391) {
     emu.reg_write(AX, hydra_state.reg_read(AX));
     emu.reg_write(CX, hydra_state.reg_read(CX));
     emu.reg_write(DX, hydra_state.reg_read(DX));
   }
 
   // Reads current system time (non-deterministic)
-  if addr == SegOff::new(0x000+0x823, 0x3a6) {
+  if addr == SegOff::new(0x000+0x823, 0x3a4) {
     emu.reg_write(CX, hydra_state.reg_read(CX));
     emu.reg_write(DX, hydra_state.reg_read(DX));
   }

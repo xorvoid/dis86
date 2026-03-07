@@ -26,11 +26,11 @@ impl Validator {
     let mut emu86_state_prev = self.emu86.cpu_state();
 
     loop {
-      self.hydra.step()?;
-      self.emu86.step()?;
-
       let hydra_addr = self.hydra.instr_addr();
       let emu86_addr = self.emu86.instr_addr();
+
+      self.hydra.step()?;
+      self.emu86.step()?;
 
       let (hydra_state, emu86_state) = check(
         hydra_addr, emu86_addr,
