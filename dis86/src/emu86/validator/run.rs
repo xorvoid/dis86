@@ -54,6 +54,12 @@ fn apply_mirroring_overrides(addr: SegOff, emu: &mut Emulator, hydra_state: &Cpu
   if addr.seg.unwrap_normal() == 0xbb4+0x823 && 0xaf <= addr.off.0 && addr.off.0 <= 0xb4 {
     emu.machine.reg_write_u16(AX, hydra_state.reg_read_u16(AX));
   }
+
+  // HACKY work around for mouse interrupt... TODO: IMPL PROPERLY
+  if addr == SegOff::new(0x454+0x823, 0x0010) {
+    emu.machine.reg_write_u16(AX, hydra_state.reg_read_u16(AX));
+    emu.machine.reg_write_u16(BX, hydra_state.reg_read_u16(BX));
+  }
 }
 
 pub fn run(exe_path: &str) -> Result<(), String> {

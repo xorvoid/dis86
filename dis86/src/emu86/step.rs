@@ -348,7 +348,11 @@ impl Machine {
       }
 
       Opcode::OP_OUT => {
-        let port = self.operand_read_u16(&instr, 0);
+        let port = match self.operand_read(&instr, 0) {
+          Value::U16(port) => port,
+          Value::U8(port) => port as u16,
+          _ => panic!("Unsupported value"),
+        };
         let data = self.operand_read_u8(&instr, 1);
         self.io_port_outb(port, data);
       }

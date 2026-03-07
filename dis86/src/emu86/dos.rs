@@ -31,6 +31,8 @@ impl Dos {
     dos.default_interrupt_vectors[0x04] = SegOff::new(0x0070, 0x00f4); // Overflow (INTO Instruction)
     dos.default_interrupt_vectors[0x05] = SegOff::new(0xf000, 0xff54); // BOUND range exceeded
     dos.default_interrupt_vectors[0x06] = SegOff::new(0xf000, 0xca60); // Invalid opcode
+    dos.default_interrupt_vectors[0x08] = SegOff::new(0xf000, 0xfea5); // PIT timer
+    dos.default_interrupt_vectors[0x09] = SegOff::new(0xf000, 0xe987); // Keyboard
     dos.default_interrupt_vectors[0x33] = SegOff::new(0xc402, 0x0010); // Mouse Handler
     dos.default_interrupt_vectors[0x3f] = SegOff::new(0xf000, 0xca60); // Overlay load interrupt
 
