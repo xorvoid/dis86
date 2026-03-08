@@ -1,7 +1,6 @@
 use std::process::{Command, Child, Stdio};
 use super::super::emu::Emu;
 use super::super::cpu::*;
-use super::super::cpu_flags::FLAG_MASK;
 use super::super::value::Value;
 use super::shmdata::ShmData;
 use super::shmmem::ShmMem;
@@ -46,18 +45,18 @@ impl HydraProcess {
     let data = ShmData::attach("/dev/shm/hydra_remote").unwrap();
     let mem = ShmMem::attach("/dev/shm/dosbox_mem").unwrap();
 
-    Ok(HydraProcess {
+    let mut this = HydraProcess {
       hydra,
       data,
       mem,
-    })
+    };
+
+    this.wait_for_init();
+
+    Ok(this)
   }
 
-  pub fn begin(&mut self) {
-    self.ensure_init();
-  }
-
-  pub fn ensure_init(&mut self) {
+  fn wait_for_init(&mut self) {
     loop {
       mem_barrier();
       let init = shmdata_read!(self.data, init);
@@ -66,7 +65,7 @@ impl HydraProcess {
   }
 
   pub fn step(&mut self) {
-    self.ensure_init();
+    self.wait_for_init();
 
     let ack = shmdata_read!(self.data, ack);
     let next_ack = ack + 1;
@@ -124,13 +123,13 @@ impl Emu for HydraProcess {
     // FIXME: Inefficent
     self.cpu_state().reg_read(reg)
   }
-  fn reg_write(&mut self, reg: Register, val: Value) {
+  fn reg_write(&mut self, _reg: Register, _val: Value) {
     panic!("reg_write unimpl for hydra process");
   }
   fn mem_slice(&self, addr: SegOff, len: u32) -> &[u8] {
     &self.mem.slice_starting_at(addr)[..len as usize]
   }
-  fn interrupt_handler(&self, vector: u8) -> Option<SegOff> {
+  fn interrupt_handler(&self, _vector: u8) -> Option<SegOff> {
     panic!("interrupt_handler unimpl for hydra process");
   }
 }

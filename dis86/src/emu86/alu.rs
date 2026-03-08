@@ -144,7 +144,7 @@ pub fn divmod(a: Value, b: Value, mut f: Flags) -> (Value, Value, Flags) {
 
 pub fn multiply(op: MultiplyOp, a: Value, b: Value, mut f: Flags) -> (Value, Flags) {
   // Unpack common case
-  let (size, sign_mask, value_mask, a, b) = match (a, b) {
+  let (size, _sign_mask, value_mask, a, b) = match (a, b) {
     (Value::U8(a),  Value::U8(b))  => (1, 0x80,   0xff,   a as u16, b as u16),
     (Value::U16(a), Value::U16(b)) => (2, 0x8000, 0xffff, a, b),
     _ => panic!("Mismatched sizes"),

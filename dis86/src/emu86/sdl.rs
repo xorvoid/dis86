@@ -37,12 +37,12 @@ impl Framebuffer {
     self.pixels.fill(color);
   }
 
-  fn put_pixel(&mut self, x: i32, y: i32, color: Color) {
-    if x < 0 || x >= WIDTH as i32 || y < 0 || y >= HEIGHT as i32 {
-      return;
-    }
-    self.pixels[y as usize * WIDTH + x as usize] = color;
-  }
+  // fn put_pixel(&mut self, x: i32, y: i32, color: Color) {
+  //   if x < 0 || x >= WIDTH as i32 || y < 0 || y >= HEIGHT as i32 {
+  //     return;
+  //   }
+  //   self.pixels[y as usize * WIDTH + x as usize] = color;
+  // }
 
   fn as_bytes(&self) -> &[u8] {
     // SAFETY: Color is repr(transparent) over u32; slice is valid for its length.
@@ -66,6 +66,7 @@ impl Framebuffer {
 // ---------------------------------------------------------------------------
 
 pub struct App {
+  #[allow(dead_code)]
   sdl:     sdl2::Sdl,
   events:  sdl2::EventPump,
   //video:   sdl2::VideoSubsystem,
@@ -123,7 +124,7 @@ impl App {
       .unwrap();
 
     let canvas = window.into_canvas().accelerated().build().unwrap();
-    let mut renderer = Renderer::new(canvas);
+    let renderer = Renderer::new(canvas);
 
     let mut fb = Framebuffer::new();
     fb.clear(Color::from_rgb(0x10, 0x10, 0x20));

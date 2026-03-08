@@ -12,10 +12,8 @@ struct Validator {
 
 impl Validator {
   fn new(exe_path: &str) -> Result<Self, String> {
-    let mut emu86_impl = Emulator::new(exe_path)?;
-
-    let mut hydra_impl = HydraProcess::spawn(exe_path)?;
-    hydra_impl.begin();
+    let emu86_impl = Emulator::new(exe_path)?;
+    let hydra_impl = HydraProcess::spawn(exe_path)?;
 
     let hydra_state_prev = hydra_impl.cpu_state();
     let emu86_state_prev = emu86_impl.cpu_state();
@@ -118,8 +116,9 @@ fn print_change_reg(name: &str, reg: Register, prev: &Cpu, cur: &Cpu) {
   }
 }
 
+#[allow(dead_code)]
 fn dump_mem(msg: &str, emu: &dyn Emu, addr: SegOff, len: u32) {
-  let mem = emu.mem_slice(addr, 16);
+  let mem = emu.mem_slice(addr, len);
   let hex = crate::util::hexdump::hexdump(mem);
 
   println!("Memdump for '{}'", msg);

@@ -1,5 +1,4 @@
 use super::machine::*;
-use super::opl::Opl3;
 
 impl Machine {
   pub fn io_port_inb(&mut self, port: u16) -> u8 {

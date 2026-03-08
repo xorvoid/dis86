@@ -165,9 +165,7 @@ impl Machine {
       panic!("Expected a root dir configuration");
     };
 
-    let dos_path = DosPath::parse(filename).unwrap();
-    let host_path = dos_path.to_hostpath(root_dir);
-
+    let host_path = path.to_hostpath(root_dir);
     let file = File::open(host_path).unwrap();
     let info = 0x3;
 
@@ -275,7 +273,7 @@ impl Machine {
   // func: 0x43, AL=0
   pub fn dos_get_file_attrs(&mut self) {
     let filename_addr = self.reg_read_addr(DS, DX);
-    let filename = self.mem.asciiz(filename_addr);
+    let _filename = self.mem.asciiz(filename_addr);
 
     // TODO: Use the actual filename and actually impl attr info
 

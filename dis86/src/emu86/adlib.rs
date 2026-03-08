@@ -1,4 +1,3 @@
-use super::machine::*;
 use super::opl::Opl3;
 
 const DEBUG: bool = false;

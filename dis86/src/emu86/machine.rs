@@ -2,7 +2,6 @@ pub use super::value::*;
 pub use super::mem::*;
 pub use super::cpu::*;
 pub use super::cpu_flags::*;
-pub use super::io::*;
 pub use super::adlib::*;
 pub use super::alu;
 
