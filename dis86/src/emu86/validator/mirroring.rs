@@ -72,14 +72,26 @@ impl Loc {
   }
 }
 
-pub fn apply_overrides(addr: SegOff, emu: &mut dyn Emu, hydra_state: &Cpu) {
-  let entries = build_entries(emu.code_load_seg());
+pub fn apply_overrides(addr: SegOff, hydra: &mut dyn Emu, emu86: &mut dyn Emu) -> (Cpu, Cpu) {
+  let mut hydra_state = hydra.cpu_state();
+
+  let entries = build_entries(emu86.code_load_seg());
   for entry in &entries {
     if entry.loc.matches(addr) {
       for reg in entry.regs.iter().cloned() {
-        emu.reg_write(reg, hydra_state.reg_read(reg));
+        emu86.reg_write(reg, hydra_state.reg_read(reg));
       }
-      return;
+      break;
     }
   }
+
+  let mut emu86_state = emu86.cpu_state();
+
+  // Clear the AF flag... It just creates problems... its behavior is undefined in
+  // a number of cases
+  hydra_state.regs[FLAGS.idx as usize] &= !(1<<4);
+  emu86_state.regs[FLAGS.idx as usize] &= !(1<<4);
+
+
+  (hydra_state, emu86_state)
 }

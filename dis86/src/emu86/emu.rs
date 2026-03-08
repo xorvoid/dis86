@@ -75,6 +75,8 @@ pub trait Emu {
 
   fn mem_slice(&self, addr: SegOff, len: u32) -> &[u8];
 
+  fn interrupt_handler(&self, vector: u8) -> Option<SegOff>;
+
   fn code_load_seg(&self) -> Seg {
     Seg::Normal(0x823)
   }
@@ -98,6 +100,9 @@ impl Emu for Emulator {
   }
   fn mem_slice(&self, addr: SegOff, len: u32) -> &[u8] {
     &self.machine.mem.slice_starting_at(addr)[..len as usize]
+  }
+  fn interrupt_handler(&self, vector: u8) -> Option<SegOff> {
+    self.machine.interrupt_vectors[vector as usize]
   }
 }
 

@@ -130,4 +130,7 @@ impl Emu for HydraProcess {
   fn mem_slice(&self, addr: SegOff, len: u32) -> &[u8] {
     &self.mem.slice_starting_at(addr)[..len as usize]
   }
+  fn interrupt_handler(&self, vector: u8) -> Option<SegOff> {
+    panic!("interrupt_handler unimpl for hydra process");
+  }
 }

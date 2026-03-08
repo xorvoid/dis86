@@ -88,8 +88,8 @@ impl Machine {
   // func: 0x25
   fn dos_set_interrupt_vector(&mut self) {
     let idx = self.reg_read_u8(AL);
-    println!("set_interrupt_vector | AL=0x{:x}", idx);
     let addr = self.reg_read_addr(DS, DX);
+    println!("set_interrupt_vector | idx: 0x{:x}, addr: {}", idx, addr);
     self.interrupt_vectors[idx as usize] = Some(addr);
   }
 
