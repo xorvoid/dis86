@@ -1,6 +1,7 @@
 use crate::binfmt::mz;
 use super::machine::Machine;
 use super::cpu::{Cpu, Register};
+use super::cpu_flags::Flag;
 use super::value::Value;
 use super::sdl;
 use std::path::Path;
@@ -14,6 +15,7 @@ pub struct Emulator {
   pub machine: Machine,
   app: sdl::App,
   step_count: u64,
+  last_cpu_state: Cpu,
 }
 
 impl Emulator {
@@ -38,6 +40,7 @@ impl Emulator {
       machine,
       app,
       step_count: 0,
+      last_cpu_state: Cpu::default(),
     })
   }
 
@@ -48,6 +51,7 @@ impl Emulator {
       let quit = self.app.update()?;
       if quit { return Err(format!("SDL Exited")) };
     }
+    self.last_cpu_state = self.machine.cpu.clone();
     self.machine.step()?;
     self.step_count += 1;
     Ok(())
@@ -68,10 +72,12 @@ impl Emulator {
 pub trait Emu {
   fn step(&mut self) -> Result<(), String>;
   fn cpu_state(&self) -> Cpu;
+  fn last_cpu_state(&self) -> Cpu;
   fn instr_addr(&self) -> SegOff;
 
   fn reg_read(&self, reg: Register) -> Value;
   fn reg_write(&mut self, reg: Register, val: Value);
+  fn flag_write(&mut self, f: Flag, set: bool);
 
   fn mem_slice(&self, addr: SegOff, len: u32) -> &[u8];
 
@@ -89,6 +95,9 @@ impl Emu for Emulator {
   fn cpu_state(&self) -> Cpu {
     self.machine.cpu.clone()
   }
+  fn last_cpu_state(&self) -> Cpu {
+    self.last_cpu_state.clone()
+  }
   fn instr_addr(&self) -> SegOff {
     self.machine.instr_addr()
   }
@@ -97,6 +106,9 @@ impl Emu for Emulator {
   }
   fn reg_write(&mut self, reg: Register, val: Value) {
     self.machine.reg_write(reg, val)
+  }
+  fn flag_write(&mut self, f: Flag, set: bool) {
+    self.machine.flag_write(f, set)
   }
   fn mem_slice(&self, addr: SegOff, len: u32) -> &[u8] {
     &self.machine.mem.slice_starting_at(addr)[..len as usize]

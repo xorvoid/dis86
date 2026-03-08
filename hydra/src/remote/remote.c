@@ -25,7 +25,7 @@ void remote_init(void)
   printf("waiting for init\n");
 }
 
-void update_shmdata(hydra_machine_t *m)
+void update_shmdata_from_hydra(hydra_machine_t *m)
 {
   shm->ax    = m->registers->ax;
   shm->bx    = m->registers->bx;
@@ -41,6 +41,28 @@ void update_shmdata(hydra_machine_t *m)
   shm->es    = m->registers->es;
   shm->ss    = m->registers->ss;
   shm->flags = m->registers->flags;
+}
+
+void update_hydra_from_shmdata(hydra_machine_t *m)
+{
+  // Copy over register values
+  m->registers->ax    = shm->ax;
+  m->registers->bx    = shm->bx;
+  m->registers->cx    = shm->cx;
+  m->registers->dx    = shm->dx;
+  m->registers->si    = shm->si;
+  m->registers->di    = shm->di;
+  m->registers->bp    = shm->bp;
+  m->registers->sp    = shm->sp;
+  m->registers->ip    = shm->ip;
+  m->registers->cs    = shm->cs;
+  m->registers->ds    = shm->ds;
+  m->registers->es    = shm->es;
+  m->registers->ss    = shm->ss;
+  m->registers->flags = shm->flags;
+
+  // Perform update in dosbox state
+  m->hardware->update_registers(m->hardware->ctx, m->registers);
 }
 
 void post_init_state(hydra_machine_t *m)
@@ -82,7 +104,7 @@ void remote_notify(hydra_machine_t *m)
         if (!(cs == 0x823 && ip == 0)) return;
         printf("init\n");
         post_init_state(m);
-        update_shmdata(m);
+        update_shmdata_from_hydra(m);
         BARRIER();
         shm->init = 1;
         BARRIER();
@@ -96,13 +118,14 @@ void remote_notify(hydra_machine_t *m)
           u64 ack = shm->ack;
           if (req <= ack) continue;
           printf("run %04x:%04x\n", cs, ip);
+          update_hydra_from_shmdata(m);
           state = STATE_RUN;
           return; // return to hydra to run instruction
         }
       } break;
       case STATE_RUN: {
         printf("run\n");
-        update_shmdata(m);
+        update_shmdata_from_hydra(m);
         BARRIER();
         shm->ack = shm->req;
         BARRIER();

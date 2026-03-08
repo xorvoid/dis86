@@ -1,6 +1,7 @@
 use std::process::{Command, Child, Stdio};
 use super::super::emu::Emu;
 use super::super::cpu::*;
+use super::super::cpu_flags::Flag;
 use super::super::value::Value;
 use super::shmdata::ShmData;
 use super::shmmem::ShmMem;
@@ -18,6 +19,9 @@ pub struct HydraProcess {
   data: ShmData,
   #[allow(dead_code)]
   pub mem: ShmMem,
+
+  cpu_state: Cpu,
+  last_cpu_state: Cpu,
 }
 
 impl HydraProcess {
@@ -49,6 +53,8 @@ impl HydraProcess {
       hydra,
       data,
       mem,
+      cpu_state: Cpu::default(),
+      last_cpu_state: Cpu::default(),
     };
 
     this.wait_for_init();
@@ -62,6 +68,44 @@ impl HydraProcess {
       let init = shmdata_read!(self.data, init);
       if init != 0 { break };
     }
+  }
+
+  pub fn read_cpu_state(&mut self) {
+    let mut cpu = Cpu::default();
+    cpu.regs[AX.idx as usize]    = shmdata_read!(self.data, ax);
+    cpu.regs[BX.idx as usize]    = shmdata_read!(self.data, bx);
+    cpu.regs[CX.idx as usize]    = shmdata_read!(self.data, cx);
+    cpu.regs[DX.idx as usize]    = shmdata_read!(self.data, dx);
+    cpu.regs[SI.idx as usize]    = shmdata_read!(self.data, si);
+    cpu.regs[DI.idx as usize]    = shmdata_read!(self.data, di);
+    cpu.regs[BP.idx as usize]    = shmdata_read!(self.data, bp);
+    cpu.regs[SP.idx as usize]    = shmdata_read!(self.data, sp);
+    cpu.regs[IP.idx as usize]    = shmdata_read!(self.data, ip);
+    cpu.regs[CS.idx as usize]    = shmdata_read!(self.data, cs);
+    cpu.regs[DS.idx as usize]    = shmdata_read!(self.data, ds);
+    cpu.regs[ES.idx as usize]    = shmdata_read!(self.data, es);
+    cpu.regs[SS.idx as usize]    = shmdata_read!(self.data, ss);
+    cpu.regs[FLAGS.idx as usize] = shmdata_read!(self.data, flags);
+
+    self.cpu_state = cpu;
+  }
+
+  pub fn write_cpu_state(&mut self) {
+    let regs = &self.cpu_state.regs;
+    shmdata_write!(self.data, ax, regs[AX.idx as usize]);
+    shmdata_write!(self.data, bx, regs[BX.idx as usize]);
+    shmdata_write!(self.data, cx, regs[CX.idx as usize]);
+    shmdata_write!(self.data, dx, regs[DX.idx as usize]);
+    shmdata_write!(self.data, si, regs[SI.idx as usize]);
+    shmdata_write!(self.data, di, regs[DI.idx as usize]);
+    shmdata_write!(self.data, bp, regs[BP.idx as usize]);
+    shmdata_write!(self.data, sp, regs[SP.idx as usize]);
+    shmdata_write!(self.data, ip, regs[IP.idx as usize]);
+    shmdata_write!(self.data, cs, regs[CS.idx as usize]);
+    shmdata_write!(self.data, ds, regs[DS.idx as usize]);
+    shmdata_write!(self.data, es, regs[ES.idx as usize]);
+    shmdata_write!(self.data, ss, regs[SS.idx as usize]);
+    shmdata_write!(self.data, flags, regs[FLAGS.idx as usize]);
   }
 
   pub fn step(&mut self) {
@@ -79,6 +123,8 @@ impl HydraProcess {
         break;
       }
     }
+
+    self.read_cpu_state()
   }
 }
 
@@ -91,27 +137,15 @@ impl Drop for HydraProcess {
 
 impl Emu for HydraProcess {
   fn step(&mut self) -> Result<(), String> {
+    self.last_cpu_state = self.cpu_state();
     Self::step(self);
     Ok(())
   }
   fn cpu_state(&self) -> Cpu {
-    let mut cpu = Cpu::default();
-    cpu.regs[AX.idx as usize]    = shmdata_read!(self.data, ax);
-    cpu.regs[BX.idx as usize]    = shmdata_read!(self.data, bx);
-    cpu.regs[CX.idx as usize]    = shmdata_read!(self.data, cx);
-    cpu.regs[DX.idx as usize]    = shmdata_read!(self.data, dx);
-    cpu.regs[SI.idx as usize]    = shmdata_read!(self.data, si);
-    cpu.regs[DI.idx as usize]    = shmdata_read!(self.data, di);
-    cpu.regs[BP.idx as usize]    = shmdata_read!(self.data, bp);
-    cpu.regs[SP.idx as usize]    = shmdata_read!(self.data, sp);
-    cpu.regs[IP.idx as usize]    = shmdata_read!(self.data, ip);
-    cpu.regs[CS.idx as usize]    = shmdata_read!(self.data, cs);
-    cpu.regs[DS.idx as usize]    = shmdata_read!(self.data, ds);
-    cpu.regs[ES.idx as usize]    = shmdata_read!(self.data, es);
-    cpu.regs[SS.idx as usize]    = shmdata_read!(self.data, ss);
-    cpu.regs[FLAGS.idx as usize] = shmdata_read!(self.data, flags);
-
-    cpu
+    self.cpu_state.clone()
+  }
+  fn last_cpu_state(&self) -> Cpu {
+    self.last_cpu_state.clone()
   }
   fn instr_addr(&self) -> SegOff {
     mem_barrier();
@@ -120,11 +154,15 @@ impl Emu for HydraProcess {
     SegOff::new(cs, ip)
   }
   fn reg_read(&self, reg: Register) -> Value {
-    // FIXME: Inefficent
-    self.cpu_state().reg_read(reg)
+    self.cpu_state.reg_read(reg)
   }
-  fn reg_write(&mut self, _reg: Register, _val: Value) {
-    panic!("reg_write unimpl for hydra process");
+  fn reg_write(&mut self, reg: Register, val: Value) {
+    self.cpu_state.reg_write(reg, val);
+    self.write_cpu_state();
+  }
+  fn flag_write(&mut self, f: Flag, set: bool) {
+    self.cpu_state.flag_write(f, set);
+    self.write_cpu_state();
   }
   fn mem_slice(&self, addr: SegOff, len: u32) -> &[u8] {
     &self.mem.slice_starting_at(addr)[..len as usize]

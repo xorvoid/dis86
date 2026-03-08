@@ -2,12 +2,11 @@ use super::super::emu::{Emu, Emulator};
 use super::super::cpu::*;
 use super::hydra_process::HydraProcess;
 use crate::segoff::SegOff;
+use super::mirroring::apply_overrides;
 
 struct Validator {
   hydra: Box<dyn Emu>,
   emu86: Box<dyn Emu>,
-  hydra_state_prev: Cpu,
-  emu86_state_prev: Cpu,
 }
 
 impl Validator {
@@ -15,14 +14,9 @@ impl Validator {
     let emu86_impl = Emulator::new(exe_path)?;
     let hydra_impl = HydraProcess::spawn(exe_path)?;
 
-    let hydra_state_prev = hydra_impl.cpu_state();
-    let emu86_state_prev = emu86_impl.cpu_state();
-
     Ok(Self {
       hydra: Box::new(hydra_impl),
       emu86: Box::new(emu86_impl),
-      hydra_state_prev,
-      emu86_state_prev,
     })
   }
 
@@ -31,56 +25,34 @@ impl Validator {
       let hydra_addr = self.hydra.instr_addr();
       let emu86_addr = self.emu86.instr_addr();
 
-      // let addr = SegOff::new(0, 0);
-      // dump_mem("hydra", self.hydra.as_ref(), addr, 16);
-      // dump_mem("emu86", self.emu86.as_ref(), addr, 16);
-
       self.hydra.step()?;
       self.emu86.step()?;
 
-      let (hydra_state, emu86_state) = self.check(
-        hydra_addr, emu86_addr);
+      apply_overrides(hydra_addr, self.hydra.as_mut(), self.emu86.as_mut());
 
-      self.hydra_state_prev = hydra_state;
-      self.emu86_state_prev = emu86_state;
+      if self.hydra.cpu_state() != self.emu86.cpu_state() {
+        self.failure(hydra_addr, emu86_addr);
+      }
     }
   }
 
-  fn check(&mut self, hydra_addr: SegOff, emu86_addr: SegOff) -> (Cpu, Cpu) {
-    let hydra = self.hydra.as_mut();
-    let emu86 = self.emu86.as_mut();
-
-    //let mut hydra_state = hydra.cpu_state();
-
-    // Check stack (near stack pointer)
-    //let tos_addr = hydra_state.reg_read_addr(SS, SP);
-    //let s_addr = tos_addr.add_offset((-16 as i16) as u16);
-
-    let (hydra_state, emu86_state) =
-      super::mirroring::apply_overrides(hydra_addr, hydra, emu86);
-
-    // All Good?
-    if &hydra_state == &emu86_state {
-      return (hydra_state, emu86_state);
-    }
-
-    // Failure?
+  fn failure(&mut self, hydra_addr: SegOff, emu86_addr: SegOff) {
     eprintln!("");
     eprintln!("State divergence:");
     eprintln!("  hydra  @  {}", hydra_addr);
     eprintln!("  emu86  @  {}", emu86_addr);
     eprintln!("");
     eprintln!("hydra changes:");
-    print_changes(&self.hydra_state_prev, &hydra_state);
+    print_changes(&self.hydra.last_cpu_state(), &self.hydra.cpu_state());
     eprintln!("");
     eprintln!("emu86 changes:");
-    print_changes(&self.emu86_state_prev, &emu86_state);
+    print_changes(&self.emu86.last_cpu_state(), &self.emu86.cpu_state());
     eprintln!("");
     eprintln!("hydra state:");
-    eprintln!("{}", hydra_state);
+    eprintln!("{}", self.hydra.cpu_state());
     eprintln!("");
     eprintln!("emu86 state:");
-    eprintln!("{}", emu86_state);
+    eprintln!("{}", self.emu86.cpu_state());
     eprintln!("");
     panic!("STOP");
   }

@@ -28,7 +28,7 @@ impl Flags {
   }
 }
 
-impl Machine {
+impl Cpu {
   pub fn flag_read_all(&self) -> Flags {
     Flags(self.reg_read_u16(FLAGS))
   }
@@ -46,6 +46,24 @@ impl Machine {
     let mut flags = self.flag_read_all();
     flags.set(f, set);
     self.flag_write_all(flags);
+  }
+}
+
+impl Machine {
+  pub fn flag_read_all(&self) -> Flags {
+    self.cpu.flag_read_all()
+  }
+
+  pub fn flag_write_all(&mut self, f: Flags) {
+    self.cpu.flag_write_all(f)
+  }
+
+  pub fn flag_read(&self, f: Flag) -> bool {
+    self.cpu.flag_read(f)
+  }
+
+  pub fn flag_write(&mut self, f: Flag, set: bool) {
+    self.cpu.flag_write(f, set)
   }
 }
 
