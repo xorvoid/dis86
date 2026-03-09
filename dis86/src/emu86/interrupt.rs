@@ -14,7 +14,7 @@ impl Machine {
     self.interrupt_default_handler(num);
   }
 
-  fn interrupt_save(&mut self) {
+  pub fn interrupt_save(&mut self) {
     // Push flags
     let mut flags = self.reg_read_u16(FLAGS);
     flags |= 1<<1; // NOTE: JUST TO MATCH DOSBOX ... 1-bit always seems to be set

@@ -20,9 +20,9 @@ mod dos;
 mod dos_ivt;
 mod dos_structs;
 mod dos_filesystem;
+mod dos_mouse;
 
 mod video;
-mod mouse;
 mod adlib;
 mod io;
 

@@ -36,6 +36,11 @@ fn build_entries(code_seg: Seg) -> Vec<Entry> {
     // Confusing setting of OF on SHR (FIXME)
     Entry::new_addr( code+0x0b48, 0x01aa, vec![FLAGS]),
     Entry::new_addr( code+0x0b48, 0x01ca, vec![FLAGS]),
+
+    // Indirect call to the default PIC Handler implemented as a special
+    // case in dosbox-x code
+    Entry::new_addr( code+0x0454, 0x00b7, vec![SP, IP, CS]),
+
   ]
 }
 

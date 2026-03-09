@@ -1,5 +1,6 @@
 use super::machine::*;
 use super::dos_filesystem::*;
+use super::dos_mouse::*;
 
 // NOTE: JUST TO MATCH DOSBOX
 pub const MEM_TOP: u16 = 0x9fff;
@@ -10,11 +11,14 @@ pub struct Dos {
   // interrupts
   pub default_interrupt_vectors: [SegOff; 256],
 
+  // memory
+  pub mem_resize_call_count: usize,
+
   // file i/op
   pub filesystem: Filesystem,
 
-  // memory
-  pub mem_resize_call_count: usize,
+  // mouse
+  pub mouse: Mouse,
 }
 
 // Init
@@ -22,8 +26,9 @@ impl Dos {
   pub fn new(root_dir: Option<&str>, mem: &mut Memory) -> Dos {
     let mut dos = Dos {
       default_interrupt_vectors: [SegOff::new(0, 0); 256],
-      filesystem: Filesystem::new(root_dir),
       mem_resize_call_count: 0,
+      filesystem: Filesystem::new(root_dir),
+      mouse: Mouse::new(),
     };
 
     // NOTE: JUST TO MATCH DOSBOX

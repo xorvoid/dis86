@@ -2,6 +2,7 @@ use std::process::{Command, Child, Stdio};
 use super::super::emu::Emu;
 use super::super::cpu::*;
 use super::super::cpu_flags::Flag;
+use super::super::machine::Machine;
 use super::super::value::Value;
 use super::shmdata::ShmData;
 use super::shmmem::ShmMem;
@@ -169,5 +170,8 @@ impl Emu for HydraProcess {
   }
   fn interrupt_handler(&self, _vector: u8) -> Option<SegOff> {
     panic!("interrupt_handler unimpl for hydra process");
+  }
+  fn machine(&mut self) -> Option<&mut Machine> {
+    None
   }
 }

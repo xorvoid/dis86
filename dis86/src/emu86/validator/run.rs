@@ -4,6 +4,20 @@ use super::hydra_process::HydraProcess;
 use crate::segoff::SegOff;
 use super::mirroring::apply_overrides;
 
+enum Interrupt {
+  None,
+  Pic(SegOff),
+}
+
+fn detect_interrupts(emu: &dyn Emu) -> Interrupt {
+  let pic_handler = SegOff::new(0x0c77, 0x0096);
+  if emu.instr_addr() == pic_handler {
+    Interrupt::Pic(pic_handler)
+  } else {
+    Interrupt::None
+  }
+}
+
 struct Validator {
   hydra: Box<dyn Emu>,
   emu86: Box<dyn Emu>,
@@ -26,14 +40,49 @@ impl Validator {
       let emu86_addr = self.emu86.instr_addr();
 
       self.hydra.step()?;
-      self.emu86.step()?;
+
+      // detect interrupt handler firing
+      match detect_interrupts(self.hydra.as_ref()) {
+        Interrupt::None => self.emu86.step()?, // normal case
+        Interrupt::Pic(handler) => {
+          // Force the same interrupt to trigger on emu86
+          let m = self.emu86.machine().unwrap();
+          m.interrupt_save();
+          m.reg_write_addr(CS, IP, handler);
+        }
+      }
 
       apply_overrides(hydra_addr, self.hydra.as_mut(), self.emu86.as_mut());
 
-      if self.hydra.cpu_state() != self.emu86.cpu_state() {
+      // let addr = self.hydra.cpu_state().reg_read_addr(SS, SP);
+      // dump_mem("hydra_stack", self.hydra.as_ref(), addr, 16);
+
+      if !self.match_states() {
         self.failure(hydra_addr, emu86_addr);
       }
     }
+  }
+
+  fn match_states(&mut self) -> bool {
+    let hydra_state = self.hydra.cpu_state();
+    let emu86_state = self.emu86.cpu_state();
+
+    if hydra_state.reg_read_u16(AX) != emu86_state.reg_read_u16(AX) { return false; }
+    if hydra_state.reg_read_u16(BX) != emu86_state.reg_read_u16(BX) { return false; }
+    if hydra_state.reg_read_u16(CX) != emu86_state.reg_read_u16(CX) { return false; }
+    if hydra_state.reg_read_u16(DX) != emu86_state.reg_read_u16(DX) { return false; }
+    if hydra_state.reg_read_u16(SI) != emu86_state.reg_read_u16(SI) { return false; }
+    if hydra_state.reg_read_u16(DI) != emu86_state.reg_read_u16(DI) { return false; }
+    if hydra_state.reg_read_u16(BP) != emu86_state.reg_read_u16(BP) { return false; }
+    if hydra_state.reg_read_u16(SP) != emu86_state.reg_read_u16(SP) { return false; }
+    if hydra_state.reg_read_u16(IP) != emu86_state.reg_read_u16(IP) { return false; }
+    if hydra_state.reg_read_u16(CS) != emu86_state.reg_read_u16(CS) { return false; }
+    if hydra_state.reg_read_u16(DS) != emu86_state.reg_read_u16(DS) { return false; }
+    if hydra_state.reg_read_u16(ES) != emu86_state.reg_read_u16(ES) { return false; }
+    if hydra_state.reg_read_u16(SS) != emu86_state.reg_read_u16(SS) { return false; }
+    if hydra_state.reg_read_u16(FLAGS) != emu86_state.reg_read_u16(FLAGS) { return false; }
+
+    true
   }
 
   fn failure(&mut self, hydra_addr: SegOff, emu86_addr: SegOff) {
