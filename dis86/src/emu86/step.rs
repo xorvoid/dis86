@@ -392,7 +392,7 @@ impl Machine {
       Opcode::OP_JL   => self.op_jump_cond(&instr, f.get(FLAG_SF) != f.get(FLAG_OF)),
       Opcode::OP_JGE  => self.op_jump_cond(&instr, f.get(FLAG_SF) == f.get(FLAG_OF)),
       Opcode::OP_JG   => self.op_jump_cond(&instr, !f.get(FLAG_ZF) && f.get(FLAG_SF) == f.get(FLAG_OF)),
-      Opcode::OP_JLE  => self.op_jump_cond(&instr, f.get(FLAG_SF) || f.get(FLAG_SF) != f.get(FLAG_OF)),
+      Opcode::OP_JLE  => self.op_jump_cond(&instr, f.get(FLAG_ZF) || f.get(FLAG_SF) != f.get(FLAG_OF)),
       Opcode::OP_JS   => self.op_jump_cond(&instr, f.get(FLAG_SF)),
       Opcode::OP_JNS  => self.op_jump_cond(&instr, !f.get(FLAG_SF)),
       Opcode::OP_JO   => self.op_jump_cond(&instr, f.get(FLAG_OF)),
