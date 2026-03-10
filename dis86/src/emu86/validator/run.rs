@@ -36,21 +36,34 @@ impl Validator {
 
   fn run(&mut self) -> Result<(), String> {
     loop {
+
       let hydra_addr = self.hydra.instr_addr();
       let emu86_addr = self.emu86.instr_addr();
+      //println!("Stepping | hydra: {} | emu86: {}", hydra_addr, emu86_addr);
+      self.emu86.report();
 
       self.hydra.step()?;
+      self.emu86.step()?;
+
+      // eprintln!("hydra state:");
+      // eprintln!("---------------------------");
+      // eprintln!("{}", self.hydra.cpu_state());
+      // eprintln!("");
 
       // detect interrupt handler firing
       match detect_interrupts(self.hydra.as_ref()) {
-        Interrupt::None => self.emu86.step()?, // normal case
+        Interrupt::None => (),
         Interrupt::Pic(handler) => {
           // Force the same interrupt to trigger on emu86
+          //panic!("interrupt override");
+          // println!("interrupt override!");
           let m = self.emu86.machine().unwrap();
           m.interrupt_save();
           m.reg_write_addr(CS, IP, handler);
         }
       }
+
+      //println!("state overrides!");
 
       apply_overrides(hydra_addr, self.hydra.as_mut(), self.emu86.as_mut());
 
@@ -60,6 +73,17 @@ impl Validator {
       if !self.match_states() {
         self.failure(hydra_addr, emu86_addr);
       }
+      //println!("good!");
+
+      // eprintln!("New state:");
+      // eprintln!("---------------------------");
+      // eprintln!("hydra state:");
+      // eprintln!("{}", self.hydra.cpu_state());
+      // eprintln!("");
+      // eprintln!("emu86 state:");
+      // eprintln!("{}", self.emu86.cpu_state());
+      // eprintln!("");
+
     }
   }
 

@@ -84,6 +84,7 @@ pub trait Emu {
   fn interrupt_handler(&self, vector: u8) -> Option<SegOff>;
 
   fn machine(&mut self) -> Option<&mut Machine>;
+  fn report(&self);
 
   fn code_load_seg(&self) -> Seg {
     Seg::Normal(0x823)
@@ -120,6 +121,9 @@ impl Emu for Emulator {
   }
   fn machine(&mut self) -> Option<&mut Machine> {
     Some(&mut self.machine)
+  }
+  fn report(&self) {
+    self.machine.report().unwrap();
   }
 }
 

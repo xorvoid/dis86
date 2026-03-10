@@ -44,8 +44,8 @@ static void capture_itrace(hydra_machine_t *m)
   last_addr = addr;
 }
 
-void hydra_user_notify(hydra_machine_t *m)
+void hydra_user_step_hook(hydra_machine_t *m)
 {
   if (ENABLE_ITRACE) capture_itrace(m);
-  remote_notify(m);
+  remote_step_hook(m);
 }

@@ -40,8 +40,8 @@ impl HydraProcess {
         "-c", &format!("{}", exe.file_name().unwrap().display()),
         "-c", "exit"
       ])
-      .stdout(Stdio::null())
-      .stderr(Stdio::null())
+      //.stdout(Stdio::null())
+      //.stderr(Stdio::null())
       .spawn()
       .map_err(|_| format!("Failed to execute"))?;
 
@@ -173,5 +173,8 @@ impl Emu for HydraProcess {
   }
   fn machine(&mut self) -> Option<&mut Machine> {
     None
+  }
+  fn report(&self) {
+    panic!("Unimpl");
   }
 }

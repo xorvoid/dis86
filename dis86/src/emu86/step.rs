@@ -3,7 +3,7 @@ use crate::asm::decode::Decoder;
 use crate::asm::instr::{self, Instr, Opcode, Operand, OperandReg, OperandMem, OperandImm};
 use crate::asm::intel_syntax::instr_str;
 
-const DEBUG: bool = true;
+const DEBUG: bool = false;
 
 impl Machine {
   pub fn operand_imm_read(&self, imm: &OperandImm) -> Value {
@@ -187,8 +187,25 @@ impl Machine {
     }
   }
 
+  pub fn report(&self) -> Result<(), String> {
+    let cs = self.reg_read_u16(CS);
+    let ip = self.reg_read_u16(IP);
+    let instr_addr = SegOff::new_normal(cs, ip);
+    let instr = decode_instr(&self.mem, instr_addr)?;
+
+    let code_seg = PSP_SEGMENT.unwrap_normal() + 0x10;
+    if cs < code_seg {
+      println!("{:6} | unknown", self.exec_count);
+    } else {
+      let instr_addr_adj = SegOff::new(cs - code_seg, ip);
+      println!("{:6} | {}   {}", self.exec_count, instr_addr_adj, instr_str(&instr));
+    }
+    Ok(())
+  }
+
   pub fn step(&mut self) -> Result<(), String> {
-    // Get instr addr
+    // Report
+    if DEBUG { self.report()? }
 
     // Fetch and Decode
     let cs = self.reg_read_u16(CS);
@@ -198,17 +215,6 @@ impl Machine {
 
     // Update IP
     self.reg_set(IP, instr.end_addr().off.0);
-
-    // Report
-    if DEBUG {
-      let code_seg = PSP_SEGMENT.unwrap_normal() + 0x10;
-      if cs < code_seg {
-        println!("{:6} | unknown", self.exec_count);
-      } else {
-        let instr_addr_adj = SegOff::new(cs - code_seg, ip);
-        println!("{:6} | {}   {}", self.exec_count, instr_addr_adj, instr_str(&instr));
-      }
-    }
 
     // Special Ops (rep aware)
     match instr.opcode {

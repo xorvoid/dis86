@@ -82,7 +82,7 @@ void post_init_state(hydra_machine_t *m)
   m->hardware->update_registers(m->hardware->ctx, m->registers);
 }
 
-void remote_notify(hydra_machine_t *m)
+void remote_step_hook(hydra_machine_t *m)
 {
   u16 cs = m->registers->cs;
   u16 ip = m->registers->ip;
@@ -102,7 +102,7 @@ void remote_notify(hydra_machine_t *m)
       /* } break; */
       case STATE_INIT: {
         if (!(cs == 0x823 && ip == 0)) return;
-        printf("init\n");
+        //printf("init\n");
         post_init_state(m);
         update_shmdata_from_hydra(m);
         BARRIER();
@@ -111,20 +111,20 @@ void remote_notify(hydra_machine_t *m)
         state = STATE_WAIT;
       } break;
       case STATE_WAIT: {
-        printf("wait\n");
+        //printf("wait\n");
         while (1) {
           BARRIER();
           u64 req = shm->req;
           u64 ack = shm->ack;
           if (req <= ack) continue;
-          printf("run %04x:%04x\n", cs, ip);
+          //printf("run %04x:%04x\n", cs, ip);
           update_hydra_from_shmdata(m);
           state = STATE_RUN;
           return; // return to hydra to run instruction
         }
       } break;
       case STATE_RUN: {
-        printf("run\n");
+        //printf("run\n");
         update_shmdata_from_hydra(m);
         BARRIER();
         shm->ack = shm->req;
