@@ -2,6 +2,7 @@ pub use super::value::*;
 pub use super::mem::*;
 pub use super::cpu::*;
 pub use super::cpu_flags::*;
+pub use super::video::*;
 pub use super::adlib::*;
 pub use super::alu;
 
@@ -14,6 +15,7 @@ pub struct Machine {
   pub cpu: Cpu,
   pub dos: Dos,
   pub interrupt_vectors: [Option<SegOff>; 256],
+  pub video: Video,
   pub adlib: Adlib,
   pub exec_count: u64,
 }
@@ -21,16 +23,16 @@ pub struct Machine {
 impl Machine {
   pub fn new(root_dir: Option<&str>) -> Machine {
     let mut mem = Memory::default();
-    let cpu = Cpu::default();
-
     let dos = Dos::new(root_dir, &mut mem);
-    let adlib = Adlib::new();
 
     Machine {
       halted: false,
-      mem, cpu, dos,
+      mem,
+      cpu: Cpu::default(),
+      dos,
       interrupt_vectors: [None; 256],
-      adlib,
+      video: Video::new(),
+      adlib: Adlib::new(),
       exec_count: 0,
     }
   }

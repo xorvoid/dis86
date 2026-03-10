@@ -41,6 +41,10 @@ fn build_entries(code_seg: Seg) -> Vec<Entry> {
     // case in dosbox-x code
     Entry::new_addr( code+0x0454, 0x00b7, vec![SP, IP, CS]),
 
+    // Mirror dosbox VGA status (it is timing dependent)
+    Entry::new_addr( code+0x0399, 0x05ec, vec![AX]),
+    Entry::new_addr( code+0x0399, 0x05f1, vec![AX]),
+
   ]
 }
 

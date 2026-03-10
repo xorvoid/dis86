@@ -1,5 +1,19 @@
 use super::machine::*;
 
+pub struct Video {
+  palette: [u8; 256*3], // RGB order
+  palette_write_index: u16,
+}
+
+impl Video {
+  pub fn new() -> Video {
+    Video {
+      palette: [0; 256*3],
+      palette_write_index: 0,
+    }
+  }
+}
+
 impl Machine {
   pub fn video_interrupt_0x10(&mut self) {
     let func = self.reg_read_u8(AH);
@@ -25,5 +39,20 @@ impl Machine {
       }
       _ => panic!("unimpl"),
     }
+  }
+
+  pub fn video_palette_set_write_index(&mut self, data: u8) {
+    self.video.palette_write_index = (data as u16) * 3;
+  }
+
+  pub fn video_palette_write(&mut self, data: u8) {
+    let idx = self.video.palette_write_index as usize;
+    self.video.palette[idx] = data & ((1<<6)-1);
+    self.video.palette_write_index += 1;
+  }
+
+  pub fn video_read_input_status(&mut self) -> u8 {
+    // TODO impl
+    0
   }
 }
