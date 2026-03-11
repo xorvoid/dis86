@@ -270,6 +270,16 @@ impl Machine {
         flags = (flags | 1<<1) & FLAG_MASK;
         self.operand_write(&instr, 0, Value::U16(flags))
       }
+
+      Opcode::OP_XLAT => {
+        let idx = self.operand_read_u8(&instr, 0);
+        let addr_seg = self.operand_read_u16(&instr, 1);
+        let addr_off = self.operand_read_u16(&instr, 2);
+        let addr = SegOff::new(addr_seg, addr_off + idx as u16);
+        let val = self.mem.read_u8(addr);
+        self.operand_write(&instr, 0, Value::U8(val));
+      }
+
       Opcode::OP_INT   => self.interrupt(self.operand_read_u8(&instr, 0)),
       Opcode::OP_IRET  => self.interrupt_restore(),
       Opcode::OP_CALL  => {
