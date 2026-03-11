@@ -170,7 +170,7 @@ pub fn multiply(op: MultiplyOp, a: Value, b: Value, mut f: Flags) -> (Value, Fla
       let ovf = (result & (value_mask as u32)) != result;
       f.set(FLAG_CF, ovf);
       f.set(FLAG_OF, ovf);
-      f.set(FLAG_ZF, result == 0);
+      //f.set(FLAG_ZF, result == 0);
     }
   }
 

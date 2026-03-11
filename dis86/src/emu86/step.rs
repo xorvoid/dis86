@@ -170,6 +170,27 @@ impl Machine {
     self.operand_write(&instr, 1, Value::U16(result as u16));
   }
 
+  pub fn op_signed_multiply_trunc(&mut self, instr: &Instr) {
+    let lhs = self.operand_read(&instr, 1);
+    let rhs = self.operand_read(&instr, 2);
+
+    // Special-cased 16-bit
+    // FIXME: Add 8-bit
+    assert!(lhs.is_u16());
+
+    let rhs = match rhs {
+      Value::U8(rhs)  => Value::U16(rhs as i8 as i16 as u16),
+      Value::U16(rhs) => Value::U16(rhs),
+      _ => panic!("invalid value type")
+    };
+
+    let (result, flags) = alu::multiply(alu::MultiplyOp::Signed, lhs, rhs, self.flag_read_all());
+    self.flag_write_all(flags);
+
+    let result = result.unwrap_u32();
+    self.operand_write(&instr, 0, Value::U16(result as u16));
+  }
+
   pub fn op_jump_cond(&mut self, instr: &Instr, cond: bool) {
     let tgt = self.operand_read_addr(&instr, 0);
     if cond { self.reg_write_addr(CS, IP, tgt); }
@@ -438,6 +459,7 @@ impl Machine {
 
       Opcode::OP_MUL  => self.op_multiply(&instr, alu::MultiplyOp::Unsigned),
       Opcode::OP_IMUL => self.op_multiply(&instr, alu::MultiplyOp::Signed),
+      Opcode::OP_IMUL_TRUNC => self.op_signed_multiply_trunc(&instr),
 
       Opcode::OP_DIV => {
         let high = self.operand_read(&instr, 0);
